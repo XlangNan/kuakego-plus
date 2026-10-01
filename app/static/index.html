@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>quark-plus</title>
+<style>
+:root{
+  --bg:#f1f2f6;--card:#fff;--line:#e7e9ef;--fg:#1b1e25;--dim:#6b7384;--faint:#9aa1b0;
+  --acc:#3b63d8;--acc2:#4a74ee;--inp:#f3f4f8;--ok:#13885a;--okbg:#e4f6ee;--err:#cf3b36;--errbg:#fdeceb;
+  --warn:#a8650c;--warnbg:#fdf2de;--info:#2f5bd0;--infobg:#e8eefc;--mute:#6b7384;--mutebg:#eceef3;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans SC","Segoe UI",sans-serif;
+}
+[data-theme=dark]{
+  --bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--dim:#99a1b3;--faint:#6b7384;
+  --acc:#4d72e6;--acc2:#5b82f0;--inp:#1e222b;--ok:#4cc38a;--okbg:#12281f;--err:#f0726c;--errbg:#2e1716;
+  --warn:#e2a34a;--warnbg:#2c2212;--info:#7da0ff;--infobg:#172036;--mute:#99a1b3;--mutebg:#222733;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.55 var(--font);background:var(--bg);color:var(--fg);display:flex;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--acc);text-decoration:none}
+
+/* ---------- 侧栏 ---------- */
+aside{width:217px;flex:none;background:var(--card);border-right:1px solid var(--line);padding:14px 8px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 6px 10px;border-bottom:1px solid var(--line)}
+.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5b7cfa,#8b5cf6);color:#fff;
+  font-weight:700;font-size:12px;display:grid;place-items:center}
+.brand b{font-size:16px;flex:1}
+.theme{width:40px;height:30px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:15px}
+.who{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ok);margin:2px 0 4px}
+.who.off{color:var(--warn)}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{display:flex;align-items:center;gap:8px;text-align:left;border:0;background:transparent;border-radius:8px;
+  padding:9px 10px;cursor:pointer;color:var(--fg);font-size:14px}
+nav button:hover{background:var(--bg)}
+nav button.on{background:var(--acc);color:#fff}
+.side-foot{margin-top:auto;font-size:11px;color:var(--faint);padding:6px}
+
+/* ---------- 主区 ---------- */
+main{flex:1;min-width:0;padding:22px 24px 60px}
+.wrap{max-width:1180px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(20,24,40,.03)}
+.card h2{margin:0 0 12px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.card h2 small{font-weight:400;color:var(--dim);font-size:12px}
+label.l{display:block;font-size:12.5px;color:var(--dim);margin:12px 0 6px}
+label.l:first-of-type{margin-top:0}
+input[type=text],input[type=number],input[type=password],input[type=date],select,textarea{
+  width:100%;background:var(--inp);border:1px solid transparent;border-radius:8px;padding:9px 12px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);background:var(--card)}
+textarea{resize:vertical;min-height:90px;line-height:1.5}
+::placeholder{color:var(--faint)}
+.row{display:flex;gap:12px;align-items:flex-end}
+.row>.grow{flex:1;min-width:0}
+.hint{font-size:12px;color:var(--dim);margin-top:6px}
+.hint.ok{color:var(--ok)}.hint.err{color:var(--err)}
+.chk{display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--acc);margin:0}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--dim);font-size:13px;list-style:none;padding:4px 0}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";display:inline-block;transition:.15s}
+details[open]>summary::before{transform:rotate(90deg)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 16px;margin-top:6px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 16px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--acc);color:var(--acc)}
+.btn.pri{background:var(--acc2);color:#fff;border-color:var(--acc2);font-weight:600}
+.btn.pri:hover{background:var(--acc);color:#fff}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.danger:hover{color:var(--err);border-color:var(--err)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:13px}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.banner{background:var(--warnbg);color:var(--warn);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px}
+
+/* ---------- 表格/标签 ---------- */
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.nm{font-weight:600}
+.sub{color:var(--dim);font-size:12px;word-break:break-all}
+.tag{display:inline-block;font-size:12px;padding:1px 9px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--okbg);color:var(--ok)}.tag.err{background:var(--errbg);color:var(--err)}
+.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.info{background:var(--infobg);color:var(--info)}
+.tag.mute{background:var(--mutebg);color:var(--mute)}
+.empty{text-align:center;color:var(--dim);padding:34px 0}
+.ops{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- 海报网格 ---------- */
+.shelf{margin-bottom:22px}
+.shelf h3{margin:0 0 10px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.shelf h3 a{font-size:12px;font-weight:400;cursor:pointer}
+.rail{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x proximity}
+.rail .pc{flex:none;width:132px;scroll-snap-align:start}
+.posters{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:14px}
+.pc{cursor:pointer}
+.pc .img{position:relative;aspect-ratio:2/3;border-radius:10px;background:var(--inp) center/cover no-repeat;overflow:hidden;
+  border:1px solid var(--line)}
+.pc:hover .img{border-color:var(--acc)}
+.pc .rate{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.68);color:#ffd36b;font-size:11px;padding:1px 6px;border-radius:6px}
+.pc .bd{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.pc .bd span{font-size:10.5px;padding:1px 6px;border-radius:5px;color:#fff;background:rgba(19,136,90,.92)}
+.pc .bd span.s{background:rgba(59,99,216,.92)}.pc .bd span.e{background:rgba(207,59,54,.92)}
+.pc .t{font-size:13px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc .y{font-size:12px;color:var(--dim)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolbar input[type=text]{max-width:280px}
+.toolbar select{width:auto}
+
+/* ---------- 订阅卡片（紧凑） ---------- */
+.sub-card{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.sub-card:last-child{border-bottom:0}
+.sub-card .pic{width:54px;flex:none;align-self:flex-start;aspect-ratio:2/3;border-radius:6px;background:var(--inp) center/cover;border:1px solid var(--line)}
+.sub-body{flex:1;min-width:0}
+.sub-top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.sub-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0}
+.sub-head b{font-size:14px}
+.sub-acts{display:flex;gap:5px;flex-wrap:wrap}
+.btn.xs{padding:2px 9px;font-size:12px;border-radius:6px}
+.ov{color:var(--faint);font-size:12px;margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:5px;border-radius:99px;background:var(--mutebg);overflow:hidden;margin:6px 0 3px;max-width:420px}
+.bar i{display:block;height:100%;background:var(--acc2);border-radius:99px;transition:width .3s}
+details.lks{margin-top:4px}
+details.lks summary{font-size:12px;padding:1px 0}
+.lk{display:flex;gap:6px;align-items:center;padding:2px 0;font-size:12px}
+.lk .n{width:16px;height:16px;border-radius:4px;background:var(--mutebg);color:var(--dim);display:grid;place-items:center;font-size:10px;flex:none}
+.lk .u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk.dead .u{text-decoration:line-through;color:var(--faint)}
+.addlk{display:flex;gap:6px;margin-top:4px;max-width:520px}
+.addlk textarea{min-height:30px;height:30px;padding:5px 10px;font-size:12px}
+
+/* ---------- 弹窗 ---------- */
+.mask{position:fixed;inset:0;background:rgba(10,12,20,.55);display:flex;align-items:flex-start;justify-content:center;
+  padding:5vh 14px;overflow-y:auto;z-index:50}
+.modal{background:var(--card);border-radius:16px;width:100%;max-width:640px;padding:20px 22px;position:relative;
+  box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.modal.wide{max-width:820px}
+.modal h3{margin:0 0 14px;font-size:16px}
+.x{position:absolute;right:14px;top:12px;border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--dim)}
+.hero{margin:-20px -22px 14px;height:150px;background:var(--inp) center/cover;border-radius:16px 16px 0 0;position:relative}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 30%,var(--card));border-radius:inherit}
+.dt{display:flex;gap:16px}
+.dt .pic{width:110px;flex:none;aspect-ratio:2/3;border-radius:8px;background:var(--inp) center/cover;margin-top:-60px;position:relative;z-index:1;border:2px solid var(--card)}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;font-size:13px;margin-bottom:10px}
+.crumbs a{cursor:pointer}
+.dirs{max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
+.dirs div{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+.dirs div:last-child{border:0}.dirs div:hover{background:var(--bg)}
+.cast{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+.cast div{flex:none;width:72px;text-align:center;font-size:11.5px}
+.cast i{display:block;width:72px;height:72px;border-radius:50%;background:var(--inp) center/cover;margin-bottom:4px}
+.cast span{display:block;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- 日志 ---------- */
+.log{background:#0d1017;color:#cfd6e4;border-radius:10px;padding:12px 14px;height:520px;overflow:auto;
+  font:12.5px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.log .WARNING{color:#f0b95a}.log .ERROR{color:#ff7b72}.log .ts{color:#6b7384}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#1d2230;color:#fff;padding:10px 18px;
+  border-radius:10px;z-index:99;font-size:13px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.toast.err{background:#b9322d}.toast.ok{background:#0f7a50}
+
+@media(max-width:860px){
+  body{flex-direction:column}
+  aside{width:100%;height:auto;position:static;border-right:0;border-bottom:1px solid var(--line);padding:10px}
+  nav{flex-direction:row;overflow-x:auto}nav button{white-space:nowrap}
+  .side-foot{display:none}
+  main{padding:14px 12px 50px}
+  .row{flex-wrap:wrap}.sub-card .pic{width:44px}
+}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><div class="logo">Q+</div><b>quark-plus</b><button class="theme" id="themeBtn" title="切换主题">🌙</button></div>
+  <div class="who off" id="who">检查登录状态…</div>
+  <nav id="nav">
+    <button data-v="monitor">📡 分享监控</button>
+    <button data-v="recommend">🍿 剧集推荐</button>
+    <button data-v="subs">📺 订阅追更</button>
+    <button data-v="dingtalk">🔔 钉钉通知</button>
+    <button data-v="smartstrm">🎬 SmartStrm 联动</button>
+    <button data-v="tmdb">🎯 TMDB 设置</button>
+    <button data-v="emby">📹 Emby 联动</button>
+    <button data-v="account">🔐 账号登录</button>
+    <button data-v="logs">📜 运行日志</button>
+  </nav>
+  <div class="side-foot" id="ver"></div>
+</aside>
+
+<main><div class="wrap">
+<div id="banner"></div>
+
+<!-- ========== 分享监控 ========== -->
+<section class="view" id="v-monitor">
+  <div class="card">
+    <h2>➕ 添加追更监控</h2>
+    <label class="l">夸克分享链接（可整段粘贴，提取码会自动识别；多个链接按先后顺序作为备用源）</label>
+    <textarea id="m-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
+    <div class="hint" id="m-parse"></div>
+    <div class="row" style="margin-top:14px">
+      <div class="grow"><label class="l">转存到我的目录（留空=根目录）</label>
+        <input type="text" id="m-path" placeholder="影视/美剧/某某剧"></div>
+      <button class="btn" id="m-browse">浏览…</button>
+      <div style="width:150px"><label class="l">扫描间隔（分钟）</label>
+        <input type="number" id="m-interval" value="60" min="60"></div>
+    </div>
+    <div class="hint">间隔最低 60 分钟。调太低会触发夸克风控，得不偿失。</div>
+    <label class="chk"><input type="checkbox" id="m-existing" checked> 添加时立即转存链接里已有的视频（取消勾选则只追新、不转已有的）</label>
+    <details><summary>高级选项（过滤规则 / 目录结构）</summary>
+      <div class="grid2">
+        <div><label class="l">监控名称（留空取目录名）</label><input type="text" id="m-name"></div>
+        <div><label class="l">默认季号（文件名里没写季时使用）</label><input type="number" id="m-season" value="1" min="0"></div>
+        <div><label class="l">只转含这些关键词的（逗号分隔，支持 *）</label><input type="text" id="m-inc" placeholder="2160p,4K"></div>
+        <div><label class="l">排除含这些关键词的</label><input type="text" id="m-exc" placeholder="预告,花絮,CAM"></div>
+        <div><label class="l">最小体积（MB，0=不限）</label><input type="number" id="m-min" value="0" min="0"></div>
+        <div><label class="l">重命名</label><select id="m-rename">
+          <option value="auto">整理为 S01E05（推荐，Emby 更易识别）</option><option value="keep">保持原文件名</option></select></div>
+        <div><label class="l">Emby 里的剧名（留空=用监控名称搜索）</label><input type="text" id="m-emby"></div>
+        <div><label class="l">到期日（可选，之后不再扫描）</label><input type="date" id="m-end"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="m-tree" checked> 保持分享里的子目录结构（如「第一季」「第二季」文件夹）</label>
+    </details>
+    <div class="actions"><button class="btn pri" id="m-add">＋ 添加监控</button></div>
+  </div>
+  <div class="card">
+    <h2>📡 监控列表 <small>（每 30 秒自动刷新）</small></h2>
+    <div class="tbl" id="m-list"><div class="empty">加载中…</div></div>
+  </div>
+</section>
+
+<!-- ========== 剧集推荐 ========== -->
+<section class="view" id="v-recommend">
+  <div class="card">
+    <div class="toolbar">
+      <input type="text" id="r-q" placeholder="搜索剧名…">
+      <button class="btn" id="r-search">搜索</button>
+      <div class="chips" id="r-cats">
+        <span class="chip on" data-c="home">精选</span><span class="chip" data-c="all">全部</span>
+        <span class="chip" data-c="cn">国产剧</span><span class="chip" data-c="kr_jp">日韩剧</span>
+        <span class="chip" data-c="us_eu">欧美剧</span>
+      </div>
+      <select id="r-sort"><option value="popularity">按热度</option><option value="rating">按评分</option><option value="latest">按最新</option></select>
+    </div>
+    <div id="r-body"><div class="empty">加载中…</div></div>
+    <div class="actions" style="justify-content:center"><button class="btn" id="r-more" style="display:none">加载更多</button></div>
+  </div>
+</section>
+
+<!-- ========== 订阅追更 ========== -->
+<section class="view" id="v-subs">
+  <div class="card">
+    <h2>📺 订阅追更 <small>一部剧可以挂多个分享链接，按顺序检查，只补 Emby 里缺的集数</small></h2>
+    <div class="actions" style="margin-top:0"><button class="btn pri" id="s-new">＋ 搜索并订阅新剧</button>
+      <button class="btn" id="s-refresh">刷新全部进度</button></div>
+  </div>
+  <div class="card"><div id="s-list"><div class="empty">加载中…</div></div></div>
+</section>
+
+<!-- ========== 钉钉 ========== -->
+<section class="view" id="v-dingtalk">
+  <div class="card">
+    <h2>🔔 钉钉通知</h2>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="d-enabled"> 启用钉钉通知</label>
+    <label class="l">机器人 Webhook</label><input type="text" id="d-webhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=…">
+    <div class="hint" id="d-webhook-h"></div>
+    <label class="l">加签密钥（可选，机器人安全设置选了「加签」才需要）</label><input type="password" id="d-secret" placeholder="SEC…">
+    <div class="hint" id="d-secret-h"></div>
+    <label class="chk"><input type="checkbox" id="d-add"> 新增监控 / 订阅时通知</label>
+    <label class="chk"><input type="checkbox" id="d-save"> 转存了新内容时通知</label>
+    <label class="chk"><input type="checkbox" id="d-err"> 分享链接失效时通知</label>
+    <div class="actions"><button class="btn pri" data-save="dingtalk">保存</button><button class="btn" data-test="dingtalk">发送测试消息</button></div>
+    <div class="hint" id="dingtalk-msg"></div>
+  </div>
+</section>
+
+<!-- ========== SmartStrm ========== -->
+<section class="view" id="v-smartstrm">
+  <div class="card">
+    <h2>🎬 SmartStrm 联动</h2>
+    <div class="hint" style="margin:0 0 10px">转存成功后调用 SmartStrm 的 Webhook，自动生成 STRM；再通知 Emby 刷新。</div>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="x-enabled"> 启用 SmartStrm 联动</label>
+    <label class="l">Webhook 地址（SmartStrm 管理后台 → 设置里复制）</label>
+    <input type="text" id="x-webhook" placeholder="http://smartstrm:8024/webhook/…"><div class="hint" id="x-webhook-h"></div>
+    <label class="l">STRM 任务名（可选，多个用英文逗号分隔；留空=由 SmartStrm 自行决定）</label><input type="text" id="x-task" placeholder="quark,movie">
+    <div class="row"><div class="grow"><label class="l">事件名</label><input type="text" id="x-event" placeholder="qas_strm"></div>
+      <div class="grow"><label class="l">转存后等待（秒）</label><input type="number" id="x-delay" min="0" max="60"></div></div>
+    <label class="chk"><input type="checkbox" id="x-sp"> 只触发本次转存的目标文件夹（推荐，秒级生成）</label>
+    <div class="actions"><button class="btn pri" data-save="smartstrm">保存</button><button class="btn" data-test="smartstrm">测试触发</button></div>
+    <div class="hint" id="smartstrm-msg">测试会不带目录触发一次，SmartStrm 可能会执行一次完整任务。</div>
+  </div>
+</section>
+
+<!-- ========== TMDB ========== -->
+<section class="view" id="v-tmdb">
+  <div class="card">
+    <h2>🎯 TMDB 设置</h2>
+    <div class="hint" style="margin:0 0 10px">用于「剧集推荐」「订阅追更」的海报、简介、季集数和播出日期。可在 themoviedb.org 免费申请。</div>
+    <label class="l">API Key（v3）或读访问令牌（v4）</label><input type="password" id="t-key"><div class="hint" id="t-key-h"></div>
+    <div class="row"><div class="grow"><label class="l">语言</label><input type="text" id="t-lang" placeholder="zh-CN"></div>
+      <div class="grow"><label class="l">地区</label><input type="text" id="t-region" placeholder="CN"></div></div>
+    <details><summary>高级（国内网络访问不了时填反代地址）</summary>
+      <label class="l">API 地址</label><input type="text" id="t-base" placeholder="https://api.themoviedb.org/3">
+      <label class="l">图片地址</label><input type="text" id="t-img" placeholder="https://image.tmdb.org/t/p/w342"></details>
+    <div class="actions"><button class="btn pri" data-save="tmdb">保存</button><button class="btn" data-test="tmdb">测试连接</button></div>
+    <div class="hint" id="tmdb-msg"></div>
+  </div>
+</section>
+
+<!-- ========== Emby ========== -->
+<section class="view" id="v-emby">
+  <div class="card">
+    <h2>📹 Emby 联动</h2>
+    <div class="hint" style="margin:0 0 10px">开启后，转存前会查询 Emby 里这部剧已有哪些集，<b>只转存缺少的集数</b>；转存后通知 Emby 刷新。</div>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="e-enabled"> 启用 Emby 联动</label>
+    <label class="l">Emby 地址</label><input type="text" id="e-url" placeholder="http://192.168.1.10:8096">
+    <label class="l">API Key（Emby 控制台 → 高级 → API 密钥）</label><input type="password" id="e-key"><div class="hint" id="e-key-h"></div>
+    <label class="l">用户 ID（可选）</label><input type="text" id="e-user">
+    <label class="chk"><input type="checkbox" id="e-only"> 只转存 Emby 里缺少的集数</label>
+    <label class="chk"><input type="checkbox" id="e-refresh"> 转存后通知 Emby 刷新</label>
+    <label class="l">刷新前等待（秒，给 STRM 生成留时间）</label><input type="number" id="e-delay" min="0" max="120" style="max-width:200px">
+    <div class="actions"><button class="btn pri" data-save="emby">保存</button><button class="btn" data-test="emby">测试连接</button></div>
+    <div class="hint" id="emby-msg"></div>
+  </div>
+</section>
+
+<!-- ========== 账号 ========== -->
+<section class="view" id="v-account">
+  <div class="card">
+    <h2>🔐 夸克账号登录</h2>
+    <div id="a-state" class="hint" style="margin:0 0 8px"></div>
+    <label class="l">Cookie</label>
+    <textarea id="a-cookie" placeholder="用浏览器登录 pan.quark.cn，按 F12 → 网络(Network) → 任意请求 → 复制请求头里的 Cookie"></textarea>
+    <div class="hint">Cookie 只保存在你自己的服务器 config 目录里，不会再显示出来。含 kps / sign / vcode 三项时可启用自动签到（需从手机端抓取）。</div>
+    <div class="actions"><button class="btn pri" id="a-save">验证并保存</button>
+      <button class="btn" id="a-sign">立即签到</button><button class="btn danger" id="a-out">退出登录</button></div>
+    <label class="chk"><input type="checkbox" id="a-auto"> 每天自动签到</label>
+    <div class="hint" id="a-msg"></div>
+  </div>
+  <div class="card">
+    <h2>📦 从 quark-auto-save 迁移</h2>
+    <div class="hint" style="margin:0 0 8px">把旧版的 <code>quark_config.json</code> 放进挂载的 config 目录，点下面按钮导入 Cookie 和任务。</div>
+    <button class="btn" id="a-import">导入旧版配置</button>
+  </div>
+</section>
+
+<!-- ========== 日志 ========== -->
+<section class="view" id="v-logs">
+  <div class="card">
+    <h2>📜 运行日志</h2>
+    <div class="toolbar"><label class="chk" style="margin:0"><input type="checkbox" id="l-warn"> 只看警告 / 错误</label>
+      <button class="btn sm" id="l-refresh">刷新</button><button class="btn sm danger" id="l-clear">清空</button></div>
+    <div class="log" id="l-box"></div>
+  </div>
+</section>
+</div></main>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api' + path, {method, headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+  let d = {}; try { d = await r.json(); } catch (_) {}
+  if (!r.ok) throw new Error(d.error || d.msg || ('请求失败 ' + r.status));
+  return d;
+}
+let toastT;
+function toast(msg, type = '') {
+  $('.toast')?.remove();
+  const el = document.createElement('div'); el.className = 'toast ' + type; el.textContent = msg; document.body.append(el);
+  clearTimeout(toastT); toastT = setTimeout(() => el.remove(), type === 'err' ? 5000 : 2500);
+}
+const guard = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { toast(e.message, 'err'); } };
+
+/* ---------- 主题 ---------- */
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+  try { localStorage.setItem('qp-theme', t); } catch (_) {}
+}
+let saved = 'light'; try { saved = localStorage.getItem('qp-theme') || 'light'; } catch (_) {}
+setTheme(saved);
+$('#themeBtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+/* ---------- 弹窗 ---------- */
+function modal(html, cls = '') {
+  const m = document.createElement('div'); m.className = 'mask';
+  m.innerHTML = `<div class="modal ${cls}"><button class="x" aria-label="关闭">×</button>${html}</div>`;
+  m.addEventListener('mousedown', e => { if (e.target === m) m.remove(); });
+  $('.x', m).onclick = () => m.remove();
+  document.body.append(m); return m;
+}
+
+/* ---------- 路由 ---------- */
+const loaders = {};
+let cur = '', timers = [];
+function go(v) {
+  if (!$('#v-' + v)) v = 'monitor';
+  cur = v; location.hash = v;
+  $$('.view').forEach(e => e.classList.toggle('on', e.id === 'v-' + v));
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  timers.forEach(clearInterval); timers = [];
+  loaders[v] && loaders[v]();
+}
+$$('#nav button').forEach(b => b.onclick = () => go(b.dataset.v));
+
+/* ---------- 状态/横幅 ---------- */
+async function refreshStatus() {
+  try {
+    const s = await api('/status');
+    const who = $('#who'); who.classList.toggle('off', !s.logged_in);
+    who.textContent = s.logged_in ? '已登录 ' + s.nickname : (s.error || '未登录夸克账号');
+    $('#ver').textContent = 'v' + s.version;
+    $('#banner').innerHTML = s.logged_in ? '' : `<div class="banner">⚠ ${esc(s.error || '尚未登录夸克账号')}，转存和目录浏览都需要登录。<a href="#account" onclick="go('account')">去登录 →</a></div>`;
+  } catch (e) { $('#who').textContent = '无法连接后端'; }
+}
+
+/* ======================================================================
+   目录浏览弹窗
+   ====================================================================== */
+function browse(initial, onPick) {
+  const stack = [{fid: '0', name: ''}];
+  const m = modal(`<h3>选择转存目录</h3><div class="crumbs" id="bc"></div><div class="dirs" id="bd"></div>
+    <div class="row" style="margin-top:12px"><div class="grow"><input type="text" id="bn" placeholder="新建文件夹名称"></div>
+    <button class="btn" id="bmk">新建并进入</button></div>
+    <div class="actions"><button class="btn pri" id="bok">选择当前目录</button><span class="hint" id="bp"></span></div>`);
+  const path = () => '/' + stack.slice(1).map(s => s.name).join('/');
+  async function load() {
+    $('#bp', m).textContent = path();
+    $('#bc', m).innerHTML = stack.map((s, i) => `<a data-i="${i}">${i ? esc(s.name) : '🏠 根目录'}</a>`).join(' / ');
+    $$('#bc a', m).forEach(a => a.onclick = () => { stack.length = +a.dataset.i + 1; load(); });
+    const box = $('#bd', m); box.innerHTML = '<div class="sub">读取中…</div>';
+    try {
+      const {dirs} = await api('/browse?fid=' + encodeURIComponent(stack.at(-1).fid));
+      box.innerHTML = dirs.length ? dirs.map(d => `<div data-f="${esc(d.fid)}" data-n="${esc(d.name)}">📁 ${esc(d.name)}</div>`).join('') : '<div class="sub">（没有子文件夹）</div>';
+      $$('div[data-f]', box).forEach(d => d.onclick = () => { stack.push({fid: d.dataset.f, name: d.dataset.n}); load(); });
+    } catch (e) { box.innerHTML = `<div class="sub" style="color:var(--err)">${esc(e.message)}</div>`; }
+  }
+  $('#bmk', m).onclick = guard(async () => {
+    const n = $('#bn', m).value.trim().replace(/\//g, ''); if (!n) return;
+    const r = await api('/browse/mkdir', 'POST', {path: path() + '/' + n});
+    stack.push({fid: r.fid, name: n}); $('#bn', m).value = ''; load();
+  });
+  $('#bok', m).onclick = () => { onPick(path() === '/' ? '' : path()); m.remove(); };
+  load();
+}
+
+/* ======================================================================
+   分享监控
+   ====================================================================== */
+const ST = {ok:['正常','ok'], paused:['已暂停','mute'], invalid:['链接失效','err'], error:['出错','err'],
+  complete:['已追完','info'], expired:['已到期','mute'], nolinks:['待添加链接','warn']};
+function stTag(t) {
+  if (t.state === 'running') return '<span class="tag info">扫描中…</span>';
+  if (t.state === 'queued') return '<span class="tag info">排队中</span>';
+  const [txt, cls] = ST[t.status] || ST.ok; return `<span class="tag ${cls}">${txt}</span>`;
+}
+const shortUrl = u => u.replace(/^https?:\/\//, '').replace(/\?pwd=\w+/, '');
+const nextIn = t => {
+  if (!t.enabled || !t.next_run) return '';
+  const m = Math.round((t.next_run * 1000 - Date.now()) / 60000);
+  return m > 0 ? `下次约 ${m} 分钟后` : '即将扫描';
+};
+
+const parseHint = debounce(guard(async () => {
+  const text = $('#m-links').value, h = $('#m-parse');
+  if (!text.trim()) { h.textContent = ''; h.className = 'hint'; return; }
+  const {links} = await api('/parse', 'POST', {text});
+  h.className = 'hint ' + (links.length ? 'ok' : 'err');
+  h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
+}), 300);
+$('#m-links').oninput = parseHint;
+$('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''));
+
+function advFields(p = 'm') {
+  return {name: $(`#${p}-name`).value, season: $(`#${p}-season`).value, include_kw: $(`#${p}-inc`).value,
+    exclude_kw: $(`#${p}-exc`).value, min_size_mb: $(`#${p}-min`).value, rename: $(`#${p}-rename`).value,
+    emby_name: $(`#${p}-emby`).value, enddate: $(`#${p}-end`).value, keep_tree: $(`#${p}-tree`).checked};
+}
+$('#m-add').onclick = guard(async () => {
+  const btn = $('#m-add'); btn.disabled = true; btn.textContent = '添加中…';
+  try {
+    const existing = $('#m-existing').checked;
+    await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m')});
+    toast(existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
+    $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
+  } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
+});
+
+async function loadMonitors() {
+  const {tasks} = await api('/tasks?kind=monitor');
+  const box = $('#m-list');
+  if (!tasks.length) { box.innerHTML = '<div class="empty">还没有监控项</div>'; return; }
+  box.innerHTML = `<table><thead><tr><th>名称 / 链接</th><th>转存目录</th><th>状态</th><th>上次扫描</th><th>最近结果</th><th>操作</th></tr></thead><tbody>${
+    tasks.map(t => {
+      const dead = t.links.filter(l => l.ban).length;
+      return `<tr><td><div class="nm">${esc(t.name)}</div>
+        <div class="sub">${t.links.slice(0, 2).map(l => esc(shortUrl(l.url))).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
+        ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}</td>
+        <td class="sub">${esc(t.savepath)}</td><td>${stTag(t)}<div class="sub">${esc(nextIn(t))}</div></td>
+        <td class="sub">${esc(t.last_run || '—')}</td>
+        <td class="sub" style="max-width:260px">${esc(t.last_msg || '—')}${t.saved_total ? `<br>累计转存 ${t.saved_total} 个` : ''}</td>
+        <td><div class="ops">
+          <button class="btn sm" data-a="run" data-id="${t.id}">立即扫描</button>
+          <button class="btn sm" data-a="preview" data-id="${t.id}" title="只看不转存，逐个文件说明会不会转、为什么">试运行</button>
+          <button class="btn sm" data-a="edit" data-id="${t.id}">编辑</button>
+          <button class="btn sm" data-a="toggle" data-id="${t.id}">${t.enabled ? '暂停' : '恢复'}</button>
+          <button class="btn sm danger" data-a="del" data-id="${t.id}">删除</button></div></td></tr>`;
+    }).join('')}</tbody></table>`;
+  bindTaskOps(box, tasks, loadMonitors);
+}
+function bindTaskOps(box, tasks, reload) {
+  $$('[data-a]', box).forEach(b => b.onclick = guard(async () => {
+    const id = b.dataset.id, t = tasks.find(x => x.id === id);
+    if (b.dataset.a === 'run') { await api(`/tasks/${id}/run`, 'POST'); toast('已开始扫描，详见运行日志', 'ok'); setTimeout(reload, 800); }
+    else if (b.dataset.a === 'toggle') { await api(`/tasks/${id}/toggle`, 'POST'); reload(); }
+    else if (b.dataset.a === 'del') { if (confirm(`删除《${t.name}》？已转存的文件不会被删除。`)) { await api('/tasks/' + id, 'DELETE'); reload(); } }
+    else if (b.dataset.a === 'edit') editTask(t, reload);
+    else if (b.dataset.a === 'preview') previewTask(t);
+  }));
+}
+loaders.monitor = () => { loadMonitors(); timers.push(setInterval(() => loadMonitors().catch(() => {}), 30000)); };
+
+/* ---------- 编辑弹窗（监控 / 订阅共用） ---------- */
+function editTask(t, reload) {
+  const wk = ['一','二','三','四','五','六','日'];
+  const dead = t.links.filter(l => l.ban);
+  const m = modal(`<h3>编辑《${esc(t.name)}》</h3>
+    <label class="l">分享链接（一行一个，<b>从上到下就是检查优先级</b>；可整段粘贴）</label>
+    <textarea id="ed-links" style="min-height:110px">${esc(t.links.map(l => l.url).join('\n'))}</textarea>
+    ${dead.length ? `<div class="hint err">失效：${dead.map(l => esc(shortUrl(l.url)) + '（' + esc(l.ban) + '）').join('；')}
+      <a id="ed-reset">重置失效标记</a></div>` : ''}
+    <div class="row" style="margin-top:12px"><div class="grow"><label class="l">转存目录</label><input type="text" id="ed-path" value="${esc(t.savepath)}"></div>
+      <button class="btn" id="ed-browse">浏览…</button><div style="width:110px"><label class="l">间隔（分钟）</label><input type="number" id="ed-int" min="60" value="${t.interval}"></div></div>
+    <div class="grid2">
+      <div><label class="l">名称</label><input type="text" id="ed-name" value="${esc(t.name)}"></div>
+      <div><label class="l">季号</label><input type="number" id="ed-season" min="0" value="${t.season}"></div>
+      <div><label class="l">关键词（包含）</label><input type="text" id="ed-inc" value="${esc(t.include_kw)}"></div>
+      <div><label class="l">关键词（排除）</label><input type="text" id="ed-exc" value="${esc(t.exclude_kw)}"></div>
+      <div><label class="l">最小体积（MB）</label><input type="number" id="ed-min" min="0" value="${t.min_size_mb}"></div>
+      <div><label class="l">总集数（0=不填，以 TMDB 为准）</label><input type="number" id="ed-total" min="0" value="${t.total_episodes}"></div>
+      <div><label class="l">重命名</label><select id="ed-rename"><option value="auto">整理为 S01E05</option><option value="keep">保持原名</option>${t.rename === 'custom' ? '<option value="custom">自定义（导入）</option>' : ''}</select></div>
+      <div><label class="l">到期日</label><input type="date" id="ed-end" value="${esc(t.enddate)}"></div>
+      <div><label class="l">解析不出第几集的视频</label><select id="ed-unp"><option value="skip">跳过（推荐剧集用，避免重复转存）</option><option value="save">照样转存（电影 / 特辑用）</option></select></div>
+      <div><label class="l">Emby 剧名</label><input type="text" id="ed-emby" value="${esc(t.emby_name)}"></div>
+      <div><label class="l">Emby 剧集 ID（精确指定）</label><input type="text" id="ed-sid" value="${esc(t.emby_series_id)}"></div>
+    </div>
+    <label class="l">运行星期</label><div class="chips" id="ed-wk">${wk.map((d, i) => `<span class="chip ${t.run_weeks.includes(i + 1) ? 'on' : ''}" data-d="${i + 1}">周${d}</span>`).join('')}</div>
+    <label class="chk"><input type="checkbox" id="ed-tree" ${t.keep_tree ? 'checked' : ''}> 保持子目录结构</label>
+    <label class="chk"><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
+    <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
+  $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
+  $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
+  $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p);
+  $('#ed-no', m).onclick = () => m.remove();
+  $('#ed-reset', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); toast('已重置', 'ok'); m.remove(); reload(); }));
+  $('#ed-ok', m).onclick = guard(async () => {
+    await api('/tasks/' + t.id, 'PUT', {
+      links_text: $('#ed-links', m).value, savepath: $('#ed-path', m).value, interval: $('#ed-int', m).value,
+      name: $('#ed-name', m).value, season: $('#ed-season', m).value, include_kw: $('#ed-inc', m).value,
+      exclude_kw: $('#ed-exc', m).value, min_size_mb: $('#ed-min', m).value, total_episodes: $('#ed-total', m).value,
+      rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
+      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked,
+      skip_when_complete: $('#ed-skip', m).checked,
+      run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
+    toast('已保存', 'ok'); m.remove(); reload();
+  });
+}
+
+/* ---------- 试运行：只看不转存 ---------- */
+async function previewTask(t) {
+  const m = modal(`<h3>试运行《${esc(t.name)}》</h3><div class="empty">正在读取分享内容并比对…</div>`, 'wide');
+  try {
+    const r = await api(`/tasks/${t.id}/preview`, 'POST');
+    const tagOf = {save: ['转存', 'ok'], skip: ['跳过', 'mute'], defer: ['延后', 'warn']};
+    $('.modal', m).innerHTML = `<button class="x">×</button><h3>试运行《${esc(t.name)}》<span class="sub" style="font-weight:400"> 只看不转存</span></h3>
+      ${r.warnings.map(w => `<div class="banner" style="margin-bottom:10px">⚠ ${esc(w)}</div>`).join('')}
+      <div class="card" style="margin:0 0 12px;padding:12px 14px;background:var(--bg);border:0">
+        <div class="sub">本任务季号：<b>第 ${r.season} 季</b>（文件名里没写季的，都按这个季号算）</div>
+        <div class="sub">${esc(r.emby_msg)}</div>
+        <div class="sub">Emby 已有：<b>${esc(r.emby_have || '无')}</b></div>
+        <div class="sub">夸克目录已有：<b>${esc(r.dir_have || '无')}</b></div></div>
+      ${r.links.map((l, i) => `<div style="margin:14px 0 6px"><b>链接 ${i + 1}</b> <span class="sub">${esc(shortUrl(l.url))}</span>
+        ${l.ban ? `<span class="tag err">已失效：${esc(l.ban)}</span>` : ''}
+        ${l.error ? `<span class="tag err">${esc(l.error)}</span>` : ''}</div>
+        ${l.rows.length ? `<div class="tbl"><table><thead><tr><th>分享里的文件名</th><th>识别为</th><th>结果</th><th>原因</th></tr></thead><tbody>
+        ${l.rows.map(x => { const [tx, c] = tagOf[x.action] || ['', 'mute']; return `<tr><td class="sub" style="color:var(--fg)">${esc(x.file)}</td>
+          <td>${esc(x.eps || '—')}</td><td><span class="tag ${c}">${tx}</span></td><td class="sub">${esc(x.why)}</td></tr>`; }).join('')}
+        </tbody></table></div>` : (l.ban || l.error ? '' : '<div class="sub">这个链接里没有可处理的文件</div>')}`).join('')}
+      <div class="actions"><button class="btn" id="pv-close">关闭</button></div>`;
+    $('.x', m).onclick = () => m.remove(); $('#pv-close', m).onclick = () => m.remove();
+  } catch (e) {
+    $('.modal', m).innerHTML = `<button class="x">×</button><h3>试运行失败</h3><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`;
+    $('.x', m).onclick = () => m.remove();
+  }
+}
+
+/* ======================================================================
+   剧集推荐
+   ====================================================================== */
+let rCat = 'home', rPage = 1, rTotal = 1, rQuery = '';
+function posterCard(it) {
+  const bd = [it.in_emby ? '<span>✓ 已入库</span>' : '', it.sub_id ? '<span class="s">已订阅</span>' : ''].join('');
+  return `<div class="pc" data-id="${it.id}"><div class="img" style="background-image:url('${esc(it.poster_url)}')">
+    ${it.vote_average ? `<div class="rate">★ ${it.vote_average}</div>` : ''}<div class="bd">${bd}</div></div>
+    <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y">${esc((it.first_air_date || '').slice(0, 4) || '—')}</div></div>`;
+}
+const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => showDetail(+p.dataset.id));
+async function loadRecommend(append = false) {
+  const body = $('#r-body'), more = $('#r-more');
+  try {
+    if (rQuery || rCat !== 'home') {
+      if (!append) { rPage = 1; body.innerHTML = '<div class="empty">加载中…</div>'; }
+      const d = rQuery ? await api(`/tmdb/search?q=${encodeURIComponent(rQuery)}&page=${rPage}`)
+        : await api(`/tmdb/discover?category=${rCat}&sort=${$('#r-sort').value}&page=${rPage}`);
+      rTotal = d.total_pages;
+      if (!append) body.innerHTML = '<div class="posters"></div>';
+      if (!d.items.length && !append) body.innerHTML = '<div class="empty">没有找到结果</div>';
+      else $('.posters', body).insertAdjacentHTML('beforeend', d.items.map(posterCard).join(''));
+      bindPosters(body); more.style.display = rPage < rTotal ? '' : 'none';
+    } else {
+      more.style.display = 'none'; body.innerHTML = '<div class="empty">加载中…</div>';
+      const {rows} = await api('/tmdb/home');
+      body.innerHTML = rows.map(r => `<div class="shelf"><h3>${esc(r.label)}<a data-c="${r.category}">查看更多 ›</a></h3>
+        ${r.items.length ? `<div class="rail">${r.items.map(posterCard).join('')}</div>` : `<div class="sub">${esc(r.err || '暂无数据')}</div>`}</div>`).join('');
+      bindPosters(body);
+      $$('.shelf h3 a', body).forEach(a => a.onclick = () => setCat(a.dataset.c));
+    }
+  } catch (e) { body.innerHTML = `<div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; more.style.display = 'none'; }
+}
+function setCat(c) {
+  rCat = c; rQuery = ''; $('#r-q').value = '';
+  $$('#r-cats .chip').forEach(x => x.classList.toggle('on', x.dataset.c === c)); loadRecommend();
+}
+$$('#r-cats .chip').forEach(c => c.onclick = () => setCat(c.dataset.c));
+$('#r-sort').onchange = () => loadRecommend();
+$('#r-search').onclick = () => { rQuery = $('#r-q').value.trim(); if (rQuery) $$('#r-cats .chip').forEach(x => x.classList.remove('on')); else setCat('home'); loadRecommend(); };
+$('#r-q').onkeydown = e => { if (e.key === 'Enter') $('#r-search').click(); };
+$('#r-more').onclick = () => { rPage++; loadRecommend(true); };
+loaders.recommend = () => loadRecommend();
+
+async function showDetail(id) {
+  const m = modal('<div class="empty">加载中…</div>', 'wide');
+  try {
+    const d = await api('/tmdb/tv/' + id);
+    const sub = d.sub_id ? `<span class="tag info">已订阅</span>` : '';
+    $('.modal', m).innerHTML = `<button class="x">×</button>
+      <div class="hero" style="background-image:url('${esc(d.backdrop_url || d.poster_url)}')"></div>
+      <div class="dt"><div class="pic" style="background-image:url('${esc(d.poster_url)}')"></div>
+        <div style="min-width:0"><h3 style="margin:0 0 4px">${esc(d.name)} ${sub} ${d.in_emby ? '<span class="tag ok">Emby 已入库</span>' : ''}</h3>
+        <div class="sub">${esc((d.first_air_date || '').slice(0, 4))} · ★ ${d.vote_average} (${d.vote_count}) · ${esc(d.genres.join(' / '))} · ${esc(d.status)}</div>
+        <p style="font-size:13px;margin:10px 0">${esc(d.overview || '暂无简介')}</p></div></div>
+      <table style="margin-top:8px"><thead><tr><th>季</th><th>集数</th><th>首播</th>${d.seasons.some(s => 'emby_have' in s) ? '<th>Emby 已有</th>' : ''}<th></th></tr></thead><tbody>
+      ${d.seasons.map(s => `<tr><td>${esc(s.name || '第 ' + s.season_number + ' 季')}</td><td>${s.episode_count}</td><td class="sub">${esc(s.air_date || '—')}</td>
+        ${'emby_have' in s ? `<td>${s.emby_have}</td>` : (d.seasons.some(x => 'emby_have' in x) ? '<td>—</td>' : '')}
+        <td><button class="btn sm pri" data-s="${s.season_number}">订阅此季</button></td></tr>`).join('')}</tbody></table>
+      ${d.cast.length ? `<label class="l" style="margin-top:14px">主演</label><div class="cast">${d.cast.map(c => `<div><i style="background-image:url('${esc(c.profile_url)}')"></i>${esc(c.name)}<span>${esc(c.character)}</span></div>`).join('')}</div>` : ''}`;
+    $('.x', m).onclick = () => m.remove();
+    $$('[data-s]', m).forEach(b => b.onclick = () => { m.remove(); subscribeDialog(d, +b.dataset.s); });
+  } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
+}
+
+/* ======================================================================
+   订阅追更
+   ====================================================================== */
+function subscribeDialog(show, season = 1) {
+  const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
+    <div class="row"><div style="width:110px"><label class="l">季号</label><input type="number" id="sd-season" min="0" value="${season}"></div>
+    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="/影视/剧集/${esc(show.name)}${season > 1 ? '/第 ' + season + ' 季' : ''}"></div>
+    <button class="btn" id="sd-browse">浏览…</button></div>
+    <label class="l">分享链接（可留空稍后再加；多个按先后顺序检查，后面的只补前面没有的集数）</label>
+    <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
+    <div class="row"><div class="grow"><label class="l">扫描间隔（分钟，≥60）</label><input type="number" id="sd-int" min="60" value="60"></div>
+    <div class="grow"><label class="l">总集数（可选，不填则按 TMDB 已播出集数）</label><input type="number" id="sd-total" min="0" value="0"></div></div>
+    <label class="chk"><input type="checkbox" id="sd-tree" checked> 保持分享里的子目录结构</label>
+    <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即转存缺少的集数</label>
+    <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
+  $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
+  $('#sd-no', m).onclick = () => m.remove();
+  $('#sd-ok', m).onclick = guard(async () => {
+    await api('/subscriptions', 'POST', {tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
+      links_text: $('#sd-links', m).value, interval: $('#sd-int', m).value, total_episodes: $('#sd-total', m).value,
+      keep_tree: $('#sd-tree', m).checked, save_existing: $('#sd-exist', m).checked});
+    m.remove(); toast('已订阅', 'ok'); go('subs');
+  });
+}
+$('#s-new').onclick = () => {
+  const m = modal(`<h3>搜索剧集</h3><div class="row"><div class="grow"><input type="text" id="ss-q" placeholder="输入剧名…"></div><button class="btn pri" id="ss-go">搜索</button></div>
+    <div id="ss-res" style="margin-top:14px"></div>`);
+  const run = guard(async () => {
+    const q = $('#ss-q', m).value.trim(); if (!q) return;
+    const {items} = await api('/tmdb/search?q=' + encodeURIComponent(q));
+    $('#ss-res', m).innerHTML = items.length ? `<div class="posters">${items.slice(0, 12).map(posterCard).join('')}</div>` : '<div class="empty">没有找到</div>';
+    $$('.pc', m).forEach(p => p.onclick = () => { m.remove(); showDetail(+p.dataset.id); });
+  });
+  $('#ss-go', m).onclick = run; $('#ss-q', m).onkeydown = e => e.key === 'Enter' && run(); $('#ss-q', m).focus();
+};
+
+const progressCache = {}, openLinks = new Set();
+function renderProgress(el, p) {
+  if (p.error) { el.innerHTML = `<span class="sub" style="color:var(--err)">${esc(p.error)}</span>`; return; }
+  const base = p.aired ?? p.total ?? 0, pct = base ? Math.min(100, Math.round(p.have_count / base * 100)) : 0;
+  const miss = p.missing.length ? ` · <span style="color:var(--warn)">缺 ${p.missing.slice(0, 10).map(e => 'E' + String(e).padStart(2, '0')).join(' ')}${p.missing.length > 10 ? ` 等 ${p.missing.length} 集` : ''}</span>`
+    : (base ? ' · <span style="color:var(--ok)">✓ 已播出的都齐了</span>' : '');
+  el.innerHTML = `<div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="sub">已有 <b>${p.have_count}</b>${p.aired != null ? ` / 已播 ${p.aired}` : ''}${p.total ? ` / 共 ${p.total}` : ''} 集 · ${esc(p.emby)}${miss}</div>`;
+}
+async function loadProgress(card, id) {
+  const el = $('.prog', card); el.innerHTML = '<span class="sub">读取进度…</span>';
+  try { progressCache[id] = await api(`/tasks/${id}/progress`); } catch (e) { progressCache[id] = {error: e.message}; }
+  renderProgress(el, progressCache[id]);
+}
+async function loadSubs(refresh = false) {
+  const {tasks} = await api('/tasks?kind=subscription');
+  const box = $('#s-list');
+  if (!tasks.length) { box.innerHTML = '<div class="empty">还没有订阅。点上面「搜索并订阅新剧」，或去「剧集推荐」点一部剧。</div>'; return; }
+  box.innerHTML = tasks.map(t => {
+    const dead = t.links.filter(l => l.ban).length, open = openLinks.has(t.id) || dead > 0 || !t.links.length;
+    return `<div class="sub-card" data-id="${t.id}">
+    <div class="pic" style="background-image:url('${esc(t.poster)}')"></div>
+    <div class="sub-body">
+      <div class="sub-top">
+        <div class="sub-head"><b title="${esc(t.overview)}">${esc(t.name)}</b><span class="tag mute">第 ${t.season} 季</span>${stTag(t)}<span class="sub">${esc(nextIn(t))}</span></div>
+        <div class="sub-acts">
+          <button class="btn xs" data-a="run" data-id="${t.id}">立即扫描</button><button class="btn xs" data-a="preview" data-id="${t.id}" title="只看不转存，逐个文件说明会不会转、为什么">试运行</button><button class="btn xs" data-a="prog" data-id="${t.id}">刷新进度</button>
+          <button class="btn xs" data-a="edit" data-id="${t.id}">编辑</button><button class="btn xs" data-a="toggle" data-id="${t.id}">${t.enabled ? '暂停' : '恢复'}</button><button class="btn xs danger" data-a="del" data-id="${t.id}">删除</button></div>
+      </div>
+      <div class="ov">📁 ${esc(t.savepath)}　·　最近：${esc(t.last_msg || '—')}</div>
+      <div class="prog"></div>
+      <details class="lks" data-id="${t.id}" ${open ? 'open' : ''}><summary>分享链接（${t.links.length}）${dead ? `<span class="tag err" style="margin-left:6px">${dead} 个失效</span>` : ''}</summary>
+        ${t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
+          <span class="u" title="${esc(l.url)}">${esc(shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效</span>` : ''}
+          <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn xs danger" data-rm="${i}">×</button></div>`).join('') || '<div class="sub" style="color:var(--warn)">还没有分享链接，在下面粘贴一个或多个</div>'}
+        <div class="addlk"><textarea placeholder="粘贴新的分享链接（可多个）"></textarea><button class="btn xs" data-add>添加</button></div>
+      </details>
+    </div></div>`;
+  }).join('');
+  $$('details.lks', box).forEach(d => d.addEventListener('toggle', () => d.open ? openLinks.add(d.dataset.id) : openLinks.delete(d.dataset.id)));
+  $$('.sub-card', box).forEach(card => {
+    const id = card.dataset.id, t = tasks.find(x => x.id === id);
+    const save = guard(async urls => { await api('/tasks/' + id, 'PUT', {links_text: urls.join('\n')}); loadSubs(); });
+    $$('[data-mv]', card).forEach(b => b.onclick = () => { const u = t.links.map(l => l.url), i = +b.dataset.i, j = i + +b.dataset.mv; [u[i], u[j]] = [u[j], u[i]]; save(u); });
+    $$('[data-rm]', card).forEach(b => b.onclick = () => { const u = t.links.map(l => l.url); u.splice(+b.dataset.rm, 1); save(u); });
+    $('[data-add]', card).onclick = guard(async () => {
+      const txt = $('.addlk textarea', card).value; if (!txt.trim()) return;
+      await api('/tasks/' + id, 'PUT', {links_text: t.links.map(l => l.url).join('\n') + '\n' + txt});
+      toast('已添加，将在下次扫描时检查', 'ok'); loadSubs();
+    });
+    $('[data-a=prog]', card).onclick = () => loadProgress(card, id);
+    if (progressCache[id] && !refresh) renderProgress($('.prog', card), progressCache[id]);
+  });
+  bindTaskOps(box, tasks, loadSubs);
+  $$('.sub-card', box).forEach(c => { if (!progressCache[c.dataset.id] || refresh) loadProgress(c, c.dataset.id); });
+}
+$('#s-refresh').onclick = () => loadSubs(true).catch(e => toast(e.message, 'err'));
+loaders.subs = () => { loadSubs().catch(e => toast(e.message, 'err')); timers.push(setInterval(() => loadSubs().catch(() => {}), 45000)); };
+
+/* ======================================================================
+   设置类页面（钉钉 / SmartStrm / TMDB / Emby）
+   ====================================================================== */
+const FORMS = {
+  dingtalk: {enabled: '#d-enabled', webhook: '#d-webhook', secret: '#d-secret', on_add: '#d-add', on_save: '#d-save', on_error: '#d-err'},
+  smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp'},
+  tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
+  emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
+};
+const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key']};
+function fill(name, d) {
+  for (const [k, sel] of Object.entries(FORMS[name])) {
+    const el = $(sel); if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!d[k]; else el.value = SECRET[name].includes(k) ? '' : (d[k] ?? '');
+    if (SECRET[name].includes(k)) {
+      const h = $(sel + '-h'); el.placeholder = d[k + '_set'] ? '已保存（留空保持不变）' : el.placeholder;
+      if (h) h.innerHTML = d[k + '_set'] ? '✓ 已保存 · <a data-clear="' + name + ':' + k + '">清除</a>' : '';
+    }
+  }
+  $$('[data-clear]').forEach(a => a.onclick = guard(async () => {
+    const [n, k] = a.dataset.clear.split(':'); await api('/settings/' + n, 'PUT', {[k]: '__clear__'}); loadSettings(n); toast('已清除', 'ok');
+  }));
+}
+const collect = name => Object.fromEntries(Object.entries(FORMS[name]).map(([k, sel]) => { const el = $(sel); return [k, el.type === 'checkbox' ? el.checked : el.value]; }));
+const loadSettings = guard(async name => fill(name, await api('/settings/' + name)));
+['dingtalk', 'smartstrm', 'tmdb', 'emby'].forEach(n => loaders[n] = () => loadSettings(n));
+$$('[data-save]').forEach(b => b.onclick = guard(async () => {
+  const n = b.dataset.save; fill(n, await api('/settings/' + n, 'PUT', collect(n))); toast('已保存', 'ok'); refreshStatus();
+}));
+$$('[data-test]').forEach(b => b.onclick = async () => {
+  const n = b.dataset.test, msg = $('#' + n + '-msg'); msg.className = 'hint'; msg.textContent = '测试中…'; b.disabled = true;
+  try { const r = await api(`/settings/${n}/test`, 'POST', collect(n)); msg.className = 'hint ok'; msg.textContent = '✓ ' + r.msg; }
+  catch (e) { msg.className = 'hint err'; msg.textContent = '✗ ' + e.message; }
+  finally { b.disabled = false; }
+});
+
+/* ======================================================================
+   账号
+   ====================================================================== */
+loaders.account = guard(async () => {
+  const s = await api('/account');
+  $('#a-state').innerHTML = s.logged_in ? `✓ 已登录：<b>${esc(s.nickname)}</b>${s.sign ? `　今日签到：${s.sign.signed ? '已完成' : '未签到'}` : (s.can_sign ? '' : '　（Cookie 无 kps/sign/vcode，不能自动签到）')}`
+    : `<span style="color:var(--warn)">${esc(s.error || '尚未登录')}</span>`;
+  $('#a-auto').checked = s.auto_sign; $('#a-sign').style.display = s.can_sign ? '' : 'none'; $('#a-out').style.display = s.logged_in ? '' : 'none';
+});
+$('#a-save').onclick = guard(async () => {
+  const msg = $('#a-msg'); msg.className = 'hint'; msg.textContent = '验证中…';
+  try { const r = await api('/account', 'POST', {cookie: $('#a-cookie').value}); $('#a-cookie').value = ''; msg.className = 'hint ok'; msg.textContent = '✓ 登录成功：' + r.nickname; refreshStatus(); loaders.account(); }
+  catch (e) { msg.className = 'hint err'; msg.textContent = '✗ ' + e.message; }
+});
+$('#a-sign').onclick = guard(async () => { const r = await api('/account/sign', 'POST'); toast(r.msg, 'ok'); });
+$('#a-out').onclick = guard(async () => { if (confirm('退出登录？监控会暂停转存。')) { await api('/account', 'DELETE'); refreshStatus(); loaders.account(); } });
+$('#a-auto').onchange = guard(() => api('/account', 'PUT', {auto_sign: $('#a-auto').checked}));
+$('#a-import').onclick = guard(async () => { const r = await api('/import-legacy', 'POST', {}); toast(`已导入 ${r.imported} 个任务`, 'ok'); refreshStatus(); });
+
+/* ======================================================================
+   日志
+   ====================================================================== */
+let lastLog = 0;
+async function loadLogs(reset) {
+  if (reset) { lastLog = 0; $('#l-box').innerHTML = ''; }
+  const lv = $('#l-warn').checked ? '&level=WARNING' : '';
+  const {items} = await api(`/logs?since=${lastLog}${lv}`);
+  if (!items.length) return;
+  const box = $('#l-box'), atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  box.insertAdjacentHTML('beforeend', items.map(i => `<div class="${i.level}"><span class="ts">${esc(i.ts)}</span> ${esc(i.msg)}</div>`).join(''));
+  lastLog = items.at(-1).id; if (atBottom || reset) box.scrollTop = box.scrollHeight;
+}
+loaders.logs = () => { loadLogs(true).catch(() => {}); timers.push(setInterval(() => loadLogs().catch(() => {}), 4000)); };
+$('#l-refresh').onclick = () => loadLogs(true);
+$('#l-warn').onchange = () => loadLogs(true);
+$('#l-clear').onclick = guard(async () => { await api('/logs', 'DELETE'); loadLogs(true); });
+
+/* ---------- 启动 ---------- */
+refreshStatus(); setInterval(refreshStatus, 60000);
+go(location.hash.slice(1) || 'monitor');
+window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== cur) go(v); });
+</script>
+</body>
+</html>

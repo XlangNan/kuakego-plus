@@ -10,10 +10,10 @@ import time
 
 from .logbuf import log
 
-BEGIN = "# >>> quark-plus hosts（自动生成，请改 config/hosts，不要改这里）>>>"
-END = "# <<< quark-plus hosts <<<"
+BEGIN = "# >>> kuakego-plus hosts（自动生成，请改 config/hosts，不要改这里）>>>"
+END = "# <<< kuakego-plus hosts <<<"
 
-TEMPLATE = """# quark-plus 自定义 hosts —— 格式和系统 hosts 一样：IP 空格 域名
+TEMPLATE = """# kuakego-plus 自定义 hosts —— 格式和系统 hosts 一样：IP 空格 域名
 # 保存后约 10 秒内自动生效，不用重启容器；也会在每次容器启动时写入。
 # 以 # 开头的是注释。下面两行是示例，把 IP 换成你查到的真实 IP、去掉行首的 # 即可：
 #
@@ -48,11 +48,11 @@ def parse(text):
 def _strip_block(text):
     out, skip = [], False
     for line in text.splitlines():
-        if line.startswith("# >>> quark-plus hosts"):
+        if line.startswith(("# >>> kuakego-plus hosts", "# >>> quark-plus hosts")):
             skip = True
             continue
         if skip:
-            if line.startswith("# <<< quark-plus hosts"):
+            if line.startswith(("# <<< kuakego-plus hosts", "# <<< quark-plus hosts")):
                 skip = False
             continue
         out.append(line)

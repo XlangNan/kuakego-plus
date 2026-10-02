@@ -1,16 +1,17 @@
+# 从源码构建运行。直接使用 Docker Hub 镜像的写法见 README.md
 services:
-  quark-plus:
+  kuakego-plus:
     build: .
-    container_name: quark-plus
+    container_name: kuakego-plus
     restart: unless-stopped
     ports:
       - "5005:5005"
     environment:
       - TZ=Asia/Shanghai
       - WEBUI_USERNAME=admin
-      # 必须改成你自己的密码；不设置的话每次启动会随机生成，并打印在 `docker logs quark-plus` 里
+      # 必须改成你自己的密码；不设置的话每次启动会随机生成，并打印在 `docker logs kuakego-plus` 里
       - WEBUI_PASSWORD=change-me
     volumes:
-      # config.json（含夸克 Cookie / 各类密钥）、run.log 都在这里；旧版 quark_config.json 也放这里即可导入
+      # config.json（含夸克 Cookie / 各类密钥）、run.log、hosts 都在这里；旧版 quark_config.json 也放这里即可导入
       # 访问不了 TMDB 时，编辑 ./config/hosts（首次启动自动生成），保存后约 10 秒自动生效
       - ./config:/app/config

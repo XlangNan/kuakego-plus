@@ -11,6 +11,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+LABEL org.opencontainers.image.title="kuakego-plus" \
+      org.opencontainers.image.description="夸克网盘追更：多分享链接按序检查，只转存 Emby 里缺少的集数" \
+      org.opencontainers.image.licenses="AGPL-3.0"
+
 WORKDIR /app
 COPY requirements.txt .
 # 国内网络访问不了 pypi.org，默认走清华镜像；海外可在构建时覆盖：

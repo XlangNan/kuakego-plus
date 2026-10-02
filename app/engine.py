@@ -61,6 +61,7 @@ class Engine:
         self.pending = set()   # 排队/运行中的任务 id
         self.running = None    # 正在运行的任务 id
         self._q, self._q_cookie = None, None
+        self._seed_recent()
 
     # ------------------------------------------------------------ 客户端
     def quark(self):
@@ -341,17 +342,27 @@ class Engine:
             return set(range(1, n + 1)), n, "manual"
         return None, None, ""
 
+    @staticmethod
+    def _snap(task, have, wanted, total):
+        """把进度存成快照，海报墙直接读，不用每次实时查夸克 / Emby。"""
+        mine = {ep for s, ep in have if s == task["season"]}
+        miss = sorted(wanted - mine) if wanted is not None else []
+        task["snap"] = {"have": len(mine), "aired": len(wanted) if wanted is not None else None,
+                        "total": total, "missing": miss[:30], "missing_n": len(miss), "ts": int(time.time())}
+
     def progress(self, task):
         q = self.quark()
-        to_fid = q.ensure_dir(task["savepath"])
-        have, emby_msg = self._have(task, q.ls_dir(to_fid))
+        found = q.get_fids([_norm_path(task["savepath"])])  # 只查不建：看进度不该有副作用
+        have, emby_msg = self._have(task, q.ls_dir(found[0]["fid"]) if found else [])
         season = task["season"]
         mine = sorted(e for s, e in have if s == season)
         aired, total, src = self.wanted(task)
-        out = {"have": mine, "have_count": len(mine), "emby": emby_msg, "source": src,
-               "aired": len(aired) if aired is not None else None, "total": total,
-               "missing": sorted(aired - set(mine)) if aired is not None else []}
-        return out
+        with self.store.lock:
+            self._snap(task, have, aired, total)
+            self.store.save()
+        return {"have": mine, "have_count": len(mine), "emby": emby_msg, "source": src,
+                "aired": len(aired) if aired is not None else None, "total": total,
+                "missing": sorted(aired - set(mine)) if aired is not None else []}
 
     # ------------------------------------------------------------ 转存
     @staticmethod
@@ -524,9 +535,10 @@ class Engine:
         if warn:
             log.warning("《%s》%s", task["name"], warn)
 
+        wanted, total_eps, src = self.wanted(task)
         if task.get("skip_when_complete") and not manual:
-            wanted, total, src = self.wanted(task)
             if wanted and {(task["season"], e) for e in wanted} <= have:
+                self._snap(task, have, wanted, total_eps)
                 done = "已收齐" if src == "manual" else f"已播出 {len(wanted)} 集均已入库"
                 return {"status": "complete", "saved": [], "msg": f"本季{done}，本次不检查链接"}
 
@@ -564,6 +576,7 @@ class Engine:
                     break  # 网盘满了，后面的链接没必要继续
             time.sleep(random.uniform(0.8, 2.0))
 
+        self._snap(task, have, wanted, total_eps)
         if saved:
             self._after_save(task, saved)
         if banned:
@@ -671,6 +684,14 @@ class Engine:
             task["next_run"] = int(time.time()) + task["interval"] * 60 + random.randint(0, 90)
             if res["saved"]:
                 task["saved_total"] = task.get("saved_total", 0) + len(res["saved"])
+            if res["saved"]:
+                recent = self.store.data["recent"]
+                recent.insert(0, {
+                    "ts": int(time.time()), "task_id": task["id"], "name": task["name"], "kind": task["kind"],
+                    "poster": task.get("poster", ""), "season": task["season"], "count": len(res["saved"]),
+                    "eps": fmt_eps([e for s in res["saved"] for e in s["eps"]]),
+                    "files": [s["name"] for s in res["saved"]][:20]})
+                del recent[200:]
             if res["saved"] or res["status"] == "error":
                 task["history"] = ([{
                     "time": task["last_run"], "status": res["status"], "msg": res["msg"],
@@ -679,6 +700,47 @@ class Engine:
             self.store.save()
         icon = {"saved": "✅", "error": "❌", "complete": "🏁"}.get(res["status"], "⏹")
         log.info("%s《%s》%s", icon, task["name"], res["msg"])
+
+    def _seed_recent(self):
+        """升级前已有转存历史、但还没有 recent 的：从任务历史里补一份，面板不至于一片空白。"""
+        with self.store.lock:
+            if self.store.data["recent"]:
+                return
+            events = []
+            for t in self.store.data["tasks"]:
+                for h in t.get("history", []):
+                    if h.get("status") != "saved":
+                        continue
+                    try:
+                        ts = int(datetime.strptime(h["time"], "%Y-%m-%d %H:%M:%S").timestamp())
+                    except (KeyError, ValueError):
+                        continue
+                    events.append({"ts": ts, "task_id": t["id"], "name": t["name"], "kind": t["kind"],
+                                   "poster": t.get("poster", ""), "season": t.get("season", 1),
+                                   "count": len(h.get("files", [])) or 1,
+                                   "eps": (h.get("msg", "").split("：", 1) + [""])[1],
+                                   "files": h.get("files", [])[:20]})
+            if events:
+                self.store.data["recent"] = sorted(events, key=lambda e: -e["ts"])[:200]
+
+    def overview(self):
+        """右侧「最近入库」面板的数据。"""
+        now = time.time()
+        midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        with self.store.lock:
+            tasks, rec = self.store.data["tasks"], list(self.store.data["recent"])
+            nxt = [t["next_run"] for t in tasks if t.get("enabled") and t["links"] and t.get("next_run")]
+            running = next((t["name"] for t in tasks if t["id"] == self.running), "")
+            return {"stats": {
+                "today": sum(e["count"] for e in rec if e["ts"] >= midnight),
+                "week": sum(e["count"] for e in rec if e["ts"] >= now - 7 * 86400),
+                "total": sum(t.get("saved_total", 0) for t in tasks),
+                "subs": sum(1 for t in tasks if t["kind"] == "subscription"),
+                "monitors": sum(1 for t in tasks if t["kind"] == "monitor"),
+                "dead_links": sum(1 for t in tasks for l in t["links"] if l.get("ban")),
+                "errors": sum(1 for t in tasks if t.get("last_status") == "error"),
+                "next_run": min(nxt) if nxt else 0, "running": running},
+                "recent": rec[:30]}
 
     def is_due(self, t, now=None):
         now = now or datetime.now()

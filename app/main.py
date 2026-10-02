@@ -19,6 +19,8 @@ from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
 
 VERSION = "1.0.0"
+# 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
+PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm")
 
 
@@ -40,13 +42,13 @@ def create_app(store=None, engine=None):
     # ------------------------------------------------------------ 鉴权
     @app.before_request
     def _auth():
-        if request.path == "/healthz":
+        if request.path == "/healthz" or request.path in PUBLIC_ASSETS:
             return None
         a = request.authorization
         ok = bool(a) and hmac.compare_digest(a.username or "", user) and \
             hmac.compare_digest(a.password or "", password)
         if not ok:
-            return Response("需要登录", 401, {"WWW-Authenticate": 'Basic realm="quark-plus"'})
+            return Response("需要登录", 401, {"WWW-Authenticate": 'Basic realm="kuakego-plus"'})
 
     def body():
         data = request.get_json(silent=True)  # 严格要求 application/json，天然防跨站表单伪造
@@ -69,6 +71,16 @@ def create_app(store=None, engine=None):
     @app.get("/healthz")
     def healthz():
         return "ok"
+
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    for _path in PUBLIC_ASSETS:
+        app.add_url_rule(
+            _path, endpoint="asset_" + _path.strip("/").replace(".", "_").replace("-", "_"),
+            view_func=lambda _n=_path.strip("/"): send_from_directory(static_dir, _n, max_age=86400))
+
+    @app.get("/api/overview")
+    def overview():
+        return jsonify(engine.overview())
 
     @app.get("/")
     def index():
@@ -398,7 +410,7 @@ def create_app(store=None, engine=None):
             if k in cur and (v or not isinstance(v, str) or k not in ("webhook", "secret", "api_key")):
                 cur[k] = v if v != "__clear__" else ""
         if name == "dingtalk":
-            ok, msg = notify.send_dingtalk(cur, "测试消息", "### ✅ 钉钉通知配置成功\n来自 quark-plus", force=True)
+            ok, msg = notify.send_dingtalk(cur, "测试消息", "### ✅ 钉钉通知配置成功\n来自 kuakego-plus", force=True)
         elif name == "smartstrm":
             ok, msg = notify.trigger_smartstrm(cur, None, force=True)
         elif name == "emby":
@@ -450,7 +462,7 @@ def main():
     hosts.watch(CONFIG_DIR)
     Scheduler(engine).start()
     port = int(os.environ.get("PORT", 5005))
-    log.info("quark-plus %s 启动，端口 %d", VERSION, port)
+    log.info("kuakego-plus %s 启动，端口 %d", VERSION, port)
     serve(app, host="0.0.0.0", port=port, threads=8)
 
 

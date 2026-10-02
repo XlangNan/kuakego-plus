@@ -14,6 +14,7 @@ DEFAULTS = {
     "auto_sign": True,
     "last_sign_date": "",
     "tasks": [],
+    "recent": [],          # 最近入库事件（新→旧，最多 200 条）
     "dingtalk": {
         "enabled": False, "webhook": "", "secret": "",
         "on_add": True, "on_save": True, "on_error": True,

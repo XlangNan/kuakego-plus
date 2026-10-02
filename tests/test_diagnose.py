@@ -145,3 +145,64 @@ def test_glued_digit_names_now_parse_and_dedupe_across_links():
     eng.run_task(t["id"], manual=True)
     assert [p for p, _ in fq.saves] == ["aaa"] * 8                       # 只补 9-16，且只来自第一个链接
     assert sorted(fq.dir.values()) == [f"S01E{i:02d}.mp4" for i in range(9, 17)]
+
+
+def test_snapshot_after_run_and_progress_has_no_side_effects():
+    store, eng = env()
+    eng._emby.have = {(1, i) for i in range(1, 9)}
+    shares = {"aaa": {"files": [f"S01E{i:02d}.mp4" for i in range(1, 11)]}}
+    fq, t = mk(eng, shares, ["aaa"], total_episodes=12)
+    eng.run_task(t["id"], manual=True)
+    s = t["snap"]
+    assert s["have"] == 10 and s["total"] == 12 and s["missing"] == [11, 12] and s["missing_n"] == 2
+    assert eng.public_task(t)["snap"]["have"] == 10                       # 海报墙从公开字段里直接读到
+    # 进度查询：目录不存在时不能顺手建出来
+    eng._emby.have = set()
+    t2 = eng.create_task({"name": "y", "savepath": "/还没有的目录", "links_text": "https://pan.quark.cn/s/aaa"})
+    p = eng.progress(t2)
+    assert "/还没有的目录" not in fq.path2fid and p["have_count"] == 0 and t2["snap"]["have"] == 0
+
+
+def test_recent_events_and_overview():
+    store, eng = env()
+    eng._emby.have = {(1, i) for i in range(1, 6)}
+    shares = {"aaa": {"files": [f"S01E{i:02d}.mp4" for i in range(1, 9)]}}
+    fq, t = mk(eng, shares, ["aaa"])
+    assert eng.overview()["recent"] == [] and eng.overview()["stats"]["today"] == 0
+    eng.run_task(t["id"], manual=True)                       # 补 6-8，共 3 个
+    o = eng.overview()
+    ev = o["recent"][0]
+    assert ev["count"] == 3 and ev["eps"] == "S01E06-E08" and ev["name"] == "庆余年" and ev["task_id"] == t["id"]
+    assert o["stats"]["today"] == 3 and o["stats"]["week"] == 3 and o["stats"]["total"] == 3 and o["stats"]["monitors"] == 1
+    eng.run_task(t["id"], manual=True)                       # 没有新内容：不产生事件
+    assert len(eng.overview()["recent"]) == 1
+
+
+def test_recent_seeded_from_old_history_and_capped():
+    store, eng = env()
+    fq, t = mk(eng, {"aaa": {"files": []}}, ["aaa"])
+    t["history"] = [{"time": "2026-09-30 20:12:03", "status": "saved", "msg": "转存 2 个：S01E05-E06", "files": ["a", "b"]},
+                    {"time": "2026-09-29 08:00:00", "status": "error", "msg": "x", "files": []}]
+    store.data["recent"] = []
+    eng._seed_recent()
+    r = store.data["recent"]
+    assert len(r) == 1 and r[0]["count"] == 2 and r[0]["eps"] == "S01E05-E06"
+    store.data["recent"] = [{"ts": i, "count": 1} for i in range(300)]
+    t["saved_total"] = 0
+    eng._finish(t, {"status": "saved", "msg": "m", "saved": [{"name": "x", "eps": [(1, 1)]}]})
+    assert len(store.data["recent"]) == 200 and store.data["recent"][0]["name"] == "庆余年"
+
+
+def test_icons_are_public_but_api_is_not():
+    import base64
+    os.environ["WEBUI_PASSWORD"] = "pw"
+    from app.main import create_app
+    store, eng = env()
+    c = create_app(store, eng).test_client()
+    for path, ctype in (("/favicon.svg", "svg"), ("/favicon.ico", "icon"), ("/apple-touch-icon.png", "png")):
+        r = c.get(path)
+        assert r.status_code == 200 and ctype in r.content_type, (path, r.status_code, r.content_type)
+    assert c.get("/api/overview").status_code == 401 and c.get("/").status_code == 401
+    assert c.get("/favicon.png").status_code in (401, 404)
+    h = {"Authorization": "Basic " + base64.b64encode(b"admin:pw").decode()}
+    assert c.get("/api/overview", headers=h).get_json()["stats"]["subs"] == 0

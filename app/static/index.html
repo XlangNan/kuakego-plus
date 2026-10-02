@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>quark-plus</title>
+<title>kuakego-plus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#5b7cfa">
 <style>
 :root{
   --bg:#f1f2f6;--card:#fff;--line:#e7e9ef;--fg:#1b1e25;--dim:#6b7384;--faint:#9aa1b0;
@@ -25,11 +29,10 @@ a{color:var(--acc);text-decoration:none}
 /* ---------- 侧栏 ---------- */
 aside{width:217px;flex:none;background:var(--card);border-right:1px solid var(--line);padding:14px 8px;
   position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
-.brand{display:flex;align-items:center;gap:10px;padding:0 6px 10px;border-bottom:1px solid var(--line)}
-.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5b7cfa,#8b5cf6);color:#fff;
-  font-weight:700;font-size:12px;display:grid;place-items:center}
-.brand b{font-size:16px;flex:1}
-.theme{width:40px;height:30px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:15px}
+.brand{display:flex;align-items:center;gap:8px;padding:0 6px 10px;border-bottom:1px solid var(--line)}
+.logo{width:28px;height:28px;border-radius:8px;display:block;flex:none}
+.brand b{font-size:15px;flex:1;white-space:nowrap;letter-spacing:-.2px;min-width:0}
+.theme{width:34px;height:30px;flex:none;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:15px}
 .who{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ok);margin:2px 0 4px}
 .who.off{color:var(--warn)}
 nav{display:flex;flex-direction:column;gap:4px}
@@ -41,7 +44,26 @@ nav button.on{background:var(--acc);color:#fff}
 
 /* ---------- 主区 ---------- */
 main{flex:1;min-width:0;padding:22px 24px 60px}
-.wrap{max-width:1180px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;max-width:1560px;align-items:start}
+.rside{position:sticky;top:22px;display:flex;flex-direction:column;gap:16px}
+.rside .card{margin-bottom:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stats>div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
+.stats b{display:block;font-size:20px;line-height:1.3}
+.stats span{font-size:11.5px;color:var(--dim)}
+#rc-list{max-height:calc(100vh - 500px);min-height:170px;overflow-y:auto;margin:0 -4px;padding:0 4px}
+.ri{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);cursor:pointer;border-radius:6px}
+.ri:first-child{border-top:0}
+.ri:hover{background:var(--bg)}
+.ri .th{width:34px;aspect-ratio:2/3;flex:none;border-radius:5px;background:linear-gradient(135deg,#6a82fb,#8b5cf6) center/cover;display:grid;place-items:center;font-size:14px;align-self:flex-start}
+.ri .tx{min-width:0;flex:1}
+.ri .a{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ri .b{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ri .c{font-size:11px;color:var(--faint)}
+.sumrow{display:flex;justify-content:space-between;padding:6px 2px;font-size:13px;cursor:pointer;border-radius:6px}
+.sumrow:hover{background:var(--bg)}
+.sumrow b.warn{color:var(--warn)}.sumrow b.err{color:var(--err)}
+@media(max-width:1199px){.layout{display:block}.rside{display:none}}
 .view{display:none}.view.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(20,24,40,.03)}
 .card h2{margin:0 0 12px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
@@ -114,27 +136,42 @@ tr:last-child td{border-bottom:0}
 .toolbar input[type=text]{max-width:280px}
 .toolbar select{width:auto}
 
-/* ---------- 订阅卡片（紧凑） ---------- */
-.sub-card{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
-.sub-card:last-child{border-bottom:0}
-.sub-card .pic{width:54px;flex:none;align-self:flex-start;aspect-ratio:2/3;border-radius:6px;background:var(--inp) center/cover;border:1px solid var(--line)}
-.sub-body{flex:1;min-width:0}
-.sub-top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
-.sub-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0}
-.sub-head b{font-size:14px}
-.sub-acts{display:flex;gap:5px;flex-wrap:wrap}
+/* ---------- 海报墙 ---------- */
+.wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:18px 14px}
+.wt{cursor:pointer;min-width:0}
+.wimg{position:relative;aspect-ratio:2/3;border-radius:10px;background:linear-gradient(135deg,#6a82fb,#8b5cf6) center/cover no-repeat;
+  overflow:hidden;border:1px solid var(--line);transition:transform .15s,box-shadow .15s}
+.wt:hover .wimg{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.wph{position:absolute;inset:0;display:grid;place-items:center;padding:10px;text-align:center;color:#fff;font-weight:600;font-size:14px}
+.wb,.wm{position:absolute;top:6px;font-size:11px;padding:1px 7px;border-radius:6px;color:#fff;background:rgba(0,0,0,.62)}
+.wb{left:6px}.wm{right:6px;background:rgba(214,130,20,.94)}
+.wb.err{background:rgba(207,59,54,.94)}.wb.warn{background:rgba(214,130,20,.94)}
+.wb.info{background:rgba(59,99,216,.94)}.wb.ok{background:rgba(19,136,90,.94)}
+.wov{position:absolute;left:0;right:0;bottom:0;padding:20px 8px 6px;background:linear-gradient(transparent,rgba(0,0,0,.8));color:#fff;font-size:11.5px}
+.wbar{height:3px;border-radius:9px;background:rgba(255,255,255,.28);margin-bottom:4px;overflow:hidden}
+.wbar i{display:block;height:100%;background:#8fb0ff}
+.wn{font-size:13px;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wsub{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- 订阅详情弹窗 ---------- */
+.sd-head{display:flex;gap:14px}
+.sd-head .pic{width:76px;flex:none;aspect-ratio:2/3;border-radius:8px;background:var(--inp) center/cover;border:1px solid var(--line);align-self:flex-start}
+.sd-head h3{margin:0 0 4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;margin:14px 0 10px;flex-wrap:wrap}
 .btn.xs{padding:2px 9px;font-size:12px;border-radius:6px}
-.ov{color:var(--faint);font-size:12px;margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar{height:5px;border-radius:99px;background:var(--mutebg);overflow:hidden;margin:6px 0 3px;max-width:420px}
-.bar i{display:block;height:100%;background:var(--acc2);border-radius:99px;transition:width .3s}
-details.lks{margin-top:4px}
-details.lks summary{font-size:12px;padding:1px 0}
-.lk{display:flex;gap:6px;align-items:center;padding:2px 0;font-size:12px}
-.lk .n{width:16px;height:16px;border-radius:4px;background:var(--mutebg);color:var(--dim);display:grid;place-items:center;font-size:10px;flex:none}
+.bar{height:6px;border-radius:99px;background:var(--mutebg);overflow:hidden;margin:8px 0 4px}
+.bar i{display:block;height:100%;background:var(--acc2);border-radius:99px}
+.lk{display:flex;gap:6px;align-items:center;padding:4px 0;font-size:12.5px}
+.lk .n{width:18px;height:18px;border-radius:5px;background:var(--mutebg);color:var(--dim);display:grid;place-items:center;font-size:10px;flex:none}
 .lk .u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lk.dead .u{text-decoration:line-through;color:var(--faint)}
-.addlk{display:flex;gap:6px;margin-top:4px;max-width:520px}
-.addlk textarea{min-height:30px;height:30px;padding:5px 10px;font-size:12px}
+.addlk{display:flex;gap:6px;margin-top:8px}
+.addlk textarea{min-height:34px;height:34px;padding:6px 10px;font-size:12.5px}
+.hrow{padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hrow:last-child{border:0}
+.hrow summary{font-size:12px;padding:2px 0}
+.files{font-size:12px;color:var(--dim);max-height:150px;overflow:auto;margin-top:2px;word-break:break-all}
+.panel{min-height:120px;max-height:52vh;overflow-y:auto}
 
 /* ---------- 弹窗 ---------- */
 .mask{position:fixed;inset:0;background:rgba(10,12,20,.55);display:flex;align-items:flex-start;justify-content:center;
@@ -172,13 +209,13 @@ details.lks summary{font-size:12px;padding:1px 0}
   nav{flex-direction:row;overflow-x:auto}nav button{white-space:nowrap}
   .side-foot{display:none}
   main{padding:14px 12px 50px}
-  .row{flex-wrap:wrap}.sub-card .pic{width:44px}
+  .row{flex-wrap:wrap}.wall{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:12px 8px}.wov{font-size:10.5px;padding:16px 6px 5px}.wb,.wm{font-size:10px;padding:0 5px}
 }
 </style>
 </head>
 <body>
 <aside>
-  <div class="brand"><div class="logo">Q+</div><b>quark-plus</b><button class="theme" id="themeBtn" title="切换主题">🌙</button></div>
+  <div class="brand"><img class="logo" src="/favicon.svg" alt="" width="28" height="28"><b>kuakego-plus</b><button class="theme" id="themeBtn" title="切换主题">🌙</button></div>
   <div class="who off" id="who">检查登录状态…</div>
   <nav id="nav">
     <button data-v="monitor">📡 分享监控</button>
@@ -191,10 +228,10 @@ details.lks summary{font-size:12px;padding:1px 0}
     <button data-v="account">🔐 账号登录</button>
     <button data-v="logs">📜 运行日志</button>
   </nav>
-  <div class="side-foot" id="ver"></div>
+  <div class="side-foot"><span id="ver"></span><br>本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
 </aside>
 
-<main><div class="wrap">
+<main><div class="layout"><div class="wrap">
 <div id="banner"></div>
 
 <!-- ========== 分享监控 ========== -->
@@ -256,7 +293,7 @@ details.lks summary{font-size:12px;padding:1px 0}
 <!-- ========== 订阅追更 ========== -->
 <section class="view" id="v-subs">
   <div class="card">
-    <h2>📺 订阅追更 <small>一部剧可以挂多个分享链接，按顺序检查，只补 Emby 里缺的集数</small></h2>
+    <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录</small></h2>
     <div class="actions" style="margin-top:0"><button class="btn pri" id="s-new">＋ 搜索并订阅新剧</button>
       <button class="btn" id="s-refresh">刷新全部进度</button></div>
   </div>
@@ -301,7 +338,7 @@ details.lks summary{font-size:12px;padding:1px 0}
 <section class="view" id="v-tmdb">
   <div class="card">
     <h2>🎯 TMDB 设置</h2>
-    <div class="hint" style="margin:0 0 10px">用于「剧集推荐」「订阅追更」的海报、简介、季集数和播出日期。可在 themoviedb.org 免费申请。</div>
+    <div class="hint" style="margin:0 0 10px">用于「剧集推荐」「订阅追更」的海报、简介、季集数和播出日期。可在 themoviedb.org 免费申请。本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
     <label class="l">API Key（v3）或读访问令牌（v4）</label><input type="password" id="t-key"><div class="hint" id="t-key-h"></div>
     <div class="row"><div class="grow"><label class="l">语言</label><input type="text" id="t-lang" placeholder="zh-CN"></div>
       <div class="grow"><label class="l">地区</label><input type="text" id="t-region" placeholder="CN"></div></div>
@@ -359,7 +396,16 @@ details.lks summary{font-size:12px;padding:1px 0}
     <div class="log" id="l-box"></div>
   </div>
 </section>
-</div></main>
+</div>
+<div class="rside" id="rail">
+  <div class="card">
+    <h2>📥 最近入库</h2>
+    <div class="stats"><div><b id="st-today">0</b><span>今天</span></div><div><b id="st-week">0</b><span>近 7 天</span></div><div><b id="st-total">0</b><span>累计</span></div></div>
+    <div class="hint" id="rc-next" style="margin:0 0 6px"></div>
+    <div id="rc-list"><div class="empty" style="padding:20px 0">加载中…</div></div>
+  </div>
+  <div class="card"><h2>📊 概况</h2><div id="rc-sum"></div></div>
+</div></div></main>
 
 <script>
 const $ = (s, r = document) => r.querySelector(s);
@@ -705,65 +751,121 @@ $('#s-new').onclick = () => {
   $('#ss-go', m).onclick = run; $('#ss-q', m).onkeydown = e => e.key === 'Enter' && run(); $('#ss-q', m).focus();
 };
 
-const progressCache = {}, openLinks = new Set();
-function renderProgress(el, p) {
-  if (p.error) { el.innerHTML = `<span class="sub" style="color:var(--err)">${esc(p.error)}</span>`; return; }
-  const base = p.aired ?? p.total ?? 0, pct = base ? Math.min(100, Math.round(p.have_count / base * 100)) : 0;
-  const miss = p.missing.length ? ` · <span style="color:var(--warn)">缺 ${p.missing.slice(0, 10).map(e => 'E' + String(e).padStart(2, '0')).join(' ')}${p.missing.length > 10 ? ` 等 ${p.missing.length} 集` : ''}</span>`
-    : (base ? ' · <span style="color:var(--ok)">✓ 已播出的都齐了</span>' : '');
-  el.innerHTML = `<div class="bar"><i style="width:${pct}%"></i></div>
-    <div class="sub">已有 <b>${p.have_count}</b>${p.aired != null ? ` / 已播 ${p.aired}` : ''}${p.total ? ` / 共 ${p.total}` : ''} 集 · ${esc(p.emby)}${miss}</div>`;
+let subsData = [], subModal = null;
+const liveProg = {};
+const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN', {hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : '';
+function badgeOf(t) {
+  if (t.state === 'running') return ['扫描中', 'info'];
+  if (t.state === 'queued') return ['排队中', 'info'];
+  return ({invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
+           expired: ['已到期', 'mute'], complete: ['已追完', 'ok']})[t.status] || null;
 }
-async function loadProgress(card, id) {
-  const el = $('.prog', card); el.innerHTML = '<span class="sub">读取进度…</span>';
-  try { progressCache[id] = await api(`/tasks/${id}/progress`); } catch (e) { progressCache[id] = {error: e.message}; }
-  renderProgress(el, progressCache[id]);
+function tileHTML(t) {
+  const s = t.snap, b = badgeOf(t), base = s ? (s.aired ?? s.total ?? 0) : 0;
+  const pct = s && base ? Math.min(100, Math.round(s.have / base * 100)) : 0;
+  return `<div class="wt" data-id="${t.id}">
+    <div class="wimg" style="${t.poster ? `background-image:url('${esc(t.poster)}')` : ''}">
+      ${t.poster ? '' : `<span class="wph">${esc(t.name)}</span>`}
+      ${b ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}${s && s.missing_n ? `<span class="wm">缺 ${s.missing_n}</span>` : ''}
+      <div class="wov"><div class="wbar"><i style="width:${pct}%"></i></div>${s ? `${s.have}${base ? ' / ' + base : ''} 集` : '未扫描'}</div></div>
+    <div class="wn" title="${esc(t.name)}">${esc(t.name)}</div>
+    ${(() => { const d = t.links.filter(l => l.ban).length;
+      return d && d < t.links.length ? `<div class="wsub" style="color:var(--warn)">第 ${t.season} 季 · ⚠ ${d} 个链接失效</div>`
+        : `<div class="wsub">第 ${t.season} 季 · ${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
 }
-async function loadSubs(refresh = false) {
+async function loadSubs() {
   const {tasks} = await api('/tasks?kind=subscription');
+  subsData = tasks;
   const box = $('#s-list');
-  if (!tasks.length) { box.innerHTML = '<div class="empty">还没有订阅。点上面「搜索并订阅新剧」，或去「剧集推荐」点一部剧。</div>'; return; }
-  box.innerHTML = tasks.map(t => {
-    const dead = t.links.filter(l => l.ban).length, open = openLinks.has(t.id) || dead > 0 || !t.links.length;
-    return `<div class="sub-card" data-id="${t.id}">
-    <div class="pic" style="background-image:url('${esc(t.poster)}')"></div>
-    <div class="sub-body">
-      <div class="sub-top">
-        <div class="sub-head"><b title="${esc(t.overview)}">${esc(t.name)}</b><span class="tag mute">第 ${t.season} 季</span>${stTag(t)}<span class="sub">${esc(nextIn(t))}</span></div>
-        <div class="sub-acts">
-          <button class="btn xs" data-a="run" data-id="${t.id}">立即扫描</button><button class="btn xs" data-a="preview" data-id="${t.id}" title="只看不转存，逐个文件说明会不会转、为什么">试运行</button><button class="btn xs" data-a="prog" data-id="${t.id}">刷新进度</button>
-          <button class="btn xs" data-a="edit" data-id="${t.id}">编辑</button><button class="btn xs" data-a="toggle" data-id="${t.id}">${t.enabled ? '暂停' : '恢复'}</button><button class="btn xs danger" data-a="del" data-id="${t.id}">删除</button></div>
-      </div>
-      <div class="ov">📁 ${esc(t.savepath)}　·　最近：${esc(t.last_msg || '—')}</div>
-      <div class="prog"></div>
-      <details class="lks" data-id="${t.id}" ${open ? 'open' : ''}><summary>分享链接（${t.links.length}）${dead ? `<span class="tag err" style="margin-left:6px">${dead} 个失效</span>` : ''}</summary>
-        ${t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
-          <span class="u" title="${esc(l.url)}">${esc(shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效</span>` : ''}
-          <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
-          <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
-          <button class="btn xs danger" data-rm="${i}">×</button></div>`).join('') || '<div class="sub" style="color:var(--warn)">还没有分享链接，在下面粘贴一个或多个</div>'}
-        <div class="addlk"><textarea placeholder="粘贴新的分享链接（可多个）"></textarea><button class="btn xs" data-add>添加</button></div>
-      </details>
-    </div></div>`;
-  }).join('');
-  $$('details.lks', box).forEach(d => d.addEventListener('toggle', () => d.open ? openLinks.add(d.dataset.id) : openLinks.delete(d.dataset.id)));
-  $$('.sub-card', box).forEach(card => {
-    const id = card.dataset.id, t = tasks.find(x => x.id === id);
-    const save = guard(async urls => { await api('/tasks/' + id, 'PUT', {links_text: urls.join('\n')}); loadSubs(); });
-    $$('[data-mv]', card).forEach(b => b.onclick = () => { const u = t.links.map(l => l.url), i = +b.dataset.i, j = i + +b.dataset.mv; [u[i], u[j]] = [u[j], u[i]]; save(u); });
-    $$('[data-rm]', card).forEach(b => b.onclick = () => { const u = t.links.map(l => l.url); u.splice(+b.dataset.rm, 1); save(u); });
-    $('[data-add]', card).onclick = guard(async () => {
-      const txt = $('.addlk textarea', card).value; if (!txt.trim()) return;
-      await api('/tasks/' + id, 'PUT', {links_text: t.links.map(l => l.url).join('\n') + '\n' + txt});
-      toast('已添加，将在下次扫描时检查', 'ok'); loadSubs();
-    });
-    $('[data-a=prog]', card).onclick = () => loadProgress(card, id);
-    if (progressCache[id] && !refresh) renderProgress($('.prog', card), progressCache[id]);
-  });
-  bindTaskOps(box, tasks, loadSubs);
-  $$('.sub-card', box).forEach(c => { if (!progressCache[c.dataset.id] || refresh) loadProgress(c, c.dataset.id); });
+  box.innerHTML = tasks.length ? `<div class="wall">${tasks.map(tileHTML).join('')}</div>`
+    : '<div class="empty">还没有订阅。点上面「搜索并订阅新剧」，或去「剧集推荐」点一部剧。</div>';
+  $$('.wt', box).forEach(el => el.onclick = () => openSub(el.dataset.id));
 }
-$('#s-refresh').onclick = () => loadSubs(true).catch(e => toast(e.message, 'err'));
+async function afterChange(id, tab) {   // 操作后：刷新墙，并重绘仍然打开的详情
+  await loadSubs();
+  const t = subsData.find(x => x.id === id);
+  if (!subModal || !subModal.isConnected) return;
+  t ? renderSub(subModal, t, tab) : subModal.remove();
+}
+function openSub(id, tab = 'info') {
+  const t = subsData.find(x => x.id === id); if (!t) return;
+  if (!subModal || !subModal.isConnected) subModal = modal('', 'wide');
+  renderSub(subModal, t, tab);
+}
+function renderSub(m, t, tab) {
+  const s = t.snap, live = liveProg[t.id], b = badgeOf(t), dead = t.links.filter(l => l.ban).length;
+  const tagCls = {saved: 'ok', error: 'err', complete: 'info', nochange: 'mute', idle: 'mute'};
+  const tagTxt = {saved: '有更新', error: '出错', complete: '已追平', nochange: '无变化', idle: '—'};
+  let panel = '';
+  if (tab === 'info') {
+    const base = s ? (s.aired ?? s.total ?? 0) : 0, pct = s && base ? Math.min(100, Math.round(s.have / base * 100)) : 0;
+    panel = s ? `<div><b style="font-size:18px">${s.have}</b> <span class="sub">${s.aired != null ? `/ 已播 ${s.aired} ` : ''}${s.total ? `/ 共 ${s.total} ` : ''}集</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      ${s.missing_n ? `<div class="sub" style="color:var(--warn)">缺 ${s.missing_n} 集：${s.missing.slice(0, 20).map(e => 'E' + String(e).padStart(2, '0')).join(' ')}${s.missing_n > 20 ? ' …' : ''}</div>`
+        : (base ? '<div class="sub" style="color:var(--ok)">✓ 已播出的都齐了</div>' : '')}
+      <div class="sub" style="margin-top:4px">${live ? esc(live.emby) + ' · ' : ''}更新于 ${esc(fmtTs(s.ts))}</div>`
+      : '<div class="sub">还没有进度数据。点「刷新进度」，或等第一次扫描完成。</div>';
+    panel += `<div class="sub" style="margin-top:10px">每 ${t.interval} 分钟扫描一次 · ${esc(nextIn(t) || (t.enabled ? '' : '已暂停'))} · 累计转存 ${t.saved_total || 0} 个</div>
+      <div class="sub">最近：${esc(t.last_run || '—')} ${esc(t.last_msg || '')}</div>
+      ${t.overview ? `<p style="font-size:12.5px;margin:10px 0 0;color:var(--dim)">${esc(t.overview)}</p>` : ''}`;
+  } else if (tab === 'links') {
+    panel = (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
+        <span class="u" title="${esc(l.url)}">${esc(shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
+        <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn xs danger" data-rm="${i}">×</button></div>`).join('')
+      : '<div class="sub" style="color:var(--warn)">还没有分享链接，在下面粘贴一个或多个</div>')
+      + `<div class="sub" style="margin-top:6px">从上到下就是检查顺序；后面的链接只补前面没有的集数。</div>
+      <div class="addlk"><textarea id="sd-add" placeholder="粘贴新的分享链接（可多个）"></textarea><button class="btn sm" data-add>添加</button></div>
+      ${dead ? '<div class="actions" style="margin-top:8px"><button class="btn xs" data-resetlk>重置失效标记</button></div>' : ''}`;
+  } else {
+    panel = t.history && t.history.length ? t.history.map(x => `<div class="hrow"><span class="sub">${esc(x.time)}</span>
+        <span class="tag ${tagCls[x.status] || 'mute'}">${tagTxt[x.status] || x.status}</span> ${esc(x.msg)}
+        ${x.files && x.files.length ? `<details><summary>${x.files.length} 个文件</summary><div class="files">${x.files.map(esc).join('<br>')}</div></details>` : ''}</div>`).join('')
+      : '<div class="empty">还没有转存记录（只记录有新转存或出错的那几次）</div>';
+  }
+  const tabs = [['info', '概览'], ['links', `分享链接（${t.links.length}）`], ['hist', `转存记录（${(t.history || []).length}）`]];
+  $('.modal', m).innerHTML = `<button class="x">×</button>
+    <div class="sd-head"><div class="pic" style="${t.poster ? `background-image:url('${esc(t.poster)}')` : ''}"></div>
+      <div style="min-width:0"><h3>${esc(t.name)}<span class="tag mute">第 ${t.season} 季</span>${b ? `<span class="tag ${b[1]}">${b[0]}</span>` : '<span class="tag ok">正常</span>'}
+        ${dead ? `<span class="tag err">${dead} 个链接失效</span>` : ''}</h3>
+      <div class="sub">${esc(t.savepath)}</div>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn xs" data-act="run">立即扫描</button><button class="btn xs" data-act="preview">试运行</button><button class="btn xs" data-act="prog">刷新进度</button>
+        <button class="btn xs" data-act="edit">编辑</button><button class="btn xs" data-act="toggle">${t.enabled ? '暂停' : '恢复'}</button><button class="btn xs danger" data-act="del">删除</button></div></div></div>
+    <div class="tabs">${tabs.map(([k, n]) => `<span class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${n}</span>`).join('')}</div>
+    <div class="panel">${panel}</div>`;
+  const reload = tb => afterChange(t.id, tb || tab);
+  $('.x', m).onclick = () => m.remove();
+  $$('[data-tab]', m).forEach(c => c.onclick = () => renderSub(m, subsData.find(x => x.id === t.id) || t, c.dataset.tab));
+  const setLinks = guard(async urls => { await api('/tasks/' + t.id, 'PUT', {links_text: urls.join('\n')}); await reload('links'); });
+  $$('[data-mv]', m).forEach(x => x.onclick = () => { const u = t.links.map(l => l.url), i = +x.dataset.i, j = i + +x.dataset.mv; [u[i], u[j]] = [u[j], u[i]]; setLinks(u); });
+  $$('[data-rm]', m).forEach(x => x.onclick = () => { const u = t.links.map(l => l.url); u.splice(+x.dataset.rm, 1); setLinks(u); });
+  $('[data-add]', m)?.addEventListener('click', guard(async () => {
+    const txt = $('#sd-add', m).value; if (!txt.trim()) return;
+    await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).join('\n') + '\n' + txt}); toast('已添加，下次扫描时检查', 'ok'); await reload('links');
+  }));
+  $('[data-resetlk]', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); await reload('links'); }));
+  $$('[data-act]', m).forEach(x => x.onclick = guard(async () => {
+    const a = x.dataset.act;
+    if (a === 'run') { await api(`/tasks/${t.id}/run`, 'POST'); toast('已开始扫描，详见运行日志', 'ok'); setTimeout(() => reload(), 900); }
+    else if (a === 'preview') previewTask(t);
+    else if (a === 'prog') { x.disabled = true; x.textContent = '读取中…'; try { liveProg[t.id] = await api(`/tasks/${t.id}/progress`); await reload('info'); } finally { x.disabled = false; } }
+    else if (a === 'edit') editTask(t, () => reload());
+    else if (a === 'toggle') { await api(`/tasks/${t.id}/toggle`, 'POST'); await reload(); }
+    else if (a === 'del' && confirm(`删除《${t.name}》？已转存的文件不会被删除。`)) { await api('/tasks/' + t.id, 'DELETE'); m.remove(); loadSubs(); }
+  }));
+}
+$('#s-refresh').onclick = guard(async () => {   // 依次实时查询所有订阅（一个一个来，别打太快）
+  const btn = $('#s-refresh'); btn.disabled = true;
+  try {
+    for (let i = 0; i < subsData.length; i++) {
+      btn.textContent = `刷新中 ${i + 1}/${subsData.length}`;
+      try { liveProg[subsData[i].id] = await api(`/tasks/${subsData[i].id}/progress`); } catch (e) { toast(`《${subsData[i].name}》${e.message}`, 'err'); }
+    }
+    await loadSubs();
+  } finally { btn.disabled = false; btn.textContent = '刷新全部进度'; }
+});
 loaders.subs = () => { loadSubs().catch(e => toast(e.message, 'err')); timers.push(setInterval(() => loadSubs().catch(() => {}), 45000)); };
 
 /* ======================================================================
@@ -839,8 +941,38 @@ $('#l-refresh').onclick = () => loadLogs(true);
 $('#l-warn').onchange = () => loadLogs(true);
 $('#l-clear').onclick = guard(async () => { await api('/logs', 'DELETE'); loadLogs(true); });
 
+/* ======================================================================
+   右侧面板：最近入库 / 概况
+   ====================================================================== */
+function relTime(ts) {
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return '刚刚'; if (s < 3600) return Math.floor(s / 60) + ' 分钟前'; if (s < 86400) return Math.floor(s / 3600) + ' 小时前';
+  const d = new Date(ts * 1000), p = n => String(n).padStart(2, '0');
+  return (s < 172800 ? '昨天 ' : `${p(d.getMonth() + 1)}-${p(d.getDate())} `) + `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function loadRail() {
+  if (getComputedStyle($('#rail')).display === 'none') return;   // 窄屏不显示，也就不用请求
+  const {stats: s, recent} = await api('/overview');
+  $('#st-today').textContent = s.today; $('#st-week').textContent = s.week; $('#st-total').textContent = s.total;
+  const mins = Math.round((s.next_run * 1000 - Date.now()) / 60000);
+  $('#rc-next').textContent = s.running ? `⏳ 正在扫描《${s.running}》` : (s.next_run ? (mins > 0 ? `下次扫描约 ${mins} 分钟后` : '即将扫描') : '');
+  const list = $('#rc-list');
+  list.innerHTML = recent.length ? recent.map(e => `<div class="ri" data-t="${esc(e.task_id)}" data-k="${esc(e.kind)}" title="${esc(e.files.join('\n'))}">
+      <div class="th" style="${e.poster ? `background-image:url('${esc(e.poster)}')` : ''}">${e.poster ? '' : (e.kind === 'subscription' ? '📺' : '📡')}</div>
+      <div class="tx"><div class="a">${esc(e.name)}</div><div class="b">${esc(e.eps || e.files[0] || '')} · ${e.count} 个</div><div class="c">${esc(relTime(e.ts))}</div></div></div>`).join('')
+    : '<div class="empty" style="padding:22px 0">还没有入库记录<br><span class="sub">有新内容转存后会显示在这里</span></div>';
+  $$('.ri', list).forEach(el => el.onclick = async () => {
+    if (el.dataset.k === 'subscription') { go('subs'); await loadSubs(); openSub(el.dataset.t); } else go('monitor');
+  });
+  const row = (label, n, cls, view) => `<div class="sumrow" data-v="${view}"><span>${label}</span><b class="${n && cls ? cls : ''}">${n}</b></div>`;
+  $('#rc-sum').innerHTML = row('📺 订阅追更', s.subs, '', 'subs') + row('📡 分享监控', s.monitors, '', 'monitor')
+    + row('⚠ 失效的分享链接', s.dead_links, 'warn', 'subs') + row('❌ 上次出错的任务', s.errors, 'err', 'logs');
+  $$('.sumrow', $('#rc-sum')).forEach(el => el.onclick = () => go(el.dataset.v));
+}
+
 /* ---------- 启动 ---------- */
 refreshStatus(); setInterval(refreshStatus, 60000);
+loadRail().catch(() => {}); setInterval(() => loadRail().catch(() => {}), 30000);
 go(location.hash.slice(1) || 'monitor');
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== cur) go(v); });
 </script>

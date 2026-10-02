@@ -54,7 +54,7 @@ docker run -d \
   -e WEBUI_USERNAME=admin \
   -e WEBUI_PASSWORD=请改成你自己的密码 \
   -v /你的路径/kuakego-plus/config:/app/config \
-  <你的DockerHub用户名>/kuakego-plus:latest
+  xlangnan/kuakego-plus:latest
 ```
 
 ### 方式二：docker compose
@@ -62,7 +62,7 @@ docker run -d \
 ```yaml
 services:
   kuakego-plus:
-    image: <你的DockerHub用户名>/kuakego-plus:latest
+    image: xlangnan/kuakego-plus:latest
     container_name: kuakego-plus
     restart: unless-stopped
     ports:

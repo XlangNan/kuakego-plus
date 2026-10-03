@@ -13,6 +13,7 @@
 - **[Cp0204/quark-auto-save](https://github.com/Cp0204/quark-auto-save)**（AGPL-3.0）— 夸克接口封装改写自该项目，转存追更的整体思路来自它。因此本项目同样以 **AGPL-3.0** 发布。
 - **[XlangNan/gygo-plus](https://github.com/XlangNan/gygo-plus)**（光鸭云盘监控转存）— 界面布局与功能划分参考自它，代码为独立编写。
 - [GuessIt](https://github.com/guessit-io/guessit)（LGPL-3.0，文件名识别兜底）、[TMDB](https://www.themoviedb.org/)（剧集数据）。
+- **[fish2018/pansou](https://github.com/fish2018/pansou)**（PanSou）— **可选的外部服务**，「资源搜索」功能调用它的 HTTP 接口。不内置、不包含其代码，需自行部署；请遵守其「仅供学习研究」的声明。
 
 在原项目基础上新增：多分享链接按序检查、Emby 缺集补转、全新 Web 界面（海报墙 / 剧集推荐 / 最近入库 / 暗色主题）、试运行、钉钉 / SmartStrm / Emby / TMDB 联动。
 
@@ -71,6 +72,7 @@ services:
 | 页面 | 作用 |
 |---|---|
 | 📡 分享监控 | 粘贴分享链接（整段粘贴自动识别提取码，可一次粘多个），定时检查并转存新内容；可选「只追新」 |
+| 🔎 资源搜索 | 对接 PanSou：添加订阅 / 监控时搜索夸克资源，**检测**每个分享的集数范围、画质、体积、是否失效，勾选后直接填入链接 |
 | 🍿 剧集推荐 | 基于 TMDB 的热门 / 国产 / 日韩 / 欧美剧集；搜索、排序；详情含分季集数、Emby 已有数、演员；一键订阅 |
 | 📺 订阅追更 | 海报墙；点开看进度、缺哪几集、分享链接（可调整优先级）、转存记录；支持「试运行」 |
 | 🔔 钉钉通知 | 新增订阅 / 有新入库 / 链接失效时推送，支持加签 |
@@ -80,6 +82,18 @@ services:
 | 🔐 账号登录 | 夸克 Cookie 登录、每日自动签到、导入旧版 quark-auto-save 配置 |
 | 📜 运行日志 | 每次检查的详细过程 |
 | 📥 最近入库（右侧面板） | 今天 / 近 7 天 / 累计入库数、最近入库列表、订阅与异常概况 |
+
+## 资源搜索（可选，需要 PanSou）
+
+```bash
+docker run -d --name pansou -p 8888:8888 \
+  -e ENABLED_PLUGINS=hunhepan,pansearch,quark4k,quarksoo,sousou,labi,zhizhen,duoduo,muou,wanou \
+  ghcr.io/fish2018/pansou:latest
+```
+
+然后在 kuakego-plus 的「资源搜索」页填 `http://服务器IP:8888`（填**只有接口**的版本，不是带网页的），勾选启用，点「测试连接」。之后在添加订阅的弹窗、订阅详情的「分享链接」页、分享监控表单里都能点 **🔎 搜索资源**：搜索 → 检测（只读取，不转存）→ 勾选 → 自动填入链接。
+
+搜索 Telegram 频道在国内需要给 PanSou 配代理（`PROXY`）；只用网站插件时，把「搜索来源」选成「仅网站插件」即可。
 
 ## 第一次使用
 
@@ -98,6 +112,7 @@ services:
 
 ## 常见问题
 
+- **资源搜索连不上 / 没结果**：先点「测试连接」。常见原因：填成了带网页版本的地址；PanSou 没有启用任何插件（`ENABLED_PLUGINS` 必须显式指定）；只搜 Telegram 频道但没配代理。
 - **访问不了 TMDB**：编辑 `config/hosts`（首次启动自动生成），按系统 hosts 格式写 `IP 域名`，保存后约 10 秒生效；也可在 TMDB 设置里填反代地址。
 - **已有的集又被转存**：先点该剧的「试运行」，会显示季号、Emby 已有集数、每个文件的识别结果。最常见原因是季号对不上。
 - **从 quark-auto-save 迁移**：把旧的 `quark_config.json` 放进 `config` 目录，首次启动自动导入。

@@ -15,3 +15,14 @@ services:
       # config.json（含夸克 Cookie / 各类密钥）、run.log、hosts 都在这里；旧版 quark_config.json 也放这里即可导入
       # 访问不了 TMDB 时，编辑 ./config/hosts（首次启动自动生成），保存后约 10 秒自动生效
       - ./config:/app/config
+
+  # 可选：资源搜索（PanSou）。取消下面的注释后，在页面「资源搜索」里填 http://pansou:8888
+  # pansou:
+  #   image: ghcr.io/fish2018/pansou:latest
+  #   container_name: pansou
+  #   restart: unless-stopped
+  #   environment:
+  #     - PORT=8888
+  #     - ENABLED_PLUGINS=hunhepan,pansearch,quark4k,quarksoo,sousou,labi,zhizhen,duoduo,muou,wanou
+  #     # - CHANNELS=频道名1,频道名2
+  #     # - PROXY=socks5://代理地址:1080

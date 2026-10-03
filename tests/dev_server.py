@@ -40,15 +40,36 @@ class Tmdb(BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
 
 
+PANSOU_RESULTS = [
+    {"url": "https://pan.quark.cn/s/ccc", "password": "ab12", "note": "法医秦明之龙番往事 全16集 1080P 国语中字", "datetime": "2026-09-28T10:00:00Z", "source": "tg:Quark_Movies"},
+    {"url": "https://pan.quark.cn/s/bbb", "password": "", "note": "【4K】法医秦明之龙番往事 2160P HDR 杜比视界 持续更新中", "datetime": "2026-09-30T08:30:00Z", "source": "plugin:quark4k"},
+    {"url": "https://pan.quark.cn/s/aaa", "password": "wxyz", "note": "法医秦明之龙番往事 (2026) 1-8集", "datetime": "2026-09-20T00:00:00Z", "source": "plugin:hunhepan"},
+    {"url": "https://pan.quark.cn/s/dead", "password": "", "note": "法医秦明之龙番往事 合集（备用）", "datetime": "2026-08-01T00:00:00Z", "source": "tg:ucquark"},
+    {"url": "https://pan.quark.cn/s/ddd", "password": "k9k9", "note": "法医秦明 龙番往事 高清 带花絮和幕后 这是一个标题非常非常长的资源用来检查两行截断是否正常显示", "datetime": "2026-07-12T00:00:00Z", "source": "plugin:sousou"},
+]
+
+
+class PanSouFake(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        d = {"status": "ok"} if self.path.startswith("/api/health") else {"code": 0, "message": "success", "data": {"total": 5, "merged_by_type": {"quark": PANSOU_RESULTS}}}
+        b = json.dumps(d).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
+
+
 def build():
     threading.Thread(target=HTTPServer(("127.0.0.1", 5998), Tmdb).serve_forever, daemon=True).start()
+    threading.Thread(target=HTTPServer(("127.0.0.1", 5997), PanSouFake).serve_forever, daemon=True).start()
     store = Store(os.path.join(os.environ["CONFIG_DIR"], "config.json"))
     store.data["cookie"] = "fake"
     store.data["tmdb"].update(api_key="k", base_url="http://127.0.0.1:5998")
+    store.data["pansou"].update(enabled=True, url="http://127.0.0.1:5997")
     eng = Engine(store)
     shares = {"aaa": {"files": [f"庆余年.第{i:02d}集.mp4" for i in range(1, 9)]},
               "bbb": {"files": [f"S02E{i:02d}.2160p.mkv" for i in range(1, 11)]},
-              "dead": {"status": 400, "msg": "分享已取消"}}
+              "dead": {"status": 400, "msg": "分享已取消"},
+              "ccc": {"files": [(f"法医秦明之龙番往事.第{i:02d}集.1080P.mp4", 900 * 1024 * 1024) for i in range(1, 17)]},
+              "ddd": {"files": [(f"龙番往事{i:02d}.mp4", 600 * 1024 * 1024) for i in range(1, 13)] + [("幕后花絮.mp4", 200 * 1024 * 1024), ("彩蛋.mp4", 100 * 1024 * 1024)]}}
     fq = FakeQuark(shares)
     fq.path2fid.update({"/影视": "R1", "/影视/剧集": "R2"}); fq.dirs.update({"R1": {}, "R2": {}})
     real_ls = fq.ls_dir

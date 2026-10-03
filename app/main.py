@@ -14,6 +14,7 @@ from .emby import Emby
 from .engine import Engine, Scheduler
 from .logbuf import log, ring, setup as setup_log
 from .quark import Quark, QuarkError
+from .pansou import PanSou, PanSouError
 from .parser import parse_share_text
 from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
@@ -21,7 +22,7 @@ from .tmdb import Tmdb
 VERSION = "1.0.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm")
+SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
 
 
 def create_app(store=None, engine=None):
@@ -388,6 +389,24 @@ def create_app(store=None, engine=None):
             threading.Thread(target=engine.run_task, args=(task["id"], True), daemon=True).start()
         return jsonify(task=engine.public_task(task))
 
+    # ------------------------------------------------------------ 资源搜索（PanSou）
+    @app.get("/api/pansou/search")
+    def pansou_search():
+        kw = request.args.get("kw", "").strip()
+        if not kw:
+            raise ValueError("请输入关键词")
+        c = store.data["pansou"]
+        if not (c["enabled"] and c["url"]):
+            raise ValueError("资源搜索还没有启用：请先到「资源搜索」页填写 PanSou 地址并勾选启用")
+        try:
+            return jsonify(items=PanSou(c).search(kw))
+        except PanSouError as e:
+            return jsonify(error=str(e)), 502
+
+    @app.post("/api/pansou/inspect")
+    def pansou_inspect():
+        return jsonify(engine.inspect_share(body().get("url", "")))
+
     # ------------------------------------------------------------ 设置
     @app.get("/api/settings/<name>")
     def settings_get(name):
@@ -407,12 +426,17 @@ def create_app(store=None, engine=None):
         # 用表单里刚填的值测试；密钥留空则回退到已保存的
         cur = dict(store.data[name])
         for k, v in body().items():
-            if k in cur and (v or not isinstance(v, str) or k not in ("webhook", "secret", "api_key")):
+            if k in cur and (v or not isinstance(v, str) or k not in ("webhook", "secret", "api_key", "password")):
                 cur[k] = v if v != "__clear__" else ""
         if name == "dingtalk":
             ok, msg = notify.send_dingtalk(cur, "测试消息", "### ✅ 钉钉通知配置成功\n来自 kuakego-plus", force=True)
         elif name == "smartstrm":
             ok, msg = notify.trigger_smartstrm(cur, None, force=True)
+        elif name == "pansou":
+            try:
+                ok, msg = True, PanSou(cur).ping()
+            except PanSouError as e:
+                ok, msg = False, str(e)
         elif name == "emby":
             try:
                 if not (cur["url"] and cur["api_key"]):

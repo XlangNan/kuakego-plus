@@ -235,7 +235,7 @@ class Engine:
             raise LinkError(f"网络异常：{msg}", network=True)
         raise LinkError(msg, permanent=bool(PERMANENT_ERR.search(msg)))
 
-    def _entries(self, task, q, link, stoken):
+    def _entries(self, task, q, link, stoken, max_dirs=100):
         """
         返回 [(文件dict, 季提示, 相对目录tuple)]。
         整个分享只有一个文件夹时自动剥掉这一层；递归深度 ≤4、最多读 100 个子目录。
@@ -251,7 +251,7 @@ class Engine:
         if len(top) == 1 and top[0]["dir"]:
             base_hint = season_from_text(top[0]["file_name"], None)
             top = q.get_detail(pwd_id, stoken, top[0]["fid"])
-        out, budget = [], [100]
+        out, budget = [], [max_dirs]
 
         def walk(items, rel, hint, depth):
             for f in items:
@@ -587,6 +587,44 @@ class Engine:
         if errors:
             return {"status": "error", "saved": [], "msg": errors[0]}
         return {"status": "nochange", "saved": [], "msg": "没有缺失的集数"}
+
+    _Q_RULES = [("4K", r"2160p|4k|uhd"), ("1080P", r"1080[pi]"), ("720P", r"720p"),
+                ("HDR", r"hdr"), ("杜比视界", r"dolby.?vision|\bdv\b|杜比")]
+
+    def inspect_share(self, url):
+        """看一眼分享里有什么（有多少集、集数范围、画质、体积），给「搜索资源」选链接用。结果缓存 10 分钟。"""
+        parsed = parse_share_text(url)
+        if not parsed:
+            raise ValueError("不是有效的夸克分享链接")
+        link = parsed[0]
+        cache = self.__dict__.setdefault("_inspect_cache", {})
+        hit = cache.get(link["url"])
+        if hit and time.time() - hit[0] < 600:
+            return hit[1]
+        q = self.quark()
+        try:
+            entries = self._entries({}, q, link, self._get_stoken(q, link), max_dirs=30)
+        except LinkError as e:
+            if e.network:
+                raise QuarkError(str(e))   # 网络问题不缓存，也不说成"失效"
+            res = {"ok": False, "error": str(e)}
+            cache[link["url"]] = (time.time(), res)
+            return res
+        vids = [(f, hint) for f, hint, _ in entries if is_video(f["file_name"])]
+        eps, unparsed, size = set(), 0, 0
+        for f, hint in vids:
+            got = parse_episodes(f["file_name"], hint if hint is not None else 1)
+            eps.update(got)
+            unparsed += 0 if got else 1
+            size += f.get("size", 0) or 0
+        names = " ".join(f["file_name"] for f, _ in vids).lower()
+        res = {"ok": True, "videos": len(vids), "eps": fmt_eps(eps), "ep_count": len(eps),
+               "seasons": sorted({s for s, _ in eps}), "unparsed": unparsed,
+               "size_gb": round(size / 1024 ** 3, 1),
+               "quality": [n for n, rx in self._Q_RULES if re.search(rx, names)],
+               "sample": [f["file_name"] for f, _ in vids[:3]]}
+        cache[link["url"]] = (time.time(), res)
+        return res
 
     def preview(self, task):
         """试运行：不转存、不建目录，逐个文件说明"会不会转、为什么"。"""

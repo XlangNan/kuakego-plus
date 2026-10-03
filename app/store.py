@@ -28,6 +28,10 @@ DEFAULTS = {
         "enabled": False, "url": "", "api_key": "", "user_id": "",
         "only_missing": True, "refresh_after_save": True, "refresh_delay": 10,
     },
+    "pansou": {
+        "enabled": False, "url": "", "username": "", "password": "",
+        "src": "all", "channels": "", "plugins": "", "timeout": 30,
+    },
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,
         "send_savepath": True,
@@ -40,6 +44,7 @@ SECRET_FIELDS = {
     "tmdb": ["api_key"],
     "emby": ["api_key"],
     "smartstrm": ["webhook"],
+    "pansou": ["password"],
 }
 
 

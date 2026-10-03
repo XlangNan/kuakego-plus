@@ -49,10 +49,24 @@ PANSOU_RESULTS = [
 ]
 
 
+PANSOU_QYN = [   # 搜「庆余年」时返回的：好的、画质不符的、花絮、没写季的、别的季、失效的、别的剧
+    {"url": "https://pan.quark.cn/s/q1", "password": "", "note": "庆余年 第二季 全集 4K HDR 杜比视界", "datetime": "2026-09-30T08:00:00Z", "source": "plugin:quark4k"},
+    {"url": "https://pan.quark.cn/s/q2", "password": "ab12", "note": "庆余年 第二季 1080P 更新至10集", "datetime": "2026-09-29T08:00:00Z", "source": "tg:Quark_Movies"},
+    {"url": "https://pan.quark.cn/s/q3", "password": "", "note": "庆余年 第一季 全集 国语", "datetime": "2026-09-01T08:00:00Z", "source": "plugin:hunhepan"},
+    {"url": "https://pan.quark.cn/s/q4", "password": "", "note": "庆余年 第二季 幕后花絮 4K HDR", "datetime": "2026-09-28T08:00:00Z", "source": "plugin:sousou"},
+    {"url": "https://pan.quark.cn/s/q5", "password": "", "note": "庆余年 全集 国语中字", "datetime": "2026-09-27T08:00:00Z", "source": "plugin:pansearch"},
+    {"url": "https://pan.quark.cn/s/q6", "password": "", "note": "庆余年 第二季 备用链接", "datetime": "2026-09-26T08:00:00Z", "source": "tg:ucquark"},
+    {"url": "https://pan.quark.cn/s/q7", "password": "", "note": "繁花 全30集 4K", "datetime": "2026-09-25T08:00:00Z", "source": "plugin:labi"},
+]
+
+
 class PanSouFake(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
-        d = {"status": "ok"} if self.path.startswith("/api/health") else {"code": 0, "message": "success", "data": {"total": 5, "merged_by_type": {"quark": PANSOU_RESULTS}}}
+        from urllib.parse import parse_qs, urlparse
+        kw = (parse_qs(urlparse(self.path).query).get("kw") or [""])[0]
+        res = PANSOU_QYN if "庆余年" in kw else PANSOU_RESULTS
+        d = {"status": "ok"} if self.path.startswith("/api/health") else {"code": 0, "message": "success", "data": {"total": len(res), "merged_by_type": {"quark": res}}}
         b = json.dumps(d).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
 
@@ -68,6 +82,13 @@ def build():
     shares = {"aaa": {"files": [f"庆余年.第{i:02d}集.mp4" for i in range(1, 9)]},
               "bbb": {"files": [f"S02E{i:02d}.2160p.mkv" for i in range(1, 11)]},
               "dead": {"status": 400, "msg": "分享已取消"},
+              "q1": {"files": [(f"庆余年.S02E{i:02d}.2160p.HDR.mkv", 2 * 1024 ** 3) for i in range(1, 17)]},
+              "q2": {"files": [(f"庆余年.S02E{i:02d}.1080p.mkv", 1200 * 1024 ** 2) for i in range(1, 11)]},
+              "q3": {"files": [(f"庆余年.S01E{i:02d}.mkv", 1024 ** 3) for i in range(1, 4)]},
+              "q4": {"files": [(f"庆余年.S02E{i:02d}.2160p.HDR.mkv", 30 * 1024 ** 2) for i in range(1, 6)]},
+              "q5": {"files": [(f"庆余年.第{i:02d}集.mp4", 1024 ** 3) for i in range(1, 17)]},
+              "q6": {"status": 400, "msg": "分享已取消"},
+              "q7": {"files": [("繁花.S01E01.mkv", 1024 ** 3)]},
               "ccc": {"files": [(f"法医秦明之龙番往事.第{i:02d}集.1080P.mp4", 900 * 1024 * 1024) for i in range(1, 17)]},
               "ddd": {"files": [(f"龙番往事{i:02d}.mp4", 600 * 1024 * 1024) for i in range(1, 13)] + [("幕后花絮.mp4", 200 * 1024 * 1024), ("彩蛋.mp4", 100 * 1024 * 1024)]}}
     fq = FakeQuark(shares)

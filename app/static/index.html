@@ -70,6 +70,8 @@ main{flex:1;min-width:0;padding:22px 24px 60px}
 .card h2 small{font-weight:400;color:var(--dim);font-size:12px}
 label.l{display:block;font-size:12.5px;color:var(--dim);margin:12px 0 6px}
 label.l:first-of-type{margin-top:0}
+.modal label.l:first-of-type{margin-top:12px}   /* 卡片里第一个标签贴顶；弹窗里每一块之间要留间距 */
+.modal .qbox{margin-top:4px}
 input[type=text],input[type=number],input[type=password],input[type=date],select,textarea{
   width:100%;background:var(--inp);border:1px solid transparent;border-radius:8px;padding:9px 12px;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--acc);background:var(--card)}
@@ -280,6 +282,7 @@ tr:last-child td{border-bottom:0}
         <div><label class="l">到期日（可选，之后不再扫描）</label><input type="date" id="m-end"></div>
       </div>
       <label class="chk"><input type="checkbox" id="m-tree" checked> 保持分享里的子目录结构（如「第一季」「第二季」文件夹）</label>
+      <div id="m-q-slot"></div>
     </details>
     <div class="actions"><button class="btn pri" id="m-add">＋ 添加监控</button></div>
   </div>
@@ -378,7 +381,8 @@ tr:last-child td{border-bottom:0}
     <div class="row" style="align-items:flex-start"><div class="grow"><label class="l">用户名（PanSou 开启了认证才需要）</label><input type="text" id="p-user"></div>
       <div class="grow"><label class="l">密码</label><input type="password" id="p-pass"><div class="hint" id="p-pass-h"></div></div></div>
     <div class="row"><div class="grow"><label class="l">搜索来源</label><select id="p-src"><option value="all">全部（Telegram 频道 + 网站插件）</option><option value="plugin">仅网站插件（不需要代理）</option><option value="tg">仅 Telegram 频道</option></select></div>
-      <div style="width:150px"><label class="l">超时（秒）</label><input type="number" id="p-timeout" min="5" max="120"></div></div>
+      <div style="width:150px"><label class="l">超时（秒）</label><input type="number" id="p-timeout" min="5" max="120"></div>
+      <div style="width:190px"><label class="l">自动找资源间隔（小时）</label><input type="number" id="p-interval" min="1" max="72"></div></div>
     <details><summary>高级：指定频道 / 插件（留空 = 用 PanSou 自己的默认配置）</summary>
       <label class="l">Telegram 频道（逗号分隔，填频道名，如 tgsearchers7）</label><input type="text" id="p-channels">
       <label class="l">插件（逗号分隔，必须是 PanSou 已启用的插件）</label><input type="text" id="p-plugins"></details>
@@ -508,6 +512,7 @@ async function refreshStatus() {
   try {
     const s = await api('/status');
     const who = $('#who'); who.classList.toggle('off', !s.logged_in);
+    PANSOU_ON = !!s.pansou;
     who.textContent = s.logged_in ? '已登录 ' + s.nickname : (s.error || '未登录夸克账号');
     $('#ver').textContent = 'v' + s.version;
     $('#banner').innerHTML = s.logged_in ? '' : `<div class="banner">⚠ ${esc(s.error || '尚未登录夸克账号')}，转存和目录浏览都需要登录。<a href="#account" onclick="go('account')">去登录 →</a></div>`;
@@ -544,10 +549,24 @@ function browse(initial, onPick) {
   load();
 }
 
+/* ---------- 画质筛选（订阅 / 编辑 / 分享监控共用） ---------- */
+let PANSOU_ON = false;
+const RES_OPTS = [['4k', '4K'], ['1080p', '1080P'], ['720p', '720P']];
+const qualityBox = (id, res = [], hdr = 'any') => `<div id="${id}" class="qbox"><label class="l">画质筛选（可多选，不选 = 不限）</label>
+  <div class="chips" data-q="res">${RES_OPTS.map(([v, n]) => `<span class="chip ${res.includes(v) ? 'on' : ''}" data-v="${v}">${n}</span>`).join('')}
+    <select data-q="hdr" style="width:auto;height:30px;padding:2px 10px;margin-left:6px">
+      <option value="any" ${hdr === 'any' ? 'selected' : ''}>HDR：不限</option><option value="yes" ${hdr === 'yes' ? 'selected' : ''}>只要 HDR / 杜比视界</option><option value="no" ${hdr === 'no' ? 'selected' : ''}>不要 HDR</option></select></div>
+  <div class="hint">自动找资源时只选画质符合的；转存时也会跳过不符合的文件。文件名里没写分辨率的无法判断，照常转存；选了「只要 HDR」时，没有 HDR / 杜比视界标记的文件会被跳过。</div></div>`;
+const bindQuality = root => root && $$('[data-q=res] .chip', root).forEach(c => c.onclick = () => c.classList.toggle('on'));
+const readQuality = root => ({want_res: $$('[data-q=res] .chip.on', root).map(c => c.dataset.v), want_hdr: $('[data-q=hdr]', root).value});
+const prefsOf = q => ({res: q.want_res, hdr: q.want_hdr});
+const qualityTags = t => [...(t.want_res || []).map(r => (RES_OPTS.find(o => o[0] === r) || [0, r])[1]), t.want_hdr === 'yes' ? 'HDR' : t.want_hdr === 'no' ? '非 HDR' : ''].filter(Boolean);
+const inText = ts => { const m = Math.round((ts * 1000 - Date.now()) / 60000); return m <= 0 ? '马上' : m < 90 ? `约 ${m} 分钟后` : `约 ${Math.round(m / 60)} 小时后`; };
+
 /* ======================================================================
    资源搜索（PanSou）：搜索 → 检测 → 勾选 → 回填
    ====================================================================== */
-function pansouPicker({keyword = '', total = 0, aired = 0, onPick}) {
+function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, onPick}) {
   const m = modal(`<h3>🔎 搜索资源 <span class="sub" style="font-weight:400">来自 PanSou，只显示夸克网盘</span></h3>
     <div class="row"><div class="grow"><input type="text" id="ps-q" value="${esc(keyword)}" placeholder="输入剧名…"></div><button class="btn pri" id="ps-go">搜索</button></div>
     <div class="hint" id="ps-msg">先点「检测」看看里面有多少集、什么画质，再勾选。勾选多个时，从上到下就是检查优先级。</div>
@@ -564,15 +583,18 @@ function pansouPicker({keyword = '', total = 0, aired = 0, onPick}) {
     if (x._r) return true;
     btn.disabled = true; btn.textContent = '检测中…';
     try {
-      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url});
+      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url, season, prefs});
       if (!r.ok) {
         box.innerHTML = `<span class="tag err">已失效：${esc(r.error)}</span>`;
         const ck = $('.ps-ck', row); ck.checked = false; ck.disabled = true; row.classList.add('dead');
       } else {
-        const cover = total && r.ep_count >= total ? '<span class="tag ok">✓ 覆盖全季</span>' : (aired && r.ep_count >= aired ? '<span class="tag ok">✓ 覆盖已播出</span>' : '');
-        box.innerHTML = `${cover}<span class="tag info">${esc(r.eps || '未识别集数')}</span><span>${r.ep_count ? r.ep_count + ' 集' : r.videos + ' 个视频'}</span>
+        const cnt = r.prefs_set ? r.eps_ok_list.length : r.ep_count;   // 设了画质要求时，只算符合要求的集
+        const cover = total && cnt >= total ? '<span class="tag ok">✓ 覆盖全季</span>' : (aired && cnt >= aired ? '<span class="tag ok">✓ 覆盖已播出</span>' : '');
+        const noSeason = !r.seasons_explicit.length && season > 1 ? '<span class="tag warn" title="文件名里没写是第几季，这里是按第 ' + season + ' 季算的，请自己确认">未标注季号</span>' : '';
+        box.innerHTML = `${cover}${noSeason}<span class="tag info">${esc(r.eps || '未识别集数')}</span><span>${r.ep_count ? r.ep_count + ' 集' : r.videos + ' 个视频'}</span>
           ${r.quality.map(q => `<span class="tag mute">${esc(q)}</span>`).join('')}${r.size_gb ? `<span class="sub">${r.size_gb} GB</span>` : ''}
-          ${r.unparsed ? `<span class="tag warn" title="这些文件名里认不出是第几集">${r.unparsed} 个认不出集数</span>` : ''}`;
+          ${r.unparsed ? `<span class="tag warn" title="这些文件名里认不出是第几集">${r.unparsed} 个认不出集数</span>` : ''}
+          ${r.prefs_set ? (r.ok_videos ? `<span class="tag ok" title="符合你选的画质要求的文件">✓ 符合画质：${esc(r.ok_eps || r.ok_videos + ' 个')}</span>` : '<span class="tag warn">✗ 没有符合你画质要求的</span>') : ''}`;
       }
       btn.textContent = '已检测'; refresh(); return true;
     } catch (e) {
@@ -633,7 +655,8 @@ const parseHint = debounce(guard(async () => {
   h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
 }), 300);
 $('#m-links').oninput = parseHint;
-$('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, onPick: urls => appendLinks($('#m-links'), urls)});
+$('#m-q-slot').innerHTML = qualityBox('m-q'); bindQuality($('#m-q'));
+$('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
 $('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''));
 
 function advFields(p = 'm') {
@@ -646,7 +669,7 @@ $('#m-add').onclick = guard(async () => {
   try {
     const existing = $('#m-existing').checked;
     await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
-      interval: $('#m-interval').value, save_existing: existing, ...advFields('m')});
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q'))});
     toast(existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
     $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
   } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
@@ -710,12 +733,15 @@ function editTask(t, reload) {
       <div><label class="l">Emby 剧名</label><input type="text" id="ed-emby" value="${esc(t.emby_name)}"></div>
       <div><label class="l">Emby 剧集 ID（精确指定）</label><input type="text" id="ed-sid" value="${esc(t.emby_series_id)}"></div>
     </div>
+    ${qualityBox('ed-q', t.want_res, t.want_hdr)}
     <label class="l">运行星期</label><div class="chips" id="ed-wk">${wk.map((d, i) => `<span class="chip ${t.run_weeks.includes(i + 1) ? 'on' : ''}" data-d="${i + 1}">周${d}</span>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="ed-tree" ${t.keep_tree ? 'checked' : ''}> 保持子目录结构</label>
+    <label class="chk"><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
     <label class="chk"><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
+  bindQuality($('#ed-q', m));
   $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p);
   $('#ed-no', m).onclick = () => m.remove();
   $('#ed-reset', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); toast('已重置', 'ok'); m.remove(); reload(); }));
@@ -725,7 +751,7 @@ function editTask(t, reload) {
       name: $('#ed-name', m).value, season: $('#ed-season', m).value, include_kw: $('#ed-inc', m).value,
       exclude_kw: $('#ed-exc', m).value, min_size_mb: $('#ed-min', m).value, total_episodes: $('#ed-total', m).value,
       rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
-      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked,
+      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, strict_season: $('#ed-strict', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
     toast('已保存', 'ok'); m.remove(); reload();
@@ -838,20 +864,25 @@ function subscribeDialog(show, season = 1) {
     <button class="btn xs" id="sd-search" type="button" style="margin-top:6px">🔎 搜索资源</button>
     <div class="row"><div class="grow"><label class="l">扫描间隔（分钟，≥60）</label><input type="number" id="sd-int" min="60" value="60"></div>
     <div class="grow"><label class="l">总集数（可选，不填则按 TMDB 已播出集数）</label><input type="number" id="sd-total" min="0" value="0"></div></div>
+    ${qualityBox('sd-q')}
+    <label class="chk"><input type="checkbox" id="sd-auto" ${PANSOU_ON ? 'checked' : 'disabled'}> 🤖 自动找资源：订阅后自动搜索并添加分享链接，之后定时检查有没有新资源（推荐）</label>
+    <div class="hint">${PANSOU_ON ? '添加前会先检测内容：必须是这一季、画质符合、能补上你缺的集数才会加；每次的判断理由都有记录。你自己填的链接优先级最高。' : '需要先到「资源搜索」页配置 PanSou 才能用。'}</div>
     <label class="chk"><input type="checkbox" id="sd-tree" checked> 保持分享里的子目录结构</label>
     <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即转存缺少的集数</label>
     <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
   $('#sd-search', m).onclick = () => {
     const sn = +$('#sd-season', m).value, eps = (show.seasons || []).find(s => s.season_number === sn)?.episode_count || 0;
-    pansouPicker({keyword: show.name, total: eps, onPick: urls => appendLinks($('#sd-links', m), urls)});
+    pansouPicker({keyword: show.name, total: eps, season: sn, prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
   };
+  bindQuality($('#sd-q', m));
   $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
     await api('/subscriptions', 'POST', {tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
       links_text: $('#sd-links', m).value, interval: $('#sd-int', m).value, total_episodes: $('#sd-total', m).value,
-      keep_tree: $('#sd-tree', m).checked, save_existing: $('#sd-exist', m).checked});
-    m.remove(); toast('已订阅', 'ok'); go('subs');
+      keep_tree: $('#sd-tree', m).checked, save_existing: $('#sd-exist', m).checked, auto_find: $('#sd-auto', m).checked, ...readQuality($('#sd-q', m))});
+    const auto = $('#sd-auto', m).checked;
+    m.remove(); toast(auto ? '已订阅，正在自动搜索资源…（可到订阅详情查看进度）' : '已订阅', 'ok'); go('subs');
   });
 }
 $('#s-new').onclick = () => {
@@ -872,6 +903,7 @@ const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN', {hour12: fa
 function badgeOf(t) {
   if (t.state === 'running') return ['扫描中', 'info'];
   if (t.state === 'queued') return ['排队中', 'info'];
+  if (t.status === 'nolinks' && t.auto_find) return ['找资源中', 'info'];
   return ({invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
            expired: ['已到期', 'mute'], complete: ['已追完', 'ok']})[t.status] || null;
 }
@@ -920,12 +952,19 @@ function renderSub(m, t, tab) {
         : (base ? '<div class="sub" style="color:var(--ok)">✓ 已播出的都齐了</div>' : '')}
       <div class="sub" style="margin-top:4px">${live ? esc(live.emby) + ' · ' : ''}更新于 ${esc(fmtTs(s.ts))}</div>`
       : '<div class="sub">还没有进度数据。点「刷新进度」，或等第一次扫描完成。</div>';
-    panel += `<div class="sub" style="margin-top:10px">每 ${t.interval} 分钟扫描一次 · ${esc(nextIn(t) || (t.enabled ? '' : '已暂停'))} · 累计转存 ${t.saved_total || 0} 个</div>
+    panel += `${qualityTags(t).length ? `<div class="sub" style="margin-top:10px">画质要求：${qualityTags(t).map(x => `<span class="tag info">${esc(x)}</span>`).join(' ')}</div>` : ''}
+      <div class="sub" style="margin-top:10px">每 ${t.interval} 分钟扫描一次 · ${esc(nextIn(t) || (t.enabled ? '' : '已暂停'))} · 累计转存 ${t.saved_total || 0} 个</div>
       <div class="sub">最近：${esc(t.last_run || '—')} ${esc(t.last_msg || '')}</div>
       ${t.overview ? `<p style="font-size:12.5px;margin:10px 0 0;color:var(--dim)">${esc(t.overview)}</p>` : ''}`;
   } else if (tab === 'links') {
-    panel = (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
-        <span class="u" title="${esc(l.url)}">${esc(shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
+    const af = t.find || {};
+    const autoBox = `<div style="margin:0 0 12px;padding:10px 12px;background:var(--bg);border-radius:10px">
+      <label class="chk" style="margin:0"><input type="checkbox" data-autotoggle ${t.auto_find ? 'checked' : ''} ${PANSOU_ON ? '' : 'disabled'}> 🤖 自动找资源</label>
+      <div class="sub" style="margin-top:4px">${!PANSOU_ON ? '需要先到「资源搜索」页配置 PanSou' : t.auto_find ? (af.last ? `上次搜索 ${esc(fmtTs(af.last))}：${esc(af.msg || '—')} · 下次${esc(inText(af.next))}` : '还没有搜索过，马上就会搜') : '开启后会定时搜索新资源并自动添加（添加前会检测内容并按画质要求筛选）'}</div>
+      <div class="actions" style="margin-top:8px"><button class="btn xs" data-findnow ${PANSOU_ON ? '' : 'disabled'}>立即搜索一次</button></div>
+      ${af.log && af.log.length ? `<details style="margin-top:6px"><summary>判断记录（${af.log.length}）</summary><div class="files" style="max-height:220px">${af.log.map(x => `<div>${esc(fmtTs(x.ts))}　${esc(x.text)}</div>`).join('')}</div></details>` : ''}</div>`;
+    panel = autoBox + (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
+        <span class="u" title="${esc((l.title ? l.title + '\n' : '') + l.url)}">${l.auto ? '🤖 ' : ''}${esc(l.auto && l.title ? l.title : shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
         <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="btn xs danger" data-rm="${i}">×</button></div>`).join('')
@@ -961,8 +1000,15 @@ function renderSub(m, t, tab) {
     const txt = $('#sd-add', m).value; if (!txt.trim()) return;
     await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).join('\n') + '\n' + txt}); toast('已添加，下次扫描时检查', 'ok'); await reload('links');
   }));
+  $('[data-autotoggle]', m)?.addEventListener('change', guard(async e => {
+    await api('/tasks/' + t.id, 'PUT', {auto_find: e.target.checked}); toast(e.target.checked ? '已开启自动找资源' : '已关闭自动找资源', 'ok'); await reload('links');
+  }));
+  $('[data-findnow]', m)?.addEventListener('click', guard(async () => {
+    await api(`/tasks/${t.id}/find`, 'POST'); toast('正在搜索，过几秒刷新就能看到判断记录', 'ok');
+    setTimeout(() => reload('links'), 4000); setTimeout(() => reload('links'), 12000);
+  }));
   $('[data-psearch]', m)?.addEventListener('click', () => pansouPicker({
-    keyword: t.name, total: t.snap?.total || 0, aired: t.snap?.aired || 0,
+    keyword: t.name, total: t.snap?.total || 0, aired: t.snap?.aired || 0, season: t.season, prefs: {res: t.want_res, hdr: t.want_hdr},
     onPick: guard(async urls => {
       await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).concat(urls).join('\n')});
       toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
@@ -997,7 +1043,7 @@ const FORMS = {
   dingtalk: {enabled: '#d-enabled', webhook: '#d-webhook', secret: '#d-secret', on_add: '#d-add', on_save: '#d-save', on_error: '#d-err'},
   smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp'},
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
-  pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout'},
+  pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
 };
 const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], pansou: ['password']};

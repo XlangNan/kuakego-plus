@@ -181,6 +181,59 @@ def _builtin_episodes(filename, default_season=1):
     return []
 
 
+# ---------------------------------------------------------------- 画质识别
+_RES_RULES = [("4k", re.compile(r"2160[pi]|(?<![a-z0-9])4k(?![a-z0-9])|(?<![a-z])uhd(?![a-z])|3840x2160", re.I)),
+              ("1080p", re.compile(r"1080[pi]|1920x1080|(?<![a-z])fhd(?![a-z])", re.I)),
+              ("720p", re.compile(r"720[pi]|1280x720", re.I))]
+# 注意：只认「杜比视界」，不认单独的「杜比」——那多半是杜比音效（全景声），和画面无关
+_HDR_RE = re.compile(r"(?<![a-z])hdr|dolby[\s._-]?vision|(?<![a-z])dv(?![a-z])|杜比视界", re.I)
+RES_LABEL = {"4k": "4K", "1080p": "1080P", "720p": "720P"}
+
+
+def quality_tags(name):
+    """文件名 -> {"res": "4k"|"1080p"|"720p"|None, "hdr": bool}。没写就是 None / False。"""
+    res = next((k for k, rx in _RES_RULES if rx.search(name or "")), None)
+    return {"res": res, "hdr": bool(_HDR_RE.search(name or ""))}
+
+
+def quality_reason(want_res, want_hdr, name):
+    """
+    按用户选的画质要求检查一个文件名。符合返回 ""，不符合返回原因。
+    - 分辨率：文件名里写了分辨率、且不在想要的范围内才算不符合；没写的无法判断，放行。
+    - HDR "yes"：HDR 版一定会标出来，所以没有 HDR / 杜比视界 标记的视为 SDR，不符合。
+    - HDR "no"：带 HDR 标记的不符合。
+    """
+    t = quality_tags(name)
+    if want_res and t["res"] and t["res"] not in want_res:
+        return f"分辨率是 {RES_LABEL[t['res']]}，不在你要的范围（{'、'.join(RES_LABEL[r] for r in want_res if r in RES_LABEL)}）内"
+    if want_hdr == "yes" and not t["hdr"]:
+        return "你要 HDR，但文件名里没有 HDR / 杜比视界 标记"
+    if want_hdr == "no" and t["hdr"]:
+        return "你不要 HDR，但这是 HDR 版"
+    return ""
+
+
+def norm_title(s):
+    """去掉空格和标点、转小写，用来判断「搜索结果的标题里有没有这部剧的名字」。"""
+    return re.sub(r"[\W_]+", "", (s or "").lower())
+
+
+def title_seasons(title, name=""):
+    """标题里提到的季号：第二季 / S2 / Season 2 / 名字后面紧跟的数字（庆余年2）。"""
+    out = set()
+    for m in _RE_SEASON_CN.finditer(title or ""):
+        n = cn2int(m.group(1))
+        if n is not None:
+            out.add(n)
+    for m in re.finditer(r"(?<![A-Za-z])(?:[Ss]eason[\s._-]?|[Ss])(\d{1,2})(?![\dA-Za-z])", title or ""):
+        out.add(int(m.group(1)))
+    n = norm_title(name)
+    if n:
+        for m in re.finditer(re.escape(n) + r"(\d{1,2})(?![\dA-Za-z])", norm_title(title)):
+            out.add(int(m.group(1)))
+    return out
+
+
 def fmt_eps(eps):
     """[(1,6),(1,7),(1,8),(2,1)] -> 'S01E06-E08, S02E01'"""
     eps = sorted(set(eps))

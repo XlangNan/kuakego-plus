@@ -31,6 +31,7 @@ DEFAULTS = {
     "pansou": {
         "enabled": False, "url": "", "username": "", "password": "",
         "src": "all", "channels": "", "plugins": "", "timeout": 30,
+        "auto_interval": 6,   # 自动找资源：每隔几小时再搜一次（小时）
     },
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,

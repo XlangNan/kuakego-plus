@@ -108,7 +108,8 @@ def create_app(store=None, engine=None):
     @app.get("/api/status")
     def status():
         s = account_state()
-        return jsonify(**s, version=VERSION, running=engine.running)
+        pc = store.data["pansou"]
+        return jsonify(**s, version=VERSION, running=engine.running, pansou=bool(pc["enabled"] and pc["url"]))
 
     @app.get("/api/account")
     def account_get():
@@ -220,6 +221,20 @@ def create_app(store=None, engine=None):
         if tid in engine.pending:
             return jsonify(ok=False, msg="该任务正在运行或排队中"), 409
         threading.Thread(target=engine.run_task, args=(tid, True), daemon=True).start()
+        return jsonify(ok=True)
+
+    @app.post("/api/tasks/<tid>/find")
+    def tasks_find(tid):
+        t = engine.find(tid)
+        if not t:
+            raise KeyError("任务不存在")
+        if t.get("kind") != "subscription":
+            raise ValueError("只有订阅追更支持自动找资源")
+        if not engine.pansou():
+            raise ValueError("资源搜索还没有启用：请先到「资源搜索」页配置 PanSou")
+        if tid in engine.pending:
+            return jsonify(ok=False, msg="该任务正在运行或排队中"), 409
+        threading.Thread(target=engine.auto_find, args=(tid, True), daemon=True).start()
         return jsonify(ok=True)
 
     @app.post("/api/tasks/<tid>/toggle")
@@ -384,9 +399,17 @@ def create_app(store=None, engine=None):
         if not (payload.get("savepath") or "").strip("/ "):
             raise ValueError("请选择转存目录")
         has_links = bool(parse_share_text(payload.get("links_text", "")))
+        pc = store.data["pansou"]
+        pansou_on = bool(pc["enabled"] and pc["url"])
+        payload["auto_find"] = bool(data.get("auto_find", pansou_on)) and pansou_on   # 没配 PanSou 就没法自动找
         task = engine.create_task(payload, save_existing=data.get("save_existing", True))
-        if has_links and data.get("save_existing", True):
-            threading.Thread(target=engine.run_task, args=(task["id"], True), daemon=True).start()
+
+        def kick():
+            if task["auto_find"]:
+                engine.auto_find(task["id"], force=True)   # 先搜资源，找到后内部会立刻扫描转存
+            elif has_links and data.get("save_existing", True):
+                engine.run_task(task["id"], True)
+        threading.Thread(target=kick, daemon=True).start()
         return jsonify(task=engine.public_task(task))
 
     # ------------------------------------------------------------ 资源搜索（PanSou）
@@ -405,7 +428,12 @@ def create_app(store=None, engine=None):
 
     @app.post("/api/pansou/inspect")
     def pansou_inspect():
-        return jsonify(engine.inspect_share(body().get("url", "")))
+        d = body()
+        try:
+            season = int(d.get("season") or 1)
+        except (TypeError, ValueError):
+            season = 1
+        return jsonify(engine.inspect_share(d.get("url", ""), season, d.get("prefs")))
 
     # ------------------------------------------------------------ 设置
     @app.get("/api/settings/<name>")

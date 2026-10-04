@@ -19,7 +19,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
 
-VERSION = "1.0.0"
+VERSION = "1.0.3"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
@@ -411,6 +411,20 @@ def create_app(store=None, engine=None):
                 engine.run_task(task["id"], True)
         threading.Thread(target=kick, daemon=True).start()
         return jsonify(task=engine.public_task(task))
+
+    # ------------------------------------------------------------ 最近使用的目录
+    @app.get("/api/recent-dirs")
+    def recent_dirs_get():
+        with store.lock:
+            return jsonify(dirs=list(store.data["recent_dirs"]))
+
+    @app.delete("/api/recent-dirs")
+    def recent_dirs_clear():
+        path = request.args.get("path")   # 不带 path = 全部清除
+        with store.lock:
+            store.data["recent_dirs"] = [d for d in store.data["recent_dirs"] if path and d["path"] != path]
+            store.save()
+        return jsonify(ok=True)
 
     # ------------------------------------------------------------ 资源搜索（PanSou）
     @app.get("/api/pansou/search")

@@ -14,6 +14,8 @@ DEFAULTS = {
     "auto_sign": True,
     "last_sign_date": "",
     "tasks": [],
+    "recent_dirs_seeded": False,   # 升级前已有的任务，是否已把它们的目录补进 recent_dirs（只补一次）
+    "recent_dirs": [],     # 最近使用的保存目录 [{path, name, ts}]，新→旧，最多 12 条
     "recent": [],          # 最近入库事件（新→旧，最多 200 条）
     "dingtalk": {
         "enabled": False, "webhook": "", "secret": "",

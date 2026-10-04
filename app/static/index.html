@@ -10,19 +10,22 @@
 <meta name="theme-color" content="#5b7cfa">
 <style>
 :root{
-  --bg:#f1f2f6;--card:#fff;--line:#e7e9ef;--fg:#1b1e25;--dim:#6b7384;--faint:#9aa1b0;
+  --out:#e5e7ee;--bg:#f1f2f6;--card:#fff;--line:#e7e9ef;--fg:#1b1e25;--dim:#6b7384;--faint:#9aa1b0;
   --acc:#3b63d8;--acc2:#4a74ee;--inp:#f3f4f8;--ok:#13885a;--okbg:#e4f6ee;--err:#cf3b36;--errbg:#fdeceb;
   --warn:#a8650c;--warnbg:#fdf2de;--info:#2f5bd0;--infobg:#e8eefc;--mute:#6b7384;--mutebg:#eceef3;
   --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans SC","Segoe UI",sans-serif;
 }
 [data-theme=dark]{
-  --bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--dim:#99a1b3;--faint:#6b7384;
+  --out:#0a0c10;  --bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--dim:#99a1b3;--faint:#6b7384;
   --acc:#4d72e6;--acc2:#5b82f0;--inp:#1e222b;--ok:#4cc38a;--okbg:#12281f;--err:#f0726c;--errbg:#2e1716;
   --warn:#e2a34a;--warnbg:#2c2212;--info:#7da0ff;--infobg:#172036;--mute:#99a1b3;--mutebg:#222733;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{font:14px/1.55 var(--font);background:var(--bg);color:var(--fg);display:flex;min-height:100vh}
+html{background:var(--out)}
+body{font:14px/1.55 var(--font);background:var(--out);color:var(--fg);min-height:100vh}
+/* 整个应用（侧栏 + 内容 + 右侧面板）作为一个整体，在窗口里水平居中；窗口比它窄时自然铺满 */
+.app{display:flex;width:100%;max-width:1760px;min-height:100vh;margin:0 auto;background:var(--bg);box-shadow:0 0 0 1px var(--line)}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--acc);text-decoration:none}
 
@@ -176,6 +179,9 @@ tr:last-child td{border-bottom:0}
 .files{font-size:12px;color:var(--dim);max-height:150px;overflow:auto;margin-top:2px;word-break:break-all}
 .panel{min-height:120px;max-height:52vh;overflow-y:auto}
 
+.recent{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.recent .chip{font-size:12px;padding:2px 10px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent a{font-size:12px;cursor:pointer;margin-left:2px}
 /* ---------- 资源搜索（PanSou） ---------- */
 .ps-list{margin-top:10px;max-height:56vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
 .ps-list:empty{display:none}
@@ -221,7 +227,7 @@ tr:last-child td{border-bottom:0}
 .toast.err{background:#b9322d}.toast.ok{background:#0f7a50}
 
 @media(max-width:860px){
-  body{flex-direction:column}
+  .app{flex-direction:column}
   aside{width:100%;height:auto;position:static;border-right:0;border-bottom:1px solid var(--line);padding:10px}
   nav{flex-direction:row;overflow-x:auto}nav button{white-space:nowrap}
   .side-foot{display:none}
@@ -231,6 +237,7 @@ tr:last-child td{border-bottom:0}
 </style>
 </head>
 <body>
+<div class="app">
 <aside>
   <div class="brand"><img class="logo" src="/favicon.svg" alt="" width="28" height="28"><b>kuakego-plus</b><button class="theme" id="themeBtn" title="切换主题">🌙</button></div>
   <div class="who off" id="who">检查登录状态…</div>
@@ -268,6 +275,7 @@ tr:last-child td{border-bottom:0}
         <input type="number" id="m-interval" value="60" min="60"></div>
     </div>
     <div class="hint">间隔最低 60 分钟。调太低会触发夸克风控，得不偿失。</div>
+    <div id="m-recent"></div>
     <label class="chk"><input type="checkbox" id="m-existing" checked> 添加时立即转存链接里已有的视频（取消勾选则只追新、不转已有的）</label>
     <details><summary>高级选项（过滤规则 / 目录结构）</summary>
       <div class="grid2">
@@ -455,6 +463,7 @@ tr:last-child td{border-bottom:0}
   </div>
   <div class="card"><h2>📊 概况</h2><div id="rc-sum"></div></div>
 </div></div></main>
+</div>
 
 <script>
 const $ = (s, r = document) => r.querySelector(s);
@@ -524,7 +533,7 @@ async function refreshStatus() {
    ====================================================================== */
 function browse(initial, onPick) {
   const stack = [{fid: '0', name: ''}];
-  const m = modal(`<h3>选择转存目录</h3><div class="crumbs" id="bc"></div><div class="dirs" id="bd"></div>
+  const m = modal(`<h3>选择转存目录</h3><div class="recent" id="br-recent" style="margin:0 0 10px"></div><div class="crumbs" id="bc"></div><div class="dirs" id="bd"></div>
     <div class="row" style="margin-top:12px"><div class="grow"><input type="text" id="bn" placeholder="新建文件夹名称"></div>
     <button class="btn" id="bmk">新建并进入</button></div>
     <div class="actions"><button class="btn pri" id="bok">选择当前目录</button><span class="hint" id="bp"></span></div>`);
@@ -545,8 +554,59 @@ function browse(initial, onPick) {
     const r = await api('/browse/mkdir', 'POST', {path: path() + '/' + n});
     stack.push({fid: r.fid, name: n}); $('#bn', m).value = ''; load();
   });
+  $('#br-recent', m).innerHTML = recentHTML().replace(/<a [^>]*data-rclear[^>]*>.*?<\/a>/, '');
+  $$('#br-recent .chip', m).forEach(c => c.onclick = () => { onPick(c.dataset.p); m.remove(); });
   $('#bok', m).onclick = () => { onPick(path() === '/' ? '' : path()); m.remove(); };
   load();
+}
+
+/* ---------- 最近使用的目录（存在服务器上，换浏览器也在） ---------- */
+let RECENT_DIRS = [];
+const loadRecent = async () => { try { RECENT_DIRS = (await api('/recent-dirs')).dirs; } catch (_) {} };
+const shortPath = p => { const s = p.split('/').filter(Boolean); return s.length > 2 ? '…/' + s.slice(-2).join('/') : p; };
+const recentHTML = () => RECENT_DIRS.length ? `<span class="sub">最近使用：</span>${RECENT_DIRS.slice(0, 6).map(d =>
+  `<span class="chip" data-p="${esc(d.path)}" title="${esc(d.path)}（${esc(d.name)}）">${esc(shortPath(d.path))}</span>`).join('')}<a class="sub" data-rclear>清除记录</a>` : '';
+function mountRecent(slot, input, after) {
+  if (!slot) return;
+  slot.className = 'recent'; slot.innerHTML = recentHTML();
+  $$('.chip', slot).forEach(c => c.onclick = () => { input.value = c.dataset.p; input.dispatchEvent(new Event('input')); after && after(); });
+  $('[data-rclear]', slot)?.addEventListener('click', guard(async () => {
+    if (!confirm('清除所有「最近使用的目录」记录？（不影响已有的订阅和监控）')) return;
+    await api('/recent-dirs', 'DELETE'); RECENT_DIRS = []; slot.innerHTML = '';
+  }));
+}
+// 订阅弹窗里的默认目录：沿用上次用的目录。每部剧必须有自己的文件夹（两部不同的剧放一起，已有集数会混淆），所以：
+//  · 上次是「每部剧一个文件夹」（…/某剧/第 2 季）→ 同级目录 + 这部剧的名字
+//  · 上次是一个普通目录 → 把它当作上级目录，里面再按剧名建文件夹
+// 注意：JS 的 \W 只认英文字母，会把汉字也当成标点删掉，这里必须用 Unicode 属性
+const normName = s => (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const SEASON_DIR = /^(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|season[\s._-]*\d+|s\d{1,2})$/i;
+const stripSeasonName = s => (s || '').replace(/[\s._-]*(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|season\s*\d+|s\d{1,2})\s*$/i, '');
+function savePathFrom(last, name, season) {     // 把「某条历史目录」的风格套用到这部剧上
+  const suffix = season > 1 ? `/第 ${season} 季` : '';
+  const segs = last.path.split('/').filter(Boolean);
+  const base = segs.length > 1 && SEASON_DIR.test(segs.at(-1)) ? segs.slice(0, -1) : segs;
+  const folder = normName(base.at(-1)), prev = normName(stripSeasonName(last.name));
+  const perShow = base.length && folder && prev && folder.includes(prev);   // 只看「文件夹名里有剧名」；反过来（剧名里含文件夹名，如「某电影合集」→「电影」）不算
+  return '/' + [...(perShow ? base.slice(0, -1) : base), name].join('/') + suffix;
+}
+const defaultSavePath = (name, season) => RECENT_DIRS[0] ? savePathFrom(RECENT_DIRS[0], name, season) : `/影视/剧集/${name}${season > 1 ? `/第 ${season} 季` : ''}`;
+// 订阅弹窗里的「推荐目录」：每条历史目录套用到当前这部剧上的结果（去重），点一下填入
+function mountSuggest(slot, input, name, season) {
+  if (!slot) return;
+  const seen = new Set(), sug = [];
+  for (const d of RECENT_DIRS) {
+    const p = savePathFrom(d, name, season);
+    if (!seen.has(p)) { seen.add(p); sug.push({p, d}); }
+    if (sug.length >= 6) break;
+  }
+  slot.className = 'recent';
+  slot.innerHTML = sug.length ? `<span class="sub">推荐目录：</span>${sug.map(s => `<span class="chip" data-p="${esc(s.p)}" title="${esc(s.p)}　（参照《${esc(s.d.name)}》的目录 ${esc(s.d.path)}）">${esc(shortPath(s.p))}</span>`).join('')}<a class="sub" data-rclear>清除记录</a>` : '';
+  $$('.chip', slot).forEach(c => c.onclick = () => { input.value = c.dataset.p; });
+  $('[data-rclear]', slot)?.addEventListener('click', guard(async () => {
+    if (!confirm('清除所有「最近使用的目录」记录？（不影响已有的订阅和监控）')) return;
+    await api('/recent-dirs', 'DELETE'); RECENT_DIRS = []; slot.innerHTML = '';
+  }));
 }
 
 /* ---------- 画质筛选（订阅 / 编辑 / 分享监控共用） ---------- */
@@ -655,7 +715,7 @@ const parseHint = debounce(guard(async () => {
   h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
 }), 300);
 $('#m-links').oninput = parseHint;
-$('#m-q-slot').innerHTML = qualityBox('m-q'); bindQuality($('#m-q'));
+$('#m-q-slot').innerHTML = qualityBox('m-q'); loadRecent().then(() => mountRecent($('#m-recent'), $('#m-path'))); bindQuality($('#m-q'));
 $('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
 $('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''));
 
@@ -672,6 +732,7 @@ $('#m-add').onclick = guard(async () => {
       interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q'))});
     toast(existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
     $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
+    await loadRecent(); mountRecent($('#m-recent'), $('#m-path'));
   } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
 });
 
@@ -707,7 +768,7 @@ function bindTaskOps(box, tasks, reload) {
     else if (b.dataset.a === 'preview') previewTask(t);
   }));
 }
-loaders.monitor = () => { loadMonitors(); timers.push(setInterval(() => loadMonitors().catch(() => {}), 30000)); };
+loaders.monitor = () => { loadRecent().then(() => mountRecent($('#m-recent'), $('#m-path'))); loadMonitors(); timers.push(setInterval(() => loadMonitors().catch(() => {}), 30000)); };
 
 /* ---------- 编辑弹窗（监控 / 订阅共用） ---------- */
 function editTask(t, reload) {
@@ -720,6 +781,7 @@ function editTask(t, reload) {
       <a id="ed-reset">重置失效标记</a></div>` : ''}
     <div class="row" style="margin-top:12px"><div class="grow"><label class="l">转存目录</label><input type="text" id="ed-path" value="${esc(t.savepath)}"></div>
       <button class="btn" id="ed-browse">浏览…</button><div style="width:110px"><label class="l">间隔（分钟）</label><input type="number" id="ed-int" min="60" value="${t.interval}"></div></div>
+    <div id="ed-recent"></div>
     <div class="grid2">
       <div><label class="l">名称</label><input type="text" id="ed-name" value="${esc(t.name)}"></div>
       <div><label class="l">季号</label><input type="number" id="ed-season" min="0" value="${t.season}"></div>
@@ -741,7 +803,7 @@ function editTask(t, reload) {
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
-  bindQuality($('#ed-q', m));
+  bindQuality($('#ed-q', m)); mountRecent($('#ed-recent', m), $('#ed-path', m));
   $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p);
   $('#ed-no', m).onclick = () => m.remove();
   $('#ed-reset', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); toast('已重置', 'ok'); m.remove(); reload(); }));
@@ -754,7 +816,7 @@ function editTask(t, reload) {
       emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, strict_season: $('#ed-strict', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
-    toast('已保存', 'ok'); m.remove(); reload();
+    toast('已保存', 'ok'); m.remove(); loadRecent(); reload();
   });
 }
 
@@ -857,8 +919,11 @@ async function showDetail(id) {
 function subscribeDialog(show, season = 1) {
   const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
     <div class="row"><div style="width:110px"><label class="l">季号</label><input type="number" id="sd-season" min="0" value="${season}"></div>
-    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="/影视/剧集/${esc(show.name)}${season > 1 ? '/第 ' + season + ' 季' : ''}"></div>
+    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="${esc(defaultSavePath(show.name, season))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
+    <div class="hint" style="margin-top:6px">${RECENT_DIRS.length
+      ? `已参照你上次的目录 ${esc(RECENT_DIRS[0].path)}（《${esc(RECENT_DIRS[0].name)}》）自动填写，每部剧单独一个文件夹；点下面的推荐目录可以切换。`
+      : '还没有历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。'}</div><div id="sd-recent"></div>
     <label class="l">分享链接（可留空稍后再加；多个按先后顺序检查，后面的只补前面没有的集数）</label>
     <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
     <button class="btn xs" id="sd-search" type="button" style="margin-top:6px">🔎 搜索资源</button>
@@ -875,13 +940,20 @@ function subscribeDialog(show, season = 1) {
     pansouPicker({keyword: show.name, total: eps, season: sn, prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
   };
   bindQuality($('#sd-q', m));
+  let autoPath = $('#sd-path', m).value;      // 改季号时，如果路径还是自动填的那个，就跟着换（带不带「第 N 季」）
+  const refreshPaths = () => {
+    const s = +$('#sd-season', m).value || 1, np = defaultSavePath(show.name, s);
+    if ($('#sd-path', m).value === autoPath) $('#sd-path', m).value = np;
+    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), show.name, s);
+  };
+  $('#sd-season', m).addEventListener('input', refreshPaths); refreshPaths();
   $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
     await api('/subscriptions', 'POST', {tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
       links_text: $('#sd-links', m).value, interval: $('#sd-int', m).value, total_episodes: $('#sd-total', m).value,
       keep_tree: $('#sd-tree', m).checked, save_existing: $('#sd-exist', m).checked, auto_find: $('#sd-auto', m).checked, ...readQuality($('#sd-q', m))});
-    const auto = $('#sd-auto', m).checked;
+    const auto = $('#sd-auto', m).checked; loadRecent();
     m.remove(); toast(auto ? '已订阅，正在自动搜索资源…（可到订阅详情查看进度）' : '已订阅', 'ok'); go('subs');
   });
 }
@@ -1141,7 +1213,7 @@ async function loadRail() {
 
 /* ---------- 启动 ---------- */
 refreshStatus(); setInterval(refreshStatus, 60000);
-loadRail().catch(() => {}); setInterval(() => loadRail().catch(() => {}), 30000);
+loadRecent(); loadRail().catch(() => {}); setInterval(() => loadRail().catch(() => {}), 30000);
 go(location.hash.slice(1) || 'monitor');
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== cur) go(v); });
 </script>

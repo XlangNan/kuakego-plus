@@ -70,6 +70,7 @@ class Engine:
         self.running = None    # 正在运行的任务 id
         self._q, self._q_cookie = None, None
         self._seed_recent()
+        self._seed_recent_dirs()
 
     # ------------------------------------------------------------ 客户端
     def quark(self):
@@ -171,8 +172,30 @@ class Engine:
         }
         return fields
 
+    def _remember_dir(self, path, name):
+        """记下最近使用的保存目录（去重、新的在前、最多 12 条；根目录不记）。调用方需持有 store.lock。"""
+        path = _norm_path(path)
+        if path == "/":
+            return
+        rd = [d for d in self.store.data["recent_dirs"] if d["path"] != path]
+        rd.insert(0, {"path": path, "name": name, "ts": int(time.time())})
+        self.store.data["recent_dirs"] = rd[:12]
+
+    def _check_dir_clash(self, fields, self_id=None):
+        """两部不同的剧放在同一个目录，已有集数会混在一起导致漏转，所以不允许。同一部剧的不同季可以放一起。"""
+        tid = fields.get("tmdb_id")
+        if not tid:
+            return
+        with self.store.lock:
+            for t in self.store.data["tasks"]:
+                if (t["id"] != self_id and t.get("tmdb_id") and t["tmdb_id"] != tid
+                        and _norm_path(t["savepath"]) == fields["savepath"]):
+                    raise ValueError(f"这个目录已经被订阅《{t['name']}》使用了。两部不同的剧放在同一个目录里，"
+                                     f"已有集数会混在一起、导致漏转，请换一个目录（比如在后面加上剧名）")
+
     def create_task(self, payload, save_existing=True):
         fields = self.normalize(payload)
+        self._check_dir_clash(fields)
         task = {
             "id": uuid.uuid4().hex[:8], "created": int(time.time()),
             "next_run": 0, "last_run": "", "last_status": "", "last_msg": "",
@@ -182,6 +205,7 @@ class Engine:
             self.snapshot_baseline(task)
         with self.store.lock:
             self.store.data["tasks"].append(task)
+            self._remember_dir(task["savepath"], task["name"])
             self.store.save()
         dt = self.store.data["dingtalk"]
         if dt["enabled"] and dt["on_add"]:
@@ -196,7 +220,10 @@ class Engine:
         if not task:
             raise KeyError("任务不存在")
         fields = self.normalize(payload, task)
+        self._check_dir_clash(fields, self_id=tid)
         with self.store.lock:
+            if fields["savepath"] != task.get("savepath"):
+                self._remember_dir(fields["savepath"], fields["name"])
             task.update(fields)
             self.store.save()
         return task
@@ -975,6 +1002,23 @@ class Engine:
             self.store.save()
         icon = {"saved": "✅", "error": "❌", "complete": "🏁"}.get(res["status"], "⏹")
         log.info("%s《%s》%s", icon, task["name"], res["msg"])
+
+    def _seed_recent_dirs(self):
+        """升级前已有的任务：把它们的目录补进「最近使用的目录」，否则老用户第一次订阅时默认目录会退回到写死的兜底值。
+        只补一次（用户点了「清除记录」之后不会再冒出来）。"""
+        with self.store.lock:
+            if self.store.data.get("recent_dirs_seeded"):
+                return
+            have = {d["path"] for d in self.store.data["recent_dirs"]}
+            add = []
+            for t in sorted(self.store.data["tasks"], key=lambda t: -t.get("created", 0)):   # 新建的排前面
+                p = _norm_path(t["savepath"])
+                if p != "/" and p not in have:
+                    have.add(p)
+                    add.append({"path": p, "name": t["name"], "ts": t.get("created", 0)})
+            self.store.data["recent_dirs"] = (self.store.data["recent_dirs"] + add)[:12]
+            self.store.data["recent_dirs_seeded"] = True
+            self.store.save()
 
     def _seed_recent(self):
         """升级前已有转存历史、但还没有 recent 的：从任务历史里补一份，面板不至于一片空白。"""

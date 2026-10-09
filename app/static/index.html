@@ -182,6 +182,12 @@ tr:last-child td{border-bottom:0}
 .recent{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .recent .chip{font-size:12px;padding:2px 10px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recent a{font-size:12px;cursor:pointer;margin-left:2px}
+/* ---------- 影视推荐：三个板块 ---------- */
+.board{display:flex;gap:4px;margin:-4px 0 14px;border-bottom:1px solid var(--line)}
+.bt{border:0;background:transparent;padding:8px 18px;font-size:15px;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:6px 6px 0 0}
+.bt:hover{color:var(--fg)}
+.bt.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+.pc .bd span.t{background:rgba(88,96,120,.92)}
 /* ---------- 资源搜索（PanSou） ---------- */
 .ps-list{margin-top:10px;max-height:56vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
 .ps-list:empty{display:none}
@@ -203,7 +209,7 @@ tr:last-child td{border-bottom:0}
   box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .modal.wide{max-width:820px}
 .modal h3{margin:0 0 14px;font-size:16px}
-.x{position:absolute;right:14px;top:12px;border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--dim)}
+.x{position:absolute;right:14px;top:12px;border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--dim);z-index:5}
 .hero{margin:-20px -22px 14px;height:150px;background:var(--inp) center/cover;border-radius:16px 16px 0 0;position:relative}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 30%,var(--card));border-radius:inherit}
 .dt{display:flex;gap:16px}
@@ -243,7 +249,7 @@ tr:last-child td{border-bottom:0}
   <div class="who off" id="who">检查登录状态…</div>
   <nav id="nav">
     <button data-v="monitor">📡 分享监控</button>
-    <button data-v="recommend">🍿 剧集推荐</button>
+    <button data-v="recommend">🍿 影视推荐</button>
     <button data-v="subs">📺 订阅追更</button>
     <button data-v="dingtalk">🔔 钉钉通知</button>
     <button data-v="smartstrm">🎬 SmartStrm 联动</button>
@@ -300,19 +306,18 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<!-- ========== 剧集推荐 ========== -->
+<!-- ========== 影视推荐 ========== -->
 <section class="view" id="v-recommend">
   <div class="card">
-    <div class="toolbar">
+    <div class="board" id="r-board">
+      <button class="bt on" data-s="tv">📺 剧集</button><button class="bt" data-s="movie">🎬 电影</button><button class="bt" data-s="anime">🌸 动漫</button>
+    </div>
+    <div class="toolbar" style="margin-bottom:10px">
       <input type="text" id="r-q" placeholder="搜索剧名…">
       <button class="btn" id="r-search">搜索</button>
-      <div class="chips" id="r-cats">
-        <span class="chip on" data-c="home">精选</span><span class="chip" data-c="all">全部</span>
-        <span class="chip" data-c="cn">国产剧</span><span class="chip" data-c="kr_jp">日韩剧</span>
-        <span class="chip" data-c="us_eu">欧美剧</span>
-      </div>
-      <select id="r-sort"><option value="popularity">按热度</option><option value="rating">按评分</option><option value="latest">按最新</option></select>
+      <select id="r-sort" style="margin-left:auto"><option value="popularity">按热度</option><option value="rating">按评分</option><option value="latest">按最新</option></select>
     </div>
+    <div class="chips" id="r-cats" style="margin-bottom:16px"></div>
     <div id="r-body"><div class="empty">加载中…</div></div>
     <div class="actions" style="justify-content:center"><button class="btn" id="r-more" style="display:none">加载更多</button></div>
   </div>
@@ -321,11 +326,12 @@ tr:last-child td{border-bottom:0}
 <!-- ========== 订阅追更 ========== -->
 <section class="view" id="v-subs">
   <div class="card">
-    <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录</small></h2>
+    <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录；想找新的剧 / 电影 / 动漫，去「🍿 影视推荐」</small></h2>
     <div class="actions" style="margin-top:0"><button class="btn pri" id="s-new">＋ 搜索并订阅新剧</button>
+      <button class="btn pri" id="s-new-movie">🎬 搜索并订阅电影</button>
       <button class="btn" id="s-refresh">刷新全部进度</button></div>
   </div>
-  <div class="card"><div id="s-list"><div class="empty">加载中…</div></div></div>
+  <div class="card"><div id="s-filter"></div><div id="s-list"><div class="empty">加载中…</div></div></div>
 </section>
 
 <!-- ========== 钉钉 ========== -->
@@ -366,7 +372,7 @@ tr:last-child td{border-bottom:0}
 <section class="view" id="v-tmdb">
   <div class="card">
     <h2>🎯 TMDB 设置</h2>
-    <div class="hint" style="margin:0 0 10px">用于「剧集推荐」「订阅追更」的海报、简介、季集数和播出日期。可在 themoviedb.org 免费申请。本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
+    <div class="hint" style="margin:0 0 10px">用于「影视推荐」「订阅追更」的海报、简介、季集数和播出日期。可在 themoviedb.org 免费申请。本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
     <label class="l">API Key（v3）或读访问令牌（v4）</label><input type="password" id="t-key"><div class="hint" id="t-key-h"></div>
     <div class="row"><div class="grow"><label class="l">语言</label><input type="text" id="t-lang" placeholder="zh-CN"></div>
       <div class="grow"><label class="l">地区</label><input type="text" id="t-region" placeholder="CN"></div></div>
@@ -469,6 +475,8 @@ tr:last-child td{border-bottom:0}
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// 海报背景：图片下面垫一层渐变，图片加载失败时也不会是一块空白
+const posterBg = u => u ? `background-image:url('${esc(u)}'),linear-gradient(135deg,#6a82fb,#8b5cf6)` : '';
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 async function api(path, method = 'GET', body) {
@@ -590,12 +598,15 @@ function savePathFrom(last, name, season) {     // 把「某条历史目录」�
   const perShow = base.length && folder && prev && folder.includes(prev);   // 只看「文件夹名里有剧名」；反过来（剧名里含文件夹名，如「某电影合集」→「电影」）不算
   return '/' + [...(perShow ? base.slice(0, -1) : base), name].join('/') + suffix;
 }
-const defaultSavePath = (name, season) => RECENT_DIRS[0] ? savePathFrom(RECENT_DIRS[0], name, season) : `/影视/剧集/${name}${season > 1 ? `/第 ${season} 季` : ''}`;
+const lastOf = media => RECENT_DIRS.find(d => (d.media || 'tv') === media);   // 剧集和电影各用各的历史目录，不能把电影推荐到剧集文件夹里
+const FALLBACK_DIR = {tv: '/影视/剧集', movie: '/影视/电影', anime: '/影视/动漫'};
+const defaultSavePath = (name, season, media = 'tv') => { const last = lastOf(media); return last ? savePathFrom(last, name, season)
+  : `${FALLBACK_DIR[media] || FALLBACK_DIR.tv}/${name}${media !== 'movie' && season > 1 ? `/第 ${season} 季` : ''}`; };
 // 订阅弹窗里的「推荐目录」：每条历史目录套用到当前这部剧上的结果（去重），点一下填入
-function mountSuggest(slot, input, name, season) {
+function mountSuggest(slot, input, name, season, media = 'tv') {
   if (!slot) return;
   const seen = new Set(), sug = [];
-  for (const d of RECENT_DIRS) {
+  for (const d of RECENT_DIRS.filter(d => (d.media || 'tv') === media)) {
     const p = savePathFrom(d, name, season);
     if (!seen.has(p)) { seen.add(p); sug.push({p, d}); }
     if (sug.length >= 6) break;
@@ -620,13 +631,13 @@ const qualityBox = (id, res = [], hdr = 'any') => `<div id="${id}" class="qbox">
 const bindQuality = root => root && $$('[data-q=res] .chip', root).forEach(c => c.onclick = () => c.classList.toggle('on'));
 const readQuality = root => ({want_res: $$('[data-q=res] .chip.on', root).map(c => c.dataset.v), want_hdr: $('[data-q=hdr]', root).value});
 const prefsOf = q => ({res: q.want_res, hdr: q.want_hdr});
-const qualityTags = t => [...(t.want_res || []).map(r => (RES_OPTS.find(o => o[0] === r) || [0, r])[1]), t.want_hdr === 'yes' ? 'HDR' : t.want_hdr === 'no' ? '非 HDR' : ''].filter(Boolean);
+const qualityTags = t => [...(t.want_res || []).map(r => (RES_OPTS.find(o => o[0] === r) || [0, r])[1]), t.want_hdr === 'yes' ? 'HDR' : t.want_hdr === 'no' ? '非 HDR' : '', t.no_cam ? '排除枪版' : ''].filter(Boolean);
 const inText = ts => { const m = Math.round((ts * 1000 - Date.now()) / 60000); return m <= 0 ? '马上' : m < 90 ? `约 ${m} 分钟后` : `约 ${Math.round(m / 60)} 小时后`; };
 
 /* ======================================================================
    资源搜索（PanSou）：搜索 → 检测 → 勾选 → 回填
    ====================================================================== */
-function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, onPick}) {
+function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, movie = false, title = '', onPick}) {
   const m = modal(`<h3>🔎 搜索资源 <span class="sub" style="font-weight:400">来自 PanSou，只显示夸克网盘</span></h3>
     <div class="row"><div class="grow"><input type="text" id="ps-q" value="${esc(keyword)}" placeholder="输入剧名…"></div><button class="btn pri" id="ps-go">搜索</button></div>
     <div class="hint" id="ps-msg">先点「检测」看看里面有多少集、什么画质，再勾选。勾选多个时，从上到下就是检查优先级。</div>
@@ -643,10 +654,14 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
     if (x._r) return true;
     btn.disabled = true; btn.textContent = '检测中…';
     try {
-      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url, season, prefs});
+      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url, season, prefs, title});
       if (!r.ok) {
         box.innerHTML = `<span class="tag err">已失效：${esc(r.error)}</span>`;
         const ck = $('.ps-ck', row); ck.checked = false; ck.disabled = true; row.classList.add('dead');
+      } else if (movie) {   // 电影：看的是「是不是一部电影」，不是集数
+        box.innerHTML = `<span class="tag info">${r.videos} 个视频</span><span>最大 ${(r.max_mb / 1024).toFixed(1)} GB</span>${r.quality.map(q => `<span class="tag mute">${esc(q)}</span>`).join('')}
+          ${r.ep_count >= 4 ? '<span class="tag warn">像是剧集</span>' : ''}${r.videos > 8 ? '<span class="tag warn">像是合集</span>' : ''}${r.max_mb < 300 ? '<span class="tag warn">视频太小，像预告</span>' : ''}${r.cam_videos ? `<span class="tag warn">${r.cam_videos} 个疑似枪版</span>` : ''}
+          ${r.prefs_set ? (r.ok_videos ? '<span class="tag ok">✓ 符合要求</span>' : '<span class="tag warn">✗ 没有符合你要求的视频</span>') : ''}`;
       } else {
         const cnt = r.prefs_set ? r.eps_ok_list.length : r.ep_count;   // 设了画质要求时，只算符合要求的集
         const cover = total && cnt >= total ? '<span class="tag ok">✓ 覆盖全季</span>' : (aired && cnt >= aired ? '<span class="tag ok">✓ 覆盖已播出</span>' : '');
@@ -772,6 +787,7 @@ loaders.monitor = () => { loadRecent().then(() => mountRecent($('#m-recent'), $(
 
 /* ---------- 编辑弹窗（监控 / 订阅共用） ---------- */
 function editTask(t, reload) {
+  const mv = t.media === 'movie', hid = mv ? ' style="display:none"' : '';   // 季号 / 总集数 / 只转存本季 等是剧集专属的
   const wk = ['一','二','三','四','五','六','日'];
   const dead = t.links.filter(l => l.ban);
   const m = modal(`<h3>编辑《${esc(t.name)}》</h3>
@@ -784,22 +800,23 @@ function editTask(t, reload) {
     <div id="ed-recent"></div>
     <div class="grid2">
       <div><label class="l">名称</label><input type="text" id="ed-name" value="${esc(t.name)}"></div>
-      <div><label class="l">季号</label><input type="number" id="ed-season" min="0" value="${t.season}"></div>
+      <div${hid}><label class="l">季号</label><input type="number" id="ed-season" min="0" value="${t.season}"></div>
       <div><label class="l">关键词（包含）</label><input type="text" id="ed-inc" value="${esc(t.include_kw)}"></div>
       <div><label class="l">关键词（排除）</label><input type="text" id="ed-exc" value="${esc(t.exclude_kw)}"></div>
       <div><label class="l">最小体积（MB）</label><input type="number" id="ed-min" min="0" value="${t.min_size_mb}"></div>
-      <div><label class="l">总集数（0=不填，以 TMDB 为准）</label><input type="number" id="ed-total" min="0" value="${t.total_episodes}"></div>
-      <div><label class="l">重命名</label><select id="ed-rename"><option value="auto">整理为 S01E05</option><option value="keep">保持原名</option>${t.rename === 'custom' ? '<option value="custom">自定义（导入）</option>' : ''}</select></div>
+      <div${hid}><label class="l">总集数（0=不填，以 TMDB 为准）</label><input type="number" id="ed-total" min="0" value="${t.total_episodes}"></div>
+      <div><label class="l">重命名</label><select id="ed-rename"><option value="auto">${mv ? '整理为「片名 (年份)」（Emby 推荐）' : '整理为 S01E05'}</option><option value="keep">保持原名</option>${t.rename === 'custom' ? '<option value="custom">自定义（导入）</option>' : ''}</select></div>
       <div><label class="l">到期日</label><input type="date" id="ed-end" value="${esc(t.enddate)}"></div>
-      <div><label class="l">解析不出第几集的视频</label><select id="ed-unp"><option value="skip">跳过（推荐剧集用，避免重复转存）</option><option value="save">照样转存（电影 / 特辑用）</option></select></div>
-      <div><label class="l">Emby 剧名</label><input type="text" id="ed-emby" value="${esc(t.emby_name)}"></div>
-      <div><label class="l">Emby 剧集 ID（精确指定）</label><input type="text" id="ed-sid" value="${esc(t.emby_series_id)}"></div>
+      <div${hid}><label class="l">解析不出第几集的视频</label><select id="ed-unp"><option value="skip">跳过（推荐剧集用，避免重复转存）</option><option value="save">照样转存（电影 / 特辑用）</option></select></div>
+      <div><label class="l">${mv ? 'Emby 里的片名' : 'Emby 剧名'}</label><input type="text" id="ed-emby" value="${esc(t.emby_name)}"></div>
+      <div${hid}><label class="l">Emby 剧集 ID（精确指定）</label><input type="text" id="ed-sid" value="${esc(t.emby_series_id)}"></div>
     </div>
     ${qualityBox('ed-q', t.want_res, t.want_hdr)}
     <label class="l">运行星期</label><div class="chips" id="ed-wk">${wk.map((d, i) => `<span class="chip ${t.run_weeks.includes(i + 1) ? 'on' : ''}" data-d="${i + 1}">周${d}</span>`).join('')}</div>
-    <label class="chk"><input type="checkbox" id="ed-tree" ${t.keep_tree ? 'checked' : ''}> 保持子目录结构</label>
-    <label class="chk"><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
-    <label class="chk"><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
+    <label class="chk"${hid}><input type="checkbox" id="ed-tree" ${t.keep_tree ? 'checked' : ''}> 保持子目录结构</label>
+    <label class="chk"${hid}><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
+    <label class="chk"${mv ? '' : ' style="display:none"'}><input type="checkbox" id="ed-nocam" ${t.no_cam ? 'checked' : ''}> 排除枪版 / 抢先版（TC、TS、CAM）</label>
+    <label class="chk"${hid}><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
@@ -813,7 +830,7 @@ function editTask(t, reload) {
       name: $('#ed-name', m).value, season: $('#ed-season', m).value, include_kw: $('#ed-inc', m).value,
       exclude_kw: $('#ed-exc', m).value, min_size_mb: $('#ed-min', m).value, total_episodes: $('#ed-total', m).value,
       rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
-      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, strict_season: $('#ed-strict', m).checked, ...readQuality($('#ed-q', m)),
+      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
     toast('已保存', 'ok'); m.remove(); loadRecent(); reload();
@@ -829,10 +846,10 @@ async function previewTask(t) {
     $('.modal', m).innerHTML = `<button class="x">×</button><h3>试运行《${esc(t.name)}》<span class="sub" style="font-weight:400"> 只看不转存</span></h3>
       ${r.warnings.map(w => `<div class="banner" style="margin-bottom:10px">⚠ ${esc(w)}</div>`).join('')}
       <div class="card" style="margin:0 0 12px;padding:12px 14px;background:var(--bg);border:0">
-        <div class="sub">本任务季号：<b>第 ${r.season} 季</b>（文件名里没写季的，都按这个季号算）</div>
+        ${r.movie ? '' : `<div class="sub">本任务季号：<b>第 ${r.season} 季</b>（文件名里没写季的，都按这个季号算）</div>`}
         <div class="sub">${esc(r.emby_msg)}</div>
-        <div class="sub">Emby 已有：<b>${esc(r.emby_have || '无')}</b></div>
-        <div class="sub">夸克目录已有：<b>${esc(r.dir_have || '无')}</b></div></div>
+        ${r.movie ? '' : `<div class="sub">Emby 已有：<b>${esc(r.emby_have || '无')}</b></div>
+        <div class="sub">夸克目录已有：<b>${esc(r.dir_have || '无')}</b></div>`}</div>
       ${r.links.map((l, i) => `<div style="margin:14px 0 6px"><b>链接 ${i + 1}</b> <span class="sub">${esc(shortUrl(l.url))}</span>
         ${l.ban ? `<span class="tag err">已失效：${esc(l.ban)}</span>` : ''}
         ${l.error ? `<span class="tag err">${esc(l.error)}</span>` : ''}</div>
@@ -849,47 +866,67 @@ async function previewTask(t) {
 }
 
 /* ======================================================================
-   剧集推荐
+   影视推荐（剧集 / 电影 / 动漫 三个板块）
    ====================================================================== */
-let rCat = 'home', rPage = 1, rTotal = 1, rQuery = '';
-function posterCard(it) {
-  const bd = [it.in_emby ? '<span>✓ 已入库</span>' : '', it.sub_id ? '<span class="s">已订阅</span>' : ''].join('');
-  return `<div class="pc" data-id="${it.id}"><div class="img" style="background-image:url('${esc(it.poster_url)}')">
+const R_BOARDS = {
+  tv: {ph: '搜索剧名…', cats: [['home', '精选'], ['all', '全部'], ['cn', '国产剧'], ['kr_jp', '日韩剧'], ['us_eu', '欧美剧']]},
+  movie: {ph: '搜索电影…', cats: [['home', '精选'], ['all', '全部'], ['cn', '华语'], ['kr_jp', '日韩'], ['us_eu', '欧美']]},
+  anime: {ph: '搜索番剧 / 动画电影…', cats: [['home', '精选'], ['all', '全部'], ['jp', '日本'], ['cn', '国产'], ['us_eu', '欧美'], ['movie', '动画电影']]},
+};
+let rScope = 'tv', rCat = 'home', rPage = 1, rTotal = 1, rQuery = '', rReq = 0;
+const rState = {};   // 每个板块记住自己的分类和排序，切回来不用重选
+function posterCard(it, showType = false) {
+  const bd = [showType && it.media === 'movie' ? '<span class="t">电影</span>' : '', it.in_emby ? '<span>✓ 已入库</span>' : '', it.sub_id ? '<span class="s">已订阅</span>' : ''].join('');
+  return `<div class="pc" data-id="${it.id}" data-media="${it.media || 'tv'}"><div class="img" style="${posterBg(it.poster_url)}">
     ${it.vote_average ? `<div class="rate">★ ${it.vote_average}</div>` : ''}<div class="bd">${bd}</div></div>
-    <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y">${esc((it.first_air_date || '').slice(0, 4) || '—')}</div></div>`;
+    <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y">${esc(it.year || (it.first_air_date || '').slice(0, 4) || '—')}</div></div>`;
 }
-const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => showDetail(+p.dataset.id));
+// 点海报：电影 → 电影详情；剧集 / 番剧 → 剧集详情（动漫板块里两种混排，靠 data-media 区分）
+const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => (p.dataset.media === 'movie' ? showMovieDetail : showDetail)(+p.dataset.id));
 async function loadRecommend(append = false) {
-  const body = $('#r-body'), more = $('#r-more');
+  const body = $('#r-body'), more = $('#r-more'), sc = rScope, my = ++rReq, typed = sc === 'anime';
+  const stale = () => my !== rReq;   // 加载期间用户切了板块 / 分类：丢掉过期的结果，免得串台
   try {
     if (rQuery || rCat !== 'home') {
       if (!append) { rPage = 1; body.innerHTML = '<div class="empty">加载中…</div>'; }
-      const d = rQuery ? await api(`/tmdb/search?q=${encodeURIComponent(rQuery)}&page=${rPage}`)
-        : await api(`/tmdb/discover?category=${rCat}&sort=${$('#r-sort').value}&page=${rPage}`);
+      const d = rQuery ? await api(`/tmdb/search?scope=${sc}&q=${encodeURIComponent(rQuery)}&page=${rPage}`)
+        : await api(`/tmdb/discover?scope=${sc}&category=${rCat}&sort=${$('#r-sort').value}&page=${rPage}`);
+      if (stale()) return;
       rTotal = d.total_pages;
       if (!append) body.innerHTML = '<div class="posters"></div>';
       if (!d.items.length && !append) body.innerHTML = '<div class="empty">没有找到结果</div>';
-      else $('.posters', body).insertAdjacentHTML('beforeend', d.items.map(posterCard).join(''));
+      else $('.posters', body).insertAdjacentHTML('beforeend', d.items.map(x => posterCard(x, typed)).join(''));
       bindPosters(body); more.style.display = rPage < rTotal ? '' : 'none';
     } else {
       more.style.display = 'none'; body.innerHTML = '<div class="empty">加载中…</div>';
-      const {rows} = await api('/tmdb/home');
-      body.innerHTML = rows.map(r => `<div class="shelf"><h3>${esc(r.label)}<a data-c="${r.category}">查看更多 ›</a></h3>
-        ${r.items.length ? `<div class="rail">${r.items.map(posterCard).join('')}</div>` : `<div class="sub">${esc(r.err || '暂无数据')}</div>`}</div>`).join('');
+      const {rows} = await api('/tmdb/home?scope=' + sc);
+      if (stale()) return;
+      body.innerHTML = rows.map(r => `<div class="shelf"><h3>${esc(r.label)}<a data-c="${r.category}" data-sort="${esc(r.sort || 'popularity')}">查看更多 ›</a></h3>
+        ${r.items.length ? `<div class="rail">${r.items.map(x => posterCard(x, typed)).join('')}</div>` : `<div class="sub">${esc(r.err || '暂无数据')}</div>`}</div>`).join('');
       bindPosters(body);
-      $$('.shelf h3 a', body).forEach(a => a.onclick = () => setCat(a.dataset.c));
+      $$('.shelf h3 a', body).forEach(a => a.onclick = () => setCat(a.dataset.c, a.dataset.sort));
     }
-  } catch (e) { body.innerHTML = `<div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; more.style.display = 'none'; }
+  } catch (e) { if (!stale()) { body.innerHTML = `<div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; more.style.display = 'none'; } }
 }
-function setCat(c) {
-  rCat = c; rQuery = ''; $('#r-q').value = '';
+function setCat(c, sort) {
+  rCat = c; rQuery = ''; $('#r-q').value = ''; if (sort) $('#r-sort').value = sort;
   $$('#r-cats .chip').forEach(x => x.classList.toggle('on', x.dataset.c === c)); loadRecommend();
 }
-$$('#r-cats .chip').forEach(c => c.onclick = () => setCat(c.dataset.c));
+function setBoard(sc, load = true) {
+  rState[rScope] = {cat: rCat, sort: $('#r-sort').value};
+  const st = rState[sc] || {cat: 'home', sort: 'popularity'};
+  rScope = sc; rCat = st.cat; rQuery = ''; $('#r-q').value = ''; $('#r-q').placeholder = R_BOARDS[sc].ph; $('#r-sort').value = st.sort;
+  $$('#r-board .bt').forEach(b => b.classList.toggle('on', b.dataset.s === sc));
+  $('#r-cats').innerHTML = R_BOARDS[sc].cats.map(([k, n]) => `<span class="chip ${k === rCat ? 'on' : ''}" data-c="${k}">${n}</span>`).join('');
+  $$('#r-cats .chip').forEach(c => c.onclick = () => setCat(c.dataset.c));
+  if (load) loadRecommend();
+}
+$$('#r-board .bt').forEach(b => b.onclick = () => setBoard(b.dataset.s));
 $('#r-sort').onchange = () => loadRecommend();
 $('#r-search').onclick = () => { rQuery = $('#r-q').value.trim(); if (rQuery) $$('#r-cats .chip').forEach(x => x.classList.remove('on')); else setCat('home'); loadRecommend(); };
 $('#r-q').onkeydown = e => { if (e.key === 'Enter') $('#r-search').click(); };
 $('#r-more').onclick = () => { rPage++; loadRecommend(true); };
+setBoard('tv', false);
 loaders.recommend = () => loadRecommend();
 
 async function showDetail(id) {
@@ -914,15 +951,83 @@ async function showDetail(id) {
 }
 
 /* ======================================================================
+   电影：推荐 / 详情 / 订阅
+   ====================================================================== */
+const todayStr = () => new Date().toISOString().slice(0, 10);
+async function showMovieDetail(id) {
+  const m = modal('<div class="empty">加载中…</div>', 'wide');
+  try {
+    const d = await api('/tmdb/movie/' + id), upcoming = d.release_date && d.release_date > todayStr();
+    $('.modal', m).innerHTML = `<button class="x">×</button>
+      <div class="hero" style="background-image:url('${esc(d.backdrop_url || d.poster_url)}')"></div>
+      <div class="dt"><div class="pic" style="background-image:url('${esc(d.poster_url)}')"></div>
+        <div style="min-width:0"><h3 style="margin:0 0 4px">${esc(d.name)} ${d.sub_id ? '<span class="tag info">已订阅</span>' : ''} ${d.in_emby ? '<span class="tag ok">Emby 已入库</span>' : ''}</h3>
+        <div class="sub">${esc(d.year || '—')} · ★ ${d.vote_average} (${d.vote_count}) ${d.runtime ? '· ' + d.runtime + ' 分钟' : ''} · ${esc(d.genres.join(' / '))}</div>
+        ${d.tagline ? `<div class="sub" style="font-style:italic">${esc(d.tagline)}</div>` : ''}
+        <p style="font-size:13px;margin:10px 0">${esc(d.overview || '暂无简介')}</p>
+        ${upcoming ? `<div class="banner" style="margin:0 0 10px">这部电影 ${esc(d.release_date)} 才上映，订阅后会等上映再找片源（早期流出的多是枪版）。</div>` : ''}
+        <div class="actions" style="margin-top:6px">${d.sub_id ? `<button class="btn" id="mv-open">已订阅，去查看</button>`
+          : d.in_emby ? '<button class="btn" disabled>Emby 里已经有了</button>' : '<button class="btn pri" id="mv-sub">订阅这部电影</button>'}</div></div></div>
+      ${d.cast.length ? `<label class="l" style="margin-top:14px">主演</label><div class="cast">${d.cast.map(c => `<div><i style="background-image:url('${esc(c.profile_url)}')"></i>${esc(c.name)}<span>${esc(c.character)}</span></div>`).join('')}</div>` : ''}`;
+    $('.x', m).onclick = () => m.remove();
+    $('#mv-sub', m)?.addEventListener('click', () => { m.remove(); subscribeMovieDialog(d); });
+    $('#mv-open', m)?.addEventListener('click', async () => { m.remove(); go('subs'); await loadSubs(); openSub(d.sub_id); });
+  } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
+}
+
+function subscribeMovieDialog(mv) {
+  const kind = mv.anime ? 'anime' : 'movie', label = mv.year ? `${mv.name} (${mv.year})` : mv.name, last = lastOf(kind);
+  const m = modal(`<h3>订阅电影《${esc(mv.name)}》${mv.year ? ` (${esc(mv.year)})` : ''}</h3>
+    ${mv.release_date && mv.release_date > todayStr() ? `<div class="banner">这部电影 ${esc(mv.release_date)} 才上映。订阅后会等上映再找片源。</div>` : ''}
+    <div class="row"><div class="grow"><label class="l">转存目录（每部电影单独一个文件夹，Emby 推荐命名为「片名 (年份)」）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(label, 1, kind))}"></div>
+    <button class="btn" id="sd-browse">浏览…</button></div>
+    <div class="hint" style="margin-top:6px">${last ? `已参照你上次${mv.anime ? '动漫' : '电影'}的目录 ${esc(last.path)}（《${esc(last.name)}》）自动填写；点下面的推荐目录可以切换。` : `还没有${mv.anime ? '动漫' : '电影'}的历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。`}</div><div id="sd-recent"></div>
+    <label class="l">分享链接（可留空，让程序自动找）</label>
+    <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd" style="min-height:70px"></textarea>
+    <button class="btn xs" id="sd-search" type="button" style="margin-top:6px">🔎 搜索资源</button>
+    <div class="row"><div class="grow"><label class="l">检查间隔（分钟，≥60）</label><input type="number" id="sd-int" min="60" value="60"></div></div>
+    ${qualityBox('sd-q')}
+    <label class="chk"><input type="checkbox" id="sd-nocam" checked> 排除枪版 / 抢先版（TC、TS、CAM）</label>
+    <label class="chk"><input type="checkbox" id="sd-auto" ${PANSOU_ON ? 'checked' : 'disabled'}> 🤖 自动找片源：订阅后自动搜索、检测并添加，找到就转存，入库后自动完成</label>
+    <div class="hint">${PANSOU_ON ? '电影只会转存最合适的那一个视频；会排除剧集、合集、预告和枪版。每次的判断理由都有记录。' : '需要先到「资源搜索」页配置 PanSou 才能用。'}</div>
+    <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即检查并转存</label>
+    <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
+  bindQuality($('#sd-q', m)); mountSuggest($('#sd-recent', m), $('#sd-path', m), label, 1, kind);
+  $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
+  $('#sd-search', m).onclick = () => pansouPicker({keyword: mv.name, movie: true, title: mv.name,
+    prefs: {...prefsOf(readQuality($('#sd-q', m))), no_cam: $('#sd-nocam', m).checked}, onPick: urls => appendLinks($('#sd-links', m), urls)});
+  $('#sd-no', m).onclick = () => m.remove();
+  $('#sd-ok', m).onclick = guard(async () => {
+    await api('/subscriptions', 'POST', {media: 'movie', tmdb_id: mv.id, savepath: $('#sd-path', m).value, links_text: $('#sd-links', m).value,
+      interval: $('#sd-int', m).value, no_cam: $('#sd-nocam', m).checked, auto_find: $('#sd-auto', m).checked,
+      save_existing: $('#sd-exist', m).checked, ...readQuality($('#sd-q', m))});
+    const auto = $('#sd-auto', m).checked; loadRecent();
+    m.remove(); toast(auto ? '已订阅，正在自动找片源…（可到订阅详情查看进度）' : '已订阅', 'ok'); go('subs');
+  });
+}
+$('#s-new-movie').onclick = () => {
+  const m = modal(`<h3>搜索电影</h3><div class="row"><div class="grow"><input type="text" id="ss-q" placeholder="输入片名…"></div><button class="btn pri" id="ss-go">搜索</button></div>
+    <div id="ss-res" style="margin-top:14px"></div>`);
+  const run = guard(async () => {
+    const q = $('#ss-q', m).value.trim(); if (!q) return;
+    const {items} = await api('/tmdb/movie/search?q=' + encodeURIComponent(q));
+    $('#ss-res', m).innerHTML = items.length ? `<div class="posters">${items.slice(0, 12).map(posterCard).join('')}</div>` : '<div class="empty">没有找到</div>';
+    $$('.pc', m).forEach(p => p.onclick = () => { m.remove(); showMovieDetail(+p.dataset.id); });
+  });
+  $('#ss-go', m).onclick = run; $('#ss-q', m).onkeydown = e => e.key === 'Enter' && run(); $('#ss-q', m).focus();
+};
+
+/* ======================================================================
    订阅追更
    ====================================================================== */
 function subscribeDialog(show, season = 1) {
+  const kind = show.anime ? 'anime' : 'tv', kindName = show.anime ? '动漫' : '剧集';   // 动漫和普通剧集各记各的目录
   const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
     <div class="row"><div style="width:110px"><label class="l">季号</label><input type="number" id="sd-season" min="0" value="${season}"></div>
-    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="${esc(defaultSavePath(show.name, season))}"></div>
+    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="${esc(defaultSavePath(show.name, season, kind))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
-    <div class="hint" style="margin-top:6px">${RECENT_DIRS.length
-      ? `已参照你上次的目录 ${esc(RECENT_DIRS[0].path)}（《${esc(RECENT_DIRS[0].name)}》）自动填写，每部剧单独一个文件夹；点下面的推荐目录可以切换。`
+    <div class="hint" style="margin-top:6px">${lastOf(kind)
+      ? `已参照你上次${kindName}的目录 ${esc(lastOf(kind).path)}（《${esc(lastOf(kind).name)}》）自动填写，每部剧单独一个文件夹；点下面的推荐目录可以切换。`
       : '还没有历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。'}</div><div id="sd-recent"></div>
     <label class="l">分享链接（可留空稍后再加；多个按先后顺序检查，后面的只补前面没有的集数）</label>
     <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
@@ -942,9 +1047,9 @@ function subscribeDialog(show, season = 1) {
   bindQuality($('#sd-q', m));
   let autoPath = $('#sd-path', m).value;      // 改季号时，如果路径还是自动填的那个，就跟着换（带不带「第 N 季」）
   const refreshPaths = () => {
-    const s = +$('#sd-season', m).value || 1, np = defaultSavePath(show.name, s);
+    const s = +$('#sd-season', m).value || 1, np = defaultSavePath(show.name, s, kind);
     if ($('#sd-path', m).value === autoPath) $('#sd-path', m).value = np;
-    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), show.name, s);
+    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), show.name, s, kind);
   };
   $('#sd-season', m).addEventListener('input', refreshPaths); refreshPaths();
   $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
@@ -976,14 +1081,27 @@ function badgeOf(t) {
   if (t.state === 'running') return ['扫描中', 'info'];
   if (t.state === 'queued') return ['排队中', 'info'];
   if (t.status === 'nolinks' && t.auto_find) return ['找资源中', 'info'];
-  return ({invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
+  return ({done: ['已入库', 'ok'], invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
            expired: ['已到期', 'mute'], complete: ['已追完', 'ok']})[t.status] || null;
 }
+function movieTileHTML(t) {
+  const s = t.snap, done = t.done || (s && s.have), upcoming = t.release_date && t.release_date > todayStr(), b = upcoming ? null : badgeOf(t);
+  const state = done ? '✓ 已入库' : upcoming ? `未上映 · ${t.release_date}` : t.status === 'nolinks' ? (t.auto_find ? '找片源中…' : '待添加链接') : s ? '等待入库' : '未检查';
+  const d = t.links.filter(l => l.ban).length;
+  return `<div class="wt" data-id="${t.id}">
+    <div class="wimg" style="${posterBg(t.poster)}">
+      ${t.poster ? '' : `<span class="wph">${esc(t.name)}</span>`}
+      ${b && !done ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}<span class="wm" style="background:rgba(0,0,0,.62)">🎬</span>
+      <div class="wov"><div class="wbar"><i style="width:${done ? 100 : 0}%"></i></div>${state}</div></div>
+    <div class="wn" title="${esc(t.name)}">${esc(t.name)}</div>
+    <div class="wsub" ${d && d < t.links.length ? 'style="color:var(--warn)"' : ''}>${esc(t.year || '')} · 电影 · ${d && d < t.links.length ? `⚠ ${d} 个链接失效` : esc(done ? '已完成' : nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div></div>`;
+}
 function tileHTML(t) {
+  if (t.media === 'movie') return movieTileHTML(t);
   const s = t.snap, b = badgeOf(t), base = s ? (s.aired ?? s.total ?? 0) : 0;
   const pct = s && base ? Math.min(100, Math.round(s.have / base * 100)) : 0;
   return `<div class="wt" data-id="${t.id}">
-    <div class="wimg" style="${t.poster ? `background-image:url('${esc(t.poster)}')` : ''}">
+    <div class="wimg" style="${posterBg(t.poster)}">
       ${t.poster ? '' : `<span class="wph">${esc(t.name)}</span>`}
       ${b ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}${s && s.missing_n ? `<span class="wm">缺 ${s.missing_n}</span>` : ''}
       <div class="wov"><div class="wbar"><i style="width:${pct}%"></i></div>${s ? `${s.have}${base ? ' / ' + base : ''} 集` : '未扫描'}</div></div>
@@ -992,13 +1110,22 @@ function tileHTML(t) {
       return d && d < t.links.length ? `<div class="wsub" style="color:var(--warn)">第 ${t.season} 季 · ⚠ ${d} 个链接失效</div>`
         : `<div class="wsub">第 ${t.season} 季 · ${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
 }
-async function loadSubs() {
-  const {tasks} = await api('/tasks?kind=subscription');
-  subsData = tasks;
-  const box = $('#s-list');
-  box.innerHTML = tasks.length ? `<div class="wall">${tasks.map(tileHTML).join('')}</div>`
-    : '<div class="empty">还没有订阅。点上面「搜索并订阅新剧」，或去「剧集推荐」点一部剧。</div>';
+let subsFilter = 'all';
+function renderWall() {
+  const tasks = subsData, box = $('#s-list');
+  const hasMv = tasks.some(t => t.media === 'movie'), hasTv = tasks.some(t => t.media !== 'movie');
+  if (subsFilter !== 'all' && !(subsFilter === 'movie' ? hasMv : hasTv)) subsFilter = 'all';
+  $('#s-filter').innerHTML = hasMv && hasTv ? `<div class="chips" style="margin-bottom:12px">${[['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) =>
+    `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('')}</div>` : '';
+  $$('#s-filter .chip').forEach(c => c.onclick = () => { subsFilter = c.dataset.f; renderWall(); });
+  const shown = tasks.filter(t => subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie'));
+  box.innerHTML = shown.length ? `<div class="wall">${shown.map(tileHTML).join('')}</div>`
+    : '<div class="empty">还没有订阅。点上面「搜索并订阅新剧 / 电影」，或去「影视推荐」点一部。</div>';
   $$('.wt', box).forEach(el => el.onclick = () => openSub(el.dataset.id));
+}
+async function loadSubs() {
+  subsData = (await api('/tasks?kind=subscription')).tasks;
+  renderWall();
 }
 async function afterChange(id, tab) {   // 操作后：刷新墙，并重绘仍然打开的详情
   await loadSubs();
@@ -1016,7 +1143,16 @@ function renderSub(m, t, tab) {
   const tagCls = {saved: 'ok', error: 'err', complete: 'info', nochange: 'mute', idle: 'mute'};
   const tagTxt = {saved: '有更新', error: '出错', complete: '已追平', nochange: '无变化', idle: '—'};
   let panel = '';
-  if (tab === 'info') {
+  if (tab === 'info' && t.media === 'movie') {
+    const have = t.done || (s && s.have), upcoming = t.release_date && t.release_date > todayStr();
+    panel = `<div style="font-size:16px"><b>${have ? '✓ 已入库' : '还没有入库'}</b></div>
+      <div class="sub" style="margin-top:4px">${live ? esc(live.emby) + ' · ' : ''}${s ? '检查于 ' + esc(fmtTs(s.ts)) : '还没有检查过。点「刷新进度」，或等第一次扫描完成。'}</div>
+      ${t.release_date ? `<div class="sub" style="margin-top:10px">上映日期：${esc(t.release_date)}${upcoming ? ' <span class="tag warn">还没上映，暂不找片源</span>' : ''}</div>` : ''}
+      ${qualityTags(t).length ? `<div class="sub" style="margin-top:6px">要求：${qualityTags(t).map(x => `<span class="tag info">${esc(x)}</span>`).join(' ')}</div>` : ''}
+      <div class="sub" style="margin-top:10px">${have ? '已完成，不再扫描和找片源。想重新获取，把网盘里的视频删掉后点「立即扫描」即可。' : `每 ${t.interval} 分钟检查一次 · ${esc(nextIn(t) || (t.enabled ? '' : '已暂停'))}`}</div>
+      <div class="sub">最近：${esc(t.last_run || '—')} ${esc(t.last_msg || '')}</div>
+      ${t.overview ? `<p style="font-size:12.5px;margin:10px 0 0;color:var(--dim)">${esc(t.overview)}</p>` : ''}`;
+  } else if (tab === 'info') {
     const base = s ? (s.aired ?? s.total ?? 0) : 0, pct = s && base ? Math.min(100, Math.round(s.have / base * 100)) : 0;
     panel = s ? `<div><b style="font-size:18px">${s.have}</b> <span class="sub">${s.aired != null ? `/ 已播 ${s.aired} ` : ''}${s.total ? `/ 共 ${s.total} ` : ''}集</span></div>
       <div class="bar"><i style="width:${pct}%"></i></div>
@@ -1053,8 +1189,8 @@ function renderSub(m, t, tab) {
   }
   const tabs = [['info', '概览'], ['links', `分享链接（${t.links.length}）`], ['hist', `转存记录（${(t.history || []).length}）`]];
   $('.modal', m).innerHTML = `<button class="x">×</button>
-    <div class="sd-head"><div class="pic" style="${t.poster ? `background-image:url('${esc(t.poster)}')` : ''}"></div>
-      <div style="min-width:0"><h3>${esc(t.name)}<span class="tag mute">第 ${t.season} 季</span>${b ? `<span class="tag ${b[1]}">${b[0]}</span>` : '<span class="tag ok">正常</span>'}
+    <div class="sd-head"><div class="pic" style="${posterBg(t.poster)}"></div>
+      <div style="min-width:0"><h3>${esc(t.name)}${t.media === 'movie' ? `<span class="tag mute">🎬 电影${t.year ? ' ' + t.year : ''}</span>` : `<span class="tag mute">第 ${t.season} 季</span>`}${b ? `<span class="tag ${b[1]}">${b[0]}</span>` : '<span class="tag ok">正常</span>'}
         ${dead ? `<span class="tag err">${dead} 个链接失效</span>` : ''}</h3>
       <div class="sub">${esc(t.savepath)}</div>
       <div class="actions" style="margin-top:10px">
@@ -1080,7 +1216,8 @@ function renderSub(m, t, tab) {
     setTimeout(() => reload('links'), 4000); setTimeout(() => reload('links'), 12000);
   }));
   $('[data-psearch]', m)?.addEventListener('click', () => pansouPicker({
-    keyword: t.name, total: t.snap?.total || 0, aired: t.snap?.aired || 0, season: t.season, prefs: {res: t.want_res, hdr: t.want_hdr},
+    keyword: t.name, total: t.media === 'movie' ? 0 : (t.snap?.total || 0), aired: t.media === 'movie' ? 0 : (t.snap?.aired || 0), season: t.season,
+    movie: t.media === 'movie', title: t.name, prefs: {res: t.want_res, hdr: t.want_hdr, no_cam: t.no_cam},
     onPick: guard(async urls => {
       await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).concat(urls).join('\n')});
       toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
@@ -1199,14 +1336,14 @@ async function loadRail() {
   $('#rc-next').textContent = s.running ? `⏳ 正在扫描《${s.running}》` : (s.next_run ? (mins > 0 ? `下次扫描约 ${mins} 分钟后` : '即将扫描') : '');
   const list = $('#rc-list');
   list.innerHTML = recent.length ? recent.map(e => `<div class="ri" data-t="${esc(e.task_id)}" data-k="${esc(e.kind)}" title="${esc(e.files.join('\n'))}">
-      <div class="th" style="${e.poster ? `background-image:url('${esc(e.poster)}')` : ''}">${e.poster ? '' : (e.kind === 'subscription' ? '📺' : '📡')}</div>
+      <div class="th" style="${posterBg(e.poster)}">${e.poster ? '' : (e.kind === 'subscription' ? '📺' : '📡')}</div>
       <div class="tx"><div class="a">${esc(e.name)}</div><div class="b">${esc(e.eps || e.files[0] || '')} · ${e.count} 个</div><div class="c">${esc(relTime(e.ts))}</div></div></div>`).join('')
     : '<div class="empty" style="padding:22px 0">还没有入库记录<br><span class="sub">有新内容转存后会显示在这里</span></div>';
   $$('.ri', list).forEach(el => el.onclick = async () => {
     if (el.dataset.k === 'subscription') { go('subs'); await loadSubs(); openSub(el.dataset.t); } else go('monitor');
   });
   const row = (label, n, cls, view) => `<div class="sumrow" data-v="${view}"><span>${label}</span><b class="${n && cls ? cls : ''}">${n}</b></div>`;
-  $('#rc-sum').innerHTML = row('📺 订阅追更', s.subs, '', 'subs') + row('📡 分享监控', s.monitors, '', 'monitor')
+  $('#rc-sum').innerHTML = row('📺 订阅追更', s.subs, '', 'subs') + row('🎬 电影订阅', s.movies, '', 'subs') + row('📡 分享监控', s.monitors, '', 'monitor')
     + row('⚠ 失效的分享链接', s.dead_links, 'warn', 'subs') + row('❌ 上次出错的任务', s.errors, 'err', 'logs');
   $$('.sumrow', $('#rc-sum')).forEach(el => el.onclick = () => go(el.dataset.v));
 }

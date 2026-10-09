@@ -59,13 +59,36 @@ class Emby:
                     return it["Id"], n
         return None, None
 
-    def tmdb_ids(self, ttl=300):
-        """Emby 里所有剧集的 TMDB ID 集合（缓存 5 分钟，给推荐页的"已入库"角标用）。"""
-        hit = _ids_cache.get(self.base)
+    def find_movie(self, name, tmdb_id=None, year=None):
+        """返回 (id, 显示名)；优先按 TMDB ID 精确匹配，其次按片名（有年份时年份相差不能超过 1）。"""
+        if tmdb_id:
+            try:
+                data = self._req("GET", "/Items", Recursive="true", IncludeItemTypes="Movie",
+                                 AnyProviderIdEquals=f"tmdb.{tmdb_id}", Limit=3)
+                if data.get("Items"):
+                    it = data["Items"][0]
+                    return it["Id"], it.get("Name", name)
+            except Exception:
+                pass
+        if not name:
+            return None, None
+        items = self._req("GET", "/Items", Recursive="true", IncludeItemTypes="Movie",
+                          SearchTerm=name, Fields="ProductionYear", Limit=10).get("Items", [])
+        for it in items:
+            n, y = it.get("Name", ""), it.get("ProductionYear")
+            if year and y and abs(int(y) - int(year)) > 1:
+                continue
+            if n == name or (n and (n in name or name in n)):
+                return it["Id"], n
+        return None, None
+
+    def tmdb_ids(self, kind="Series", ttl=300):
+        """Emby 里所有剧集（kind="Series"）或电影（"Movie"）的 TMDB ID 集合（缓存 5 分钟，给推荐页的"已入库"角标用）。"""
+        hit = _ids_cache.get((self.base, kind))
         if hit and time.time() - hit[0] < ttl:
             return hit[1]
         data = self._req(
-            "GET", "/Items", Recursive="true", IncludeItemTypes="Series",
+            "GET", "/Items", Recursive="true", IncludeItemTypes=kind,
             Fields="ProviderIds", Limit=5000,
         )
         ids = set()
@@ -74,7 +97,7 @@ class Emby:
             v = v.get("Tmdb") or v.get("tmdb")
             if v and str(v).isdigit():
                 ids.add(int(v))
-        _ids_cache[self.base] = (time.time(), ids)
+        _ids_cache[(self.base, kind)] = (time.time(), ids)
         return ids
 
     def episodes(self, series_id):

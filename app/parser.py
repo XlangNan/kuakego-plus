@@ -187,16 +187,19 @@ _RES_RULES = [("4k", re.compile(r"2160[pi]|(?<![a-z0-9])4k(?![a-z0-9])|(?<![a-z]
               ("720p", re.compile(r"720[pi]|1280x720", re.I))]
 # 注意：只认「杜比视界」，不认单独的「杜比」——那多半是杜比音效（全景声），和画面无关
 _HDR_RE = re.compile(r"(?<![a-z])hdr|dolby[\s._-]?vision|(?<![a-z])dv(?![a-z])|杜比视界", re.I)
+# 枪版 / 抢先版（TC、TS、CAM 等）。只在「去掉扩展名的文件名」里找：.ts 是常见的视频容器扩展名，不能算枪版
+_CAM_RE = re.compile(r"(?<![a-z0-9])(?:hd)?(?:cam|tc|ts)(?![a-z0-9])|telesync|telecine|枪版|抢先版|抢鲜版", re.I)
 RES_LABEL = {"4k": "4K", "1080p": "1080P", "720p": "720P"}
 
 
 def quality_tags(name):
     """文件名 -> {"res": "4k"|"1080p"|"720p"|None, "hdr": bool}。没写就是 None / False。"""
     res = next((k for k, rx in _RES_RULES if rx.search(name or "")), None)
-    return {"res": res, "hdr": bool(_HDR_RE.search(name or ""))}
+    return {"res": res, "hdr": bool(_HDR_RE.search(name or "")),
+            "cam": bool(_CAM_RE.search(os.path.splitext(name or "")[0]))}
 
 
-def quality_reason(want_res, want_hdr, name):
+def quality_reason(want_res, want_hdr, name, no_cam=False):
     """
     按用户选的画质要求检查一个文件名。符合返回 ""，不符合返回原因。
     - 分辨率：文件名里写了分辨率、且不在想要的范围内才算不符合；没写的无法判断，放行。
@@ -204,6 +207,8 @@ def quality_reason(want_res, want_hdr, name):
     - HDR "no"：带 HDR 标记的不符合。
     """
     t = quality_tags(name)
+    if no_cam and t["cam"]:
+        return "疑似枪版 / 抢先版（TC、TS、CAM）"
     if want_res and t["res"] and t["res"] not in want_res:
         return f"分辨率是 {RES_LABEL[t['res']]}，不在你要的范围（{'、'.join(RES_LABEL[r] for r in want_res if r in RES_LABEL)}）内"
     if want_hdr == "yes" and not t["hdr"]:

@@ -300,22 +300,34 @@ def create_app(store=None, engine=None):
         except Exception as e:
             raise QuarkError(f"TMDB 请求失败：{e}")
 
-    def annotate(items):
-        """给 TMDB 条目加上：是否已订阅、订阅状态、Emby 是否已入库。"""
-        subs = {x["tmdb_id"]: x for x in store.data["tasks"] if x.get("tmdb_id")}
+    def annotate(items, media="tv"):
+        """给 TMDB 条目加上：是否已订阅、订阅状态、Emby 是否已入库。剧集和电影的 TMDB ID 是两套编号，要分开比对。"""
+        subs = {(x.get("media", "tv"), x["tmdb_id"]): x for x in store.data["tasks"] if x.get("tmdb_id")}
         emby_ids = set()
         cli = engine.emby()
         if cli:
             try:
-                emby_ids = cli.tmdb_ids()
+                emby_ids = cli.tmdb_ids("Movie" if media == "movie" else "Series")
             except Exception:
                 pass
         for it in items:
-            t = subs.get(it["id"])
+            t = subs.get((media, it["id"]))
             it["sub_id"] = t["id"] if t else None
             it["sub_status"] = engine.public_task(t)["status"] if t else ""
             it["in_emby"] = it["id"] in emby_ids
         return items
+
+    def annotate_mixed(items):
+        """动漫板块里剧集和电影混排：按各自的类型分别标记（两套 TMDB ID 不能混用）。"""
+        for media in ("tv", "movie"):
+            group = [x for x in items if x.get("media", "tv") == media]
+            if group:
+                annotate(group, media)
+        return items
+
+    def scope_arg():
+        s = request.args.get("scope", "tv")
+        return s if s in ("tv", "movie", "anime") else "tv"
 
     img_cache = {}
 
@@ -339,27 +351,37 @@ def create_app(store=None, engine=None):
         data, ctype = img_cache[key]
         return Response(data, mimetype=ctype, headers={"Cache-Control": "public, max-age=604800"})
 
+    # 影视推荐页的三个板块：scope = tv 剧集（不含动画）/ movie 电影（不含动画）/ anime 动漫（番剧 + 动画电影）
     @app.get("/api/tmdb/home")
     def tmdb_home():
-        rows = tmdb_or_400().home()
+        tm = tmdb_or_400()
+        rows = {"tv": tm.home, "movie": tm.movie_home, "anime": tm.anime_home}[scope_arg()]()
         for r in rows:
-            annotate(r["items"])
+            annotate_mixed(r["items"])
         return jsonify(rows=rows)
 
     @app.get("/api/tmdb/discover")
     def tmdb_discover():
-        d = tmdb_call(tmdb_or_400().discover, request.args.get("category", "all"),
-                      request.args.get("sort", "popularity"), int(request.args.get("page", 1)))
-        annotate(d["items"])
+        tm, scope = tmdb_or_400(), scope_arg()
+        cat, sort, page = request.args.get("category", "all"), request.args.get("sort", "popularity"), int(request.args.get("page", 1))
+        if scope == "movie":
+            d = tmdb_call(tm.movie_discover, cat, page, sort)
+        elif scope == "anime":
+            d = (tmdb_call(tm.movie_discover, "all", page, sort, True) if cat == "movie"
+                 else tmdb_call(tm.discover, cat, sort, page, True))
+        else:
+            d = tmdb_call(tm.discover, cat, sort, page)
+        annotate_mixed(d["items"])
         return jsonify(d)
 
     @app.get("/api/tmdb/search")
     def tmdb_search():
-        q = request.args.get("q", "").strip()
+        q, tm, scope = request.args.get("q", "").strip(), tmdb_or_400(), scope_arg()
         if not q:
             return jsonify(items=[], total_pages=1)
-        d = tmdb_call(tmdb_or_400().search, q, int(request.args.get("page", 1)))
-        annotate(d["items"])
+        page = int(request.args.get("page", 1))
+        d = tmdb_call({"tv": tm.search, "movie": tm.movie_search, "anime": tm.anime_search}[scope], q, page)
+        annotate_mixed(d["items"])
         return jsonify(d)
 
     @app.get("/api/tmdb/tv/<int:tid>")
@@ -377,25 +399,52 @@ def create_app(store=None, engine=None):
                 pass
         return jsonify(d)
 
+    @app.get("/api/tmdb/movie/discover")
+    def movie_discover():
+        d = tmdb_call(tmdb_or_400().movie_discover, request.args.get("category", "trending"), int(request.args.get("page", 1)))
+        annotate(d["items"], "movie")
+        return jsonify(d)
+
+    @app.get("/api/tmdb/movie/search")
+    def movie_search():
+        q = request.args.get("q", "").strip()
+        if not q:
+            return jsonify(items=[], total_pages=1)
+        d = tmdb_call(tmdb_or_400().movie_search, q, int(request.args.get("page", 1)))
+        annotate(d["items"], "movie")
+        return jsonify(d)
+
+    @app.get("/api/tmdb/movie/<int:tid>")
+    def movie_detail(tid):
+        d = tmdb_call(tmdb_or_400().movie_detail, tid)
+        annotate([d], "movie")
+        return jsonify(d)
+
     @app.post("/api/subscriptions")
     def sub_create():
         data = body()
+        media = "movie" if data.get("media") == "movie" else "tv"
         try:
             tid = int(data.get("tmdb_id") or 0)
-            season = int(data.get("season") or 1)
+            season = 1 if media == "movie" else int(data.get("season") or 1)
         except (TypeError, ValueError):
             raise ValueError("TMDB ID、季号必须是数字")
         if not tid:
-            raise ValueError("请先从推荐或搜索里选择一部剧")
+            raise ValueError("请先从推荐或搜索里选择一部" + ("电影" if media == "movie" else "剧"))
         with store.lock:
-            if any(t.get("tmdb_id") == tid and t.get("season") == season for t in store.data["tasks"]):
-                raise ValueError("这一季已经订阅过了，请到订阅列表里添加分享链接")
-        info = tmdb_call(tmdb_or_400().detail, tid)
+            if any(t.get("media", "tv") == media and t.get("tmdb_id") == tid and (media == "movie" or t.get("season") == season)
+                   for t in store.data["tasks"]):
+                raise ValueError("这部电影已经订阅过了" if media == "movie" else "这一季已经订阅过了，请到订阅列表里添加分享链接")
+        tm = tmdb_or_400()
+        info = tmdb_call(tm.movie_detail if media == "movie" else tm.detail, tid)
         payload = {
-            **data, "kind": "subscription", "tmdb_id": tid, "season": season,
+            **data, "media": media, "kind": "subscription", "tmdb_id": tid, "season": season,
             "name": data.get("name") or info["name"], "poster": info["poster_url"],
             "overview": info["overview"],
         }
+        payload["anime"] = bool(info.get("anime"))   # 动画（番剧 / 动画电影）：目录推荐时和普通剧集、电影分开
+        if media == "movie":
+            payload.update(year=int(info.get("year") or 0), release_date=info.get("release_date") or "")
         if not (payload.get("savepath") or "").strip("/ "):
             raise ValueError("请选择转存目录")
         has_links = bool(parse_share_text(payload.get("links_text", "")))
@@ -447,7 +496,7 @@ def create_app(store=None, engine=None):
             season = int(d.get("season") or 1)
         except (TypeError, ValueError):
             season = 1
-        return jsonify(engine.inspect_share(d.get("url", ""), season, d.get("prefs")))
+        return jsonify(engine.inspect_share(d.get("url", ""), season, d.get("prefs"), d.get("title")))
 
     # ------------------------------------------------------------ 设置
     @app.get("/api/settings/<name>")

@@ -14,22 +14,53 @@ from app.engine import Engine, Scheduler                    # noqa: E402
 from app.main import create_app                             # noqa: E402
 from app.store import Store                                 # noqa: E402
 
+ANIME_TV = [{"id": 200 + i, "name": n, "first_air_date": d, "vote_average": v, "overview": "这是一部番剧的简介。" * 3, "poster_path": "/a%d.jpg" % i,
+             "genre_ids": [16, 10759]} for i, (n, d, v) in enumerate([("某某番剧", "2024-04-06", 8.6), ("国漫之光", "2024-06-01", 8.2), ("热血少年", "2023-10-02", 8.9)], 1)]
+ANIME_MOVIES = [{"id": 300 + i, "title": n, "release_date": d, "vote_average": v, "poster_path": "/am%d.jpg" % i, "overview": "动画电影简介。",
+                 "genre_ids": [16, 10751]} for i, (n, d, v) in enumerate([("动画电影一号", "2024-07-19", 8.0), ("剧场版某某", "2023-12-01", 8.5)], 1)]
 SHOWS = [{"id": i, "name": n, "first_air_date": d, "vote_average": v, "overview": "这是一段剧情简介，用来检查两行截断和排版效果是否正常。" * 2,
-          "poster_path": None, "backdrop_path": None, "origin_country": ["CN"]}
+          "poster_path": "/s%d.jpg" % i, "backdrop_path": None, "origin_country": ["CN"], "genre_ids": [18]}
          for i, (n, d, v) in enumerate([("庆余年 第二季", "2024-05-16", 8.3), ("长相思", "2024-07-22", 7.9), ("繁花", "2023-12-27", 8.5),
                                          ("三体", "2023-01-15", 8.1), ("漫长的季节", "2023-04-22", 9.4), ("狂飙", "2023-01-14", 8.6),
                                          ("去有风的地方", "2023-01-02", 7.7), ("莲花楼", "2023-07-19", 8.2)], 1)]
 
 
+MOVIES = [{"id": 101 + i, "title": t, "release_date": d, "vote_average": v, "poster_path": "/p%d.jpg" % i,
+           "overview": "这是一部电影的简介，用来检查两行截断和排版效果是否正常。" * 2, "genre_ids": [18]}
+          for i, (t, d, v) in enumerate([("某电影", "2024-06-01", 7.8), ("另一部电影", "2023-12-15", 8.4), ("即将上映的电影", "2999-01-01", 0),
+                                          ("经典老片", "1999-03-31", 8.7), ("华语新片", "2025-02-10", 7.1), ("动作大片", "2024-07-19", 8.0)])]
+
+
+ALL_TV = {x["id"]: x for x in SHOWS + ANIME_TV}
+ALL_MOVIES = {x["id"]: x for x in MOVIES + ANIME_MOVIES}
+
+
 class Tmdb(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
-        p = self.path.split("?")[0]
-        if p.startswith("/tv/") and "/season/" in p:
+        from urllib.parse import parse_qs, urlparse
+        u = urlparse(self.path); p, q = u.path, parse_qs(u.query)
+        with_g, without_g = q.get("with_genres", [""])[0], q.get("without_genres", [""])[0]
+        def filt(items):   # 模拟 TMDB 的 with_genres / without_genres
+            if with_g == "16": return [x for x in items if 16 in x["genre_ids"]]
+            if without_g == "16": return [x for x in items if 16 not in x["genre_ids"]]
+            return items
+        if p.startswith("/movie/"):
+            mv = ALL_MOVIES[int(p.split("/")[2])]
+            d = {**mv, "runtime": 118, "genres": [{"id": g, "name": "动画" if g == 16 else "剧情"} for g in mv["genre_ids"]], "vote_count": 1234,
+                 "tagline": "一句电影标语", "backdrop_path": None, "status": "Released",
+                 "credits": {"cast": [{"name": "演员甲", "character": "角色乙"}, {"name": "演员丙", "character": "角色丁"}]}}
+        elif p == "/trending/movie/week": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 3}          # 趋势接口混着动画，由服务端去掉
+        elif p == "/discover/movie": d = {"results": filt(MOVIES + ANIME_MOVIES), "total_pages": 3}
+        elif p == "/search/movie": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 1}
+        elif p == "/trending/tv/week": d = {"results": SHOWS + ANIME_TV, "total_pages": 3}
+        elif p == "/discover/tv": d = {"results": filt(SHOWS + ANIME_TV), "total_pages": 3}
+        elif p == "/search/tv": d = {"results": SHOWS + ANIME_TV, "total_pages": 1}
+        elif p.startswith("/tv/") and "/season/" in p:
             d = {"episodes": [{"episode_number": i, "air_date": "2024-05-%02d" % i if i <= 8 else "2099-01-01"} for i in range(1, 11)]}
         elif p.startswith("/tv/"):
-            s = SHOWS[int(p.split("/")[2]) - 1]
-            d = {**s, "genres": [{"name": "剧情"}, {"name": "古装"}], "status": "Returning Series", "vote_count": 420,
+            s_ = ALL_TV[int(p.split("/")[2])]
+            d = {**s_, "genres": [{"id": g, "name": "动画" if g == 16 else "剧情"} for g in s_["genre_ids"]], "status": "Returning Series", "vote_count": 420,
                  "number_of_seasons": 2, "number_of_episodes": 46,
                  "seasons": [{"season_number": 1, "name": "第 1 季", "episode_count": 46, "air_date": "2019-11-26"},
                              {"season_number": 2, "name": "第 2 季", "episode_count": 36, "air_date": "2024-05-16"}],
@@ -60,12 +91,22 @@ PANSOU_QYN = [   # 搜「庆余年」时返回的：好的、画质不符的、�
 ]
 
 
+PANSOU_MOVIE = [   # 搜「某电影」时返回的
+    {"url": "https://pan.quark.cn/s/m1", "password": "", "note": "某电影 2024 4K HDR 国英双语 内封字幕", "datetime": "2026-09-30T08:00:00Z", "source": "plugin:quark4k"},
+    {"url": "https://pan.quark.cn/s/m2", "password": "ab12", "note": "某电影 (2024) 1080P 国语中字", "datetime": "2026-09-29T08:00:00Z", "source": "tg:Quark_Movies"},
+    {"url": "https://pan.quark.cn/s/m3", "password": "", "note": "某电影 2024 抢先版 TS", "datetime": "2026-06-10T08:00:00Z", "source": "plugin:sousou"},
+    {"url": "https://pan.quark.cn/s/m4", "password": "", "note": "某电影 全集 12集 国语", "datetime": "2026-09-27T08:00:00Z", "source": "plugin:pansearch"},
+    {"url": "https://pan.quark.cn/s/m5", "password": "", "note": "某电影 2024 备用链接", "datetime": "2026-09-26T08:00:00Z", "source": "tg:ucquark"},
+    {"url": "https://pan.quark.cn/s/m6", "password": "", "note": "某电影 1999 国语", "datetime": "2026-09-25T08:00:00Z", "source": "plugin:hunhepan"},
+]
+
+
 class PanSouFake(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
         from urllib.parse import parse_qs, urlparse
         kw = (parse_qs(urlparse(self.path).query).get("kw") or [""])[0]
-        res = PANSOU_QYN if "庆余年" in kw else PANSOU_RESULTS
+        res = PANSOU_MOVIE if "某电影" in kw else PANSOU_QYN if "庆余年" in kw else PANSOU_RESULTS
         d = {"status": "ok"} if self.path.startswith("/api/health") else {"code": 0, "message": "success", "data": {"total": len(res), "merged_by_type": {"quark": res}}}
         b = json.dumps(d).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(b)
@@ -82,6 +123,11 @@ def build():
     shares = {"aaa": {"files": [f"庆余年.第{i:02d}集.mp4" for i in range(1, 9)]},
               "bbb": {"files": [f"S02E{i:02d}.2160p.mkv" for i in range(1, 11)]},
               "dead": {"status": 400, "msg": "分享已取消"},
+              "m1": {"files": [("某电影.2024.2160p.HDR.mkv", 8 * 1024 ** 3), ("花絮.mp4", 80 * 1024 ** 2), ("海报.jpg", 2048)]},
+              "m2": {"files": [("某电影.2024.1080p.mkv", 3 * 1024 ** 3)]},
+              "m3": {"files": [("某电影.2024.TS.1080p.mkv", 3 * 1024 ** 3)]},
+              "m4": {"files": [(f"某电影.S01E{i:02d}.mkv", 1024 ** 3) for i in range(1, 13)]},
+              "m5": {"status": 400, "msg": "分享已取消"},
               "q1": {"files": [(f"庆余年.S02E{i:02d}.2160p.HDR.mkv", 2 * 1024 ** 3) for i in range(1, 17)]},
               "q2": {"files": [(f"庆余年.S02E{i:02d}.1080p.mkv", 1200 * 1024 ** 2) for i in range(1, 11)]},
               "q3": {"files": [(f"庆余年.S01E{i:02d}.mkv", 1024 ** 3) for i in range(1, 4)]},

@@ -4,6 +4,8 @@ from datetime import date
 
 import requests
 
+from .parser import emby_folder_name, norm_title
+
 _cache = {}
 
 CATEGORIES = {
@@ -16,6 +18,10 @@ MOVIE_COUNTRIES = {"cn": "CN|HK|TW", "kr_jp": "KR|JP", "jp": "JP", "us_eu": "US|
 ANIMATION = 16   # TMDB 的「动画」类型 ID（剧集和电影通用）。剧集 / 电影板块排除它，动漫板块只要它
 ANIME_COUNTRIES = {"jp": {"with_origin_country": "JP"}, "cn": {"with_origin_country": "CN"},
                    "us_eu": {"with_origin_country": "US|GB|FR|DE|ES|IT|SE|DK|NO"}}
+# 别名：优先取这些地区的译名（华语地区、日韩、英美），其次是各语言的翻译
+ALT_REGIONS = ("CN", "TW", "HK", "SG", "MO", "JP", "KR", "US", "GB")
+ALT_LANGS = ("zh", "en", "ja", "ko")
+TALK_NEWS = {10767, 10763}   # 访谈 / 新闻：演员「参演作品」里这类多是本人出镜，没有订阅价值
 SORTS = {
     "popularity": {"sort_by": "popularity.desc"},
     "rating": {"sort_by": "vote_average.desc", "vote_count.gte": 200},
@@ -137,15 +143,79 @@ class Tmdb:
             {"label": "🇨🇳 国产动画", "category": "cn", "fn": lambda: self.discover("cn", anime=True)},
             {"label": "🎞 动画电影", "category": "movie", "fn": lambda: self.movie_discover("all", anime=True)}])
 
+    # ------------------------------------------------------------ 别名 / 演员 / 相似
+    @staticmethod
+    def _aliases_from(d, media):
+        """一部作品常有好几个名字（原名、港台译名、英文名……）。主名搜不到资源时拿它们去搜。返回的列表不含主名。"""
+        primary = norm_title(d.get("name") or d.get("title") or "")
+        out = [d.get("original_name") or d.get("original_title") or ""]
+        alt = d.get("alternative_titles") or {}
+        rows = alt.get("results") if media == "tv" else alt.get("titles")
+        rows = sorted(rows or [], key=lambda x: ALT_REGIONS.index(x["iso_3166_1"]) if x.get("iso_3166_1") in ALT_REGIONS else 99)
+        out += [x.get("title") or "" for x in rows]
+        trs = [t for t in (d.get("translations") or {}).get("translations") or [] if t.get("iso_639_1") in ALT_LANGS]
+        trs.sort(key=lambda t: ALT_LANGS.index(t["iso_639_1"]))
+        out += [(t.get("data") or {}).get("name") or (t.get("data") or {}).get("title") or "" for t in trs]
+        res, seen = [], {primary}
+        for n in out:
+            n = (n or "").strip()
+            k = norm_title(n)
+            if k and k not in seen and len(n) <= 60:
+                seen.add(k)
+                res.append(n)
+        return res[:10]
+
+    def aliases(self, media, tmdb_id):
+        d = self._get(f"/{'movie' if media == 'movie' else 'tv'}/{tmdb_id}", 3600, append_to_response="alternative_titles,translations")
+        return self._aliases_from(d, "movie" if media == "movie" else "tv")
+
+    def person(self, pid):
+        """演员（或导演等）的资料和参演的全部作品，按热度排序。"""
+        d = self._get(f"/person/{pid}", append_to_response="combined_credits")
+        items, seen = [], set()
+        for c in sorted((d.get("combined_credits") or {}).get("cast") or [], key=lambda c: c.get("popularity") or 0, reverse=True):
+            mt = c.get("media_type")
+            key = (mt, c.get("id"))
+            if mt not in ("tv", "movie") or not c.get("poster_path") or key in seen or TALK_NEWS & set(c.get("genre_ids") or []):
+                continue
+            seen.add(key)
+            card = self.card(c) if mt == "tv" else self.movie_card(c)
+            card["character"] = c.get("character") or ""
+            items.append(card)
+        return {"id": d["id"], "name": d.get("name", ""), "profile_url": self._url(d.get("profile_path"), "w185"),
+                "biography": (d.get("biography") or "")[:500], "birthday": d.get("birthday") or "",
+                "place_of_birth": d.get("place_of_birth") or "", "department": d.get("known_for_department") or "",
+                "items": items[:90]}
+
+    def similar(self, media, tmdb_id):
+        """推荐相似的作品：先取 TMDB 的「推荐」，不够再补「相似」。"""
+        media = "movie" if media == "movie" else "tv"
+        rows, seen = [], set()
+        for kind in ("recommendations", "similar"):
+            try:
+                got = self._get(f"/{media}/{tmdb_id}/{kind}").get("results") or []
+            except Exception:
+                got = []
+            for x in got:
+                if x.get("id") not in seen and x.get("poster_path"):
+                    seen.add(x["id"])
+                    rows.append(x)
+            if len(rows) >= 12:
+                break
+        return {"items": [self.card(x) if media == "tv" else self.movie_card(x) for x in rows[:18]]}
+
     def detail(self, tmdb_id):
-        d = self._get(f"/tv/{tmdb_id}", append_to_response="credits")
+        d = self._get(f"/tv/{tmdb_id}", append_to_response="credits,alternative_titles,translations")
         cast = [
-            {"name": c.get("name", ""), "character": c.get("character", ""),
+            {"id": c.get("id"), "name": c.get("name", ""), "character": c.get("character", ""),
              "profile_url": self._url(c.get("profile_path"), "w185")}
             for c in (d.get("credits", {}).get("cast") or [])[:12]
         ]
+        year = int((d.get("first_air_date") or "0000")[:4] or 0)
         return {
             **self.card(d),
+            "year": year, "aliases": self._aliases_from(d, "tv"),
+            "folder_name": emby_folder_name(d.get("name") or d.get("original_name") or "", year, d["id"]),
             "backdrop_url": self._url(d.get("backdrop_path"), "w780"),
             "genres": [g["name"] for g in d.get("genres", [])],
             "anime": any(g.get("id") == ANIMATION for g in d.get("genres", [])),
@@ -197,11 +267,13 @@ class Tmdb:
                 "total_pages": min(d.get("total_pages", 1), 10)}
 
     def movie_detail(self, tmdb_id):
-        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits")
-        cast = [{"name": c.get("name", ""), "character": c.get("character", ""),
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,alternative_titles,translations")
+        cast = [{"id": c.get("id"), "name": c.get("name", ""), "character": c.get("character", ""),
                  "profile_url": self._url(c.get("profile_path"), "w185")}
                 for c in (d.get("credits", {}).get("cast") or [])[:12]]
-        return {**self.movie_card(d), "backdrop_url": self._url(d.get("backdrop_path"), "w780"),
+        card = self.movie_card(d)
+        return {**card, "aliases": self._aliases_from(d, "movie"),
+                "folder_name": emby_folder_name(card["name"], int(card["year"] or 0), d["id"]), "backdrop_url": self._url(d.get("backdrop_path"), "w780"),
                 "genres": [g["name"] for g in d.get("genres", [])], "status": d.get("status", ""),
                 "anime": any(g.get("id") == ANIMATION for g in d.get("genres", [])),
                 "runtime": d.get("runtime") or 0, "tagline": d.get("tagline") or "",

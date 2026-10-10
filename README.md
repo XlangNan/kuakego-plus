@@ -61,7 +61,7 @@ docker run -d \
   -e WEBUI_USERNAME=admin \
   -e WEBUI_PASSWORD=请改成你自己的密码 \
   -v /你的路径/kuakego-plus/config:/app/config \
-  xlangnan/kuakego-plus:latest
+  <你的DockerHub用户名>/kuakego-plus:latest
 ```
 
 ### 方式二：docker compose
@@ -69,7 +69,7 @@ docker run -d \
 ```yaml
 services:
   kuakego-plus:
-    image: xlangnan/kuakego-plus:latest
+    image: <你的DockerHub用户名>/kuakego-plus:latest
     container_name: kuakego-plus
     restart: unless-stopped
     ports:
@@ -108,7 +108,7 @@ docker compose up -d
 ### 升级
 
 ```bash
-docker pull xlangnan/kuakego-plus:latest
+docker pull <你的DockerHub用户名>/kuakego-plus:latest
 docker rm -f kuakego-plus
 # 再执行一遍上面的 docker run；config 目录里的数据不会丢
 # compose 用户：docker compose pull && docker compose up -d
@@ -143,7 +143,7 @@ docker run -d --name pansou -p 8888:8888 \
 ```yaml
 services:
   kuakego-plus:
-    image: xlangnan/kuakego-plus:latest
+    image: <你的DockerHub用户名>/kuakego-plus:latest
     container_name: kuakego-plus
     restart: unless-stopped
     ports:

@@ -14,8 +14,8 @@ from . import notify
 from .emby import Emby
 from .logbuf import log
 from .pansou import PanSouError
-from .parser import (RES_LABEL, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
-                     quality_reason, quality_tags, title_seasons,
+from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
+                     quality_reason, quality_tags, safe_name, title_seasons,
                      season_from_text)
 from .quark import Quark, QuarkError
 from .tmdb import Tmdb
@@ -29,6 +29,8 @@ AUTO_MAX_INSPECT = 8     # 每轮最多检测几个候选（检测会读夸克�
 AUTO_MIN_AVG_MB = 100    # 平均每个视频小于这个体积，多半是花絮 / 预告
 MOVIE_MIN_MB = 300        # 电影里最大的视频不到这个体积，多半是预告 / 片段
 AUTO_MAX_ADD_MOVIE = 2   # 电影每轮最多自动添加几个（一个主用 + 一个备用）
+AUTO_MAX_NAMES = 5       # 一部剧 / 电影最多用几个名称（主名 + 别名）去搜；每多一个名称就多搜一轮
+AUTO_NAME_ENOUGH = 3     # 用某个名称搜到这么多个「名字对得上」的新结果，就不再换别名
 AUTO_RECHECK = {"reject": 24 * 3600, "dead": 72 * 3600, "ok": 0, "cap": 0, "added": 10 ** 9}   # 看过的候选多久后再看
 PERMANENT_ERR = re.compile(r"失效|取消|不存在|删除|违规|过期|封禁|提取码|passcode|expired", re.I)
 
@@ -141,6 +143,7 @@ class Engine:
             total_eps = max(0, int(pick("total_episodes", 0) or 0))
         except (TypeError, ValueError):
             raise ValueError("最小体积、总集数必须是数字")
+        aliases = list(dict.fromkeys(a.strip() for a in (pick("aliases", []) or []) if isinstance(a, str) and a.strip()))[:12]
         rename = pick("rename", "auto")
         if rename not in ("auto", "keep", "custom"):
             rename = "auto"
@@ -169,7 +172,8 @@ class Engine:
             "run_weeks": weeks or [1, 2, 3, 4, 5, 6, 7],
             "season": season, "rename": rename, "pattern": pattern,
             "replace": pick("replace", ""),
-            "keep_tree": bool(pick("keep_tree", True)),
+            "keep_tree": bool(pick("keep_tree", False)),   # 默认不保留分享里的子目录：压平后统一命名
+            "emby_layout": bool(pick("emby_layout", False)), "aliases": aliases,
             "include_kw": (pick("include_kw", "") or "").strip(),
             "exclude_kw": (pick("exclude_kw", "") or "").strip(),
             "min_size_mb": min_size, "total_episodes": total_eps,
@@ -182,6 +186,15 @@ class Engine:
             "poster": pick("poster", ""),
         }
         return fields
+
+    @staticmethod
+    def _dest(task):
+        """实际转存到的目录。「Emby 规范目录」开启时，剧集再套一层季文件夹：…/觉醒年代 (2021) {tmdb-117954}/Season 1。"""
+        base = _norm_path(task["savepath"])
+        if task.get("emby_layout") and task.get("media", "tv") != "movie":
+            s = int(task.get("season") or 0)
+            return _norm_path(f"{base}/" + (f"Season {s}" if s else "Specials"))
+        return base
 
     @staticmethod
     def _dir_kind(t):
@@ -252,6 +265,15 @@ class Engine:
             self.store.save()
             return len(self.store.data["tasks"]) < n
 
+    def delete_tasks(self, ids):
+        """批量删除，返回实际删除的个数。"""
+        ids = set(ids)
+        with self.store.lock:
+            n = len(self.store.data["tasks"])
+            self.store.data["tasks"] = [t for t in self.store.data["tasks"] if t["id"] not in ids]
+            self.store.save()
+            return n - len(self.store.data["tasks"])
+
     def public_task(self, t):
         d = {k: v for k, v in t.items() if k != "links"}
         d["links"] = [
@@ -315,15 +337,16 @@ class Engine:
             raise LinkError(str(e))
         if not top:
             raise LinkError("分享为空，文件已被分享者删除", permanent=True)
-        base_hint = None
+        base_hint, top_dirs = None, ()
         if len(top) == 1 and top[0]["dir"]:
-            base_hint = season_from_text(top[0]["file_name"], None)
+            base_hint, top_dirs = season_from_text(top[0]["file_name"], None), (top[0]["file_name"],)
             top = q.get_detail(pwd_id, stoken, top[0]["fid"])
         out, budget = [], [max_dirs]
 
         def walk(items, rel, hint, depth):
             for f in items:
                 if not f["dir"]:
+                    f["_dirs"] = tuple(reversed(rel)) + top_dirs   # 所在的各层文件夹名，从近到远：判断 HDR / 分辨率时，文件名没写就看它们
                     out.append((f, hint, rel))
                 elif depth < 4 and budget[0] > 0:
                     budget[0] -= 1
@@ -431,7 +454,7 @@ class Engine:
             return {"movie": True, "have": have, "have_count": 1 if have else 0, "emby": msg,
                     "aired": None, "total": 1, "missing": [], "source": ""}
         q = self.quark()
-        found = q.get_fids([_norm_path(task["savepath"])])  # 只查不建：看进度不该有副作用
+        found = q.get_fids([self._dest(task)])  # 只查不建：看进度不该有副作用
         have, emby_msg = self._have(task, q.ls_dir(found[0]["fid"]) if found else [])
         season = task["season"]
         mine = sorted(e for s, e in have if s == season)
@@ -456,12 +479,15 @@ class Engine:
                 return fname
         if mode == "auto" and len(eps) == 1:
             s, e = eps[0]
+            if task.get("emby_layout"):   # 觉醒年代 (2021) - S01E01.mp4：文件名里带上剧名和年份，Emby 单独看文件也能认出来
+                y = f" ({task['year']})" if task.get("year") else ""
+                return f"{safe_name(task['name'])}{y} - S{s:02d}E{e:02d}{ext}"
             return f"S{s:02d}E{e:02d}{ext}"
         return fname
 
     def _dir_state(self, q, task, rel, cache):
         if rel not in cache:
-            path = _norm_path(task["savepath"] + "/" + "/".join(rel))
+            path = _norm_path(self._dest(task) + "/" + "/".join(rel))
             found = q.get_fids([path])
             if found:
                 fid = found[0]["fid"]
@@ -482,8 +508,8 @@ class Engine:
         v = task.get("strict_season")
         return bool(v) if v is not None else task.get("kind") == "subscription"
 
-    def _filter_reason(self, task, f):
-        """文件不该转存的原因；该转存则返回空字符串。"""
+    def _filter_reason(self, task, f, share_title=""):
+        """文件不该转存的原因；该转存则返回空字符串。share_title：搜索结果 / 分享的标题，画质判断时也参考。"""
         name = f["file_name"]
         if task.get("pattern"):
             if not re.search(task["pattern"], name):
@@ -497,9 +523,24 @@ class Engine:
         min_b = task.get("min_size_mb", 0) * 1024 * 1024
         if min_b and f.get("size", 0) < min_b:
             return f"体积小于 {task['min_size_mb']} MB"
-        return quality_reason(task.get("want_res") or [], task.get("want_hdr", "any"), name, bool(task.get("no_cam")))
+        return quality_reason(task.get("want_res") or [], task.get("want_hdr", "any"), name, bool(task.get("no_cam")),
+                              f.get("_dirs", ()), share_title)
 
-    def _run_link(self, task, link, q, dir_cache, have, limit=None, trace=None, dry=False, srcs=None):
+    @staticmethod
+    def _version_rank(f, share_title=""):
+        """同一集 / 同一部电影有多个版本时比较谁更好：分辨率高的优先，同级体积大的优先。"""
+        t = quality_tags(f["file_name"], f.get("_dirs", ()), share_title)
+        return ({"4k": 3, "1080p": 2, "720p": 1}.get(t["res"], 0), f.get("size", 0) or 0)
+
+    def _solo_ep(self, task, have, wanted):
+        """订阅只差最后一集时，返回这一集 (季, 集)，否则 None。
+        用来放行「分享里只有一个视频、但文件名很怪认不出集数」的资源：搜到的标题已经是想要的了，不用再看里面叫什么，直接按缺的这一集改名。"""
+        if task.get("kind") != "subscription" or task.get("media") == "movie" or not wanted:
+            return None
+        miss = [e for e in wanted if (task["season"], e) not in have]
+        return (task["season"], miss[0]) if len(miss) == 1 else None
+
+    def _run_link(self, task, link, q, dir_cache, have, limit=None, trace=None, dry=False, srcs=None, solo_ep=None):
         """处理单个链接，返回 [{name, eps}]。have 仅在成功后合并。"""
         stoken = self._get_stoken(q, link)
         link["fails"] = 0
@@ -507,7 +548,11 @@ class Engine:
         entries = self._entries(task, q, link, stoken)
         baseline = set(link.get("baseline") or [])
         link_have, cands, seen, unparsed = set(have), [], set(), []
-        keep_tree = task.get("keep_tree", True)
+        keep_tree = task.get("keep_tree", False)
+        share_title = link.get("title", "")
+        chosen = {}   # 集数 -> 已选中的候选，同一集有多个版本（4K / 1080P、HDR / 普通）时挑最好的那个
+        videos = [f["file_name"] for f, _, _ in entries if is_video(f["file_name"])]
+        solo_name = videos[0] if len(videos) == 1 else None
 
         def tr(name, eps, action, why):
             if trace is not None:
@@ -526,11 +571,14 @@ class Engine:
 
         for f, hint, rel in sorted(entries, key=lambda x: (x[2], _natkey(x[0]["file_name"]))):
             fname = f["file_name"]
-            why = self._filter_reason(task, f)
+            why = self._filter_reason(task, f, share_title)
             if why:
                 tr(fname, [], "skip", why)
                 continue
             eps = parse_episodes(fname, hint if hint is not None else task["season"])
+            inferred = False
+            if not eps and solo_ep and fname == solo_name:
+                eps, inferred = [solo_ep], True   # 整个分享只有这一个视频，名字再怪也按缺的那一集处理
             if eps and self._strict_season(task):
                 other = sorted({s for s, _ in eps if s != task["season"]})
                 if other:
@@ -539,6 +587,18 @@ class Engine:
             if fname in baseline:
                 tr(fname, eps, "skip", "添加监控时就已存在（当时选了只追新）")
                 continue
+            rank = self._version_rank(f, share_title)
+            prev = chosen.get(tuple(eps)) if eps else None
+            replace = False
+            if prev is not None:   # 这一集同一个分享里已经选了一个版本：新的更好就换掉它，否则跳过新的
+                if rank > prev["rank"]:
+                    cands.remove(prev)
+                    seen.discard((prev["rel"], prev["target"]))
+                    tr(prev["f"]["file_name"], prev["eps"], "skip", f"同一集有更好的版本（{fname}），不转存这个")
+                    replace = True
+                else:
+                    tr(fname, eps, "skip", "同一集已选了更好的版本")
+                    continue
             src_rel, rel = rel, (rel if keep_tree else ())
             d = self._dir_state(q, task, rel, dir_cache)
             if fname in d["names"]:
@@ -549,7 +609,7 @@ class Engine:
                 tr(fname, [], "skip", "解析不出是第几集，已按「跳过」处理（可在「编辑」里改成转存）")
                 continue
             if eps:
-                if all(e in link_have for e in eps):
+                if not replace and all(e in link_have for e in eps):
                     tr(fname, eps, "skip", f"这一集已有（{have_src(eps)}）")
                     continue
                 link_have.update(eps)
@@ -558,7 +618,10 @@ class Engine:
                 tr(fname, eps, "skip", "同一集已选了另一个版本" if (rel, target) in seen else "目标目录里已有同名文件")
                 continue
             seen.add((rel, target))
-            cands.append({"f": f, "target": target, "eps": eps, "rel": rel, "src": src_rel})
+            cand = {"f": f, "target": target, "eps": eps, "rel": rel, "src": src_rel, "inferred": inferred, "rank": rank}
+            cands.append(cand)
+            if eps:
+                chosen[tuple(eps)] = cand
         if unparsed:
             log.warning("《%s》有 %d 个视频解析不出是第几集，已跳过（避免重复转存）：%s%s", task["name"], len(unparsed),
                         "、".join(unparsed[:5]), " …" if len(unparsed) > 5 else "")
@@ -569,7 +632,8 @@ class Engine:
             cands = cands[:limit]
         for c in cands:
             note = "" if c["target"] == c["f"]["file_name"] else f" → 将命名为 {c['target']}"
-            tr(c["f"]["file_name"], c["eps"], "save", ("缺少这一集" if c["eps"] else "解析不出集数，按文件名判断") + note)
+            tr(c["f"]["file_name"], c["eps"], "save",
+               ("分享里只有这一个视频，名字认不出集数，按你缺的这一集处理" if c.get("inferred") else "缺少这一集" if c["eps"] else "解析不出集数，按文件名判断") + note)
         if dry:
             for c in cands:
                 have.update(c["eps"])
@@ -614,10 +678,10 @@ class Engine:
         if not live:
             return {"status": "error", "msg": "所有分享链接均已失效", "saved": []}
 
-        to_fid = q.ensure_dir(task["savepath"])
+        dest = self._dest(task)
+        to_fid = q.ensure_dir(dest)
         dir_items = q.ls_dir(to_fid)
-        dir_cache = {(): {"fid": to_fid, "names": {i["file_name"] for i in dir_items},
-                          "path": _norm_path(task["savepath"])}}
+        dir_cache = {(): {"fid": to_fid, "names": {i["file_name"] for i in dir_items}, "path": dest}}
         try:
             have, emby_msg, dir_have, emby_have = self._have_detail(task, dir_items, strict=True)
         except EmbyError as ex:
@@ -639,6 +703,7 @@ class Engine:
 
         limit_total = None if task.get("saved_total", 0) == 0 else INCREMENTAL_LIMIT
         saved, errors, banned = [], [], []
+        solo_ep = self._solo_ep(task, have, wanted)
         for idx, link in enumerate(live, 1):
             tag = f"《{task['name']}》链接 {idx}/{len(live)}"
             left = None if limit_total is None else limit_total - len(saved)
@@ -646,7 +711,7 @@ class Engine:
                 log.info("%s：本轮转存已达上限，剩余链接留到下一轮", tag)
                 break
             try:
-                got = self._run_link(task, link, q, dir_cache, have, left)
+                got = self._run_link(task, link, q, dir_cache, have, left, solo_ep=solo_ep)
                 if got:
                     log.info("%s：转存 %d 个 → %s", tag, len(got),
                              fmt_eps([e for g in got for e in g["eps"]]) or "无集数信息")
@@ -683,7 +748,7 @@ class Engine:
             return {"status": "error", "saved": [], "msg": errors[0]}
         return {"status": "nochange", "saved": [], "msg": "没有缺失的集数"}
 
-    def inspect_share(self, url, season=1, prefs=None, title=None):
+    def inspect_share(self, url, season=1, prefs=None, title=None, share_title=None):
         """
         看一眼分享里有什么：集数范围、画质、体积……给「搜索资源」和「自动找资源」用。结果缓存 10 分钟。
         season：文件名里没写季的，按这个季算。prefs：{"res": ["4k"], "hdr": "yes"}，用来统计「符合画质要求」的部分。
@@ -696,7 +761,8 @@ class Engine:
         want_res = [r for r in (prefs.get("res") or []) if r in RES_LABEL]
         want_hdr = prefs.get("hdr") if prefs.get("hdr") in ("yes", "no") else "any"
         no_cam = bool(prefs.get("no_cam"))
-        ckey = (link["url"], season, tuple(sorted(want_res)), want_hdr, no_cam, norm_title(title))
+        share_title = (share_title or "").strip()
+        ckey = (link["url"], season, tuple(sorted(want_res)), want_hdr, no_cam, norm_title(title), share_title)
         cache = self.__dict__.setdefault("_inspect_cache", {})
         hit = cache.get(ckey)
         if hit and time.time() - hit[0] < 600:
@@ -713,7 +779,7 @@ class Engine:
         vids = [(f, hint) for f, hint, _ in entries if is_video(f["file_name"])]
         eps, eps_ok, expl, unparsed, size, ok_vids = set(), set(), set(), 0, 0, 0
         max_size, cam_vids, nt, title_hit = 0, 0, norm_title(title), False
-        counts = {"4k": 0, "1080p": 0, "720p": 0, "other": 0, "hdr": 0}
+        counts, first_why = {"4k": 0, "1080p": 0, "720p": 0, "other": 0, "hdr": 0}, ""
         for f, hint in vids:
             name = f["file_name"]
             got = parse_episodes(name, hint if hint is not None else -1)    # -1 = 文件名里没写季
@@ -724,11 +790,14 @@ class Engine:
             size += f.get("size", 0) or 0
             max_size = max(max_size, f.get("size", 0) or 0)
             title_hit = title_hit or bool(nt and nt in norm_title(name))
-            t = quality_tags(name)
+            t = quality_tags(name, f.get("_dirs", ()), share_title)
             cam_vids += 1 if t["cam"] else 0
             counts[t["res"] or "other"] += 1
             counts["hdr"] += 1 if t["hdr"] else 0
-            if not quality_reason(want_res, want_hdr, name, no_cam):
+            why = quality_reason(want_res, want_hdr, name, no_cam, f.get("_dirs", ()), share_title)
+            if why:
+                first_why = first_why or why
+            else:
                 ok_vids += 1
                 eps_ok.update(mapped)
         res = {"ok": True, "videos": len(vids), "eps": fmt_eps(eps), "ep_count": len(eps),
@@ -737,7 +806,7 @@ class Engine:
                "quality": [RES_LABEL[k] for k in ("4k", "1080p", "720p") if counts[k]] + (["HDR"] if counts["hdr"] else []),
                "quality_counts": counts, "prefs_set": bool(want_res or want_hdr != "any" or no_cam),
                "max_mb": round(max_size / 1024 ** 2), "cam_videos": cam_vids, "title_hit": title_hit if nt else None,
-               "ok_videos": ok_vids, "ok_eps": fmt_eps(eps_ok),
+               "ok_videos": ok_vids, "why_skipped": first_why, "skipped_videos": len(vids) - ok_vids if (want_res or want_hdr != "any" or no_cam) else 0, "ok_eps": fmt_eps(eps_ok),
                "eps_list": [list(x) for x in sorted(eps)], "eps_ok_list": [list(x) for x in sorted(eps_ok)],
                "sample": [f["file_name"] for f, _ in vids[:3]]}
         cache[ckey] = (time.time(), res)
@@ -827,9 +896,15 @@ class Engine:
             return "reject", f"没写是第几季，而本订阅是第 {S} 季，不敢要", 0
         everything = {e for s, e in map(tuple, r["eps_list"]) if s == S}
         rel = {e for s, e in map(tuple, r["eps_ok_list"] if r["prefs_set"] else r["eps_list"]) if s == S}
+        if (not everything and r["videos"] == 1 and r.get("unparsed") == 1 and need is not None and len(need) == 1
+                and r["avg_mb"] >= AUTO_MIN_AVG_MB):
+            # 整个分享只有 1 个视频，名字认不出集数；而订阅恰好只差 1 集。搜到的标题已经对得上了，不必再看里面叫什么，转存时按缺的这一集改名
+            if r["prefs_set"] and not r["ok_videos"]:
+                return "reject", f"唯一的视频不符合你的画质要求（分享里是：{'、'.join(r['quality']) or '没标注画质'}）", 0
+            return "ok", f"分享里只有 1 个视频（名字认不出集数），按你缺的 E{next(iter(need)):02d} 处理", 1
         if not rel:
             if r["prefs_set"] and everything:
-                return "reject", f"有第 {S} 季的集，但没有符合你画质要求的（分享里是：{'、'.join(r['quality']) or '没标注画质'}）", 0
+                return "reject", f"有第 {S} 季的集，但没有符合你画质要求的（{r.get('why_skipped') or '分享里是：' + ('、'.join(r['quality']) or '没标注画质')}）", 0
             return "reject", f"没有识别到第 {S} 季的集数", 0
         if total and max(rel) > total * 1.5 + 5:
             return "reject", f"最大集号 {max(rel)} 远超本季总集数 {total}，可能不是这部剧或是合集", 0
@@ -840,7 +915,61 @@ class Engine:
             return "reject", f"现在能提供 {fmt_eps([(S, x) for x in rel])}，没有你缺的集", 0
         if len(rel) < 2 and not (need is not None and len(need) == 1):
             return "reject", "只有 1 集，不像完整的资源", 0
-        return "ok", f"能补你缺的 {len(useful)} 集：{fmt_eps([(S, x) for x in useful])}", len(useful)
+        extra = f"（另有 {r['skipped_videos']} 个不符合画质要求的视频会被跳过）" if r.get("skipped_videos") else ""
+        return "ok", f"能补你缺的 {len(useful)} 集：{fmt_eps([(S, x) for x in useful])}{extra}", len(useful)
+
+    # ---- 名称 / 别名 ----
+    @staticmethod
+    def _strip_season(name):
+        """有些剧在 TMDB 里的名字本身就带「第二季」，比对标题 / 搜索时要先去掉，否则会漏掉大量结果。"""
+        return re.sub(r"[\s._-]*(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|[Ss]eason\s*\d+|[Ss]\d{1,2})\s*$", "", name or "").strip() or (name or "")
+
+    def _search_names(self, task, strip_season=True):
+        """[(显示名, 规范化名)]：主名在前，TMDB 里的别名（原名、各地区译名）在后。
+        老订阅没存过别名的，第一次用到时去 TMDB 补一次（失败不影响，只用主名）。"""
+        if not task.get("aliases") and task.get("tmdb_id") and not task.get("aliases_tried"):
+            task["aliases_tried"] = True
+            try:
+                tm = self.tmdb()
+                if tm.ready:
+                    task["aliases"] = tm.aliases(task.get("media", "tv"), task["tmdb_id"])
+                    with self.store.lock:
+                        self.store.save()
+            except Exception as ex:
+                log.warning("《%s》读取 TMDB 别名失败（只用主名搜索）：%s", task["name"], ex)
+        raw = [task["name"]] + list(task.get("aliases") or [])
+        out, seen = [], set()
+        for i, n in enumerate(raw):
+            n = self._strip_season(n) if strip_season else (n or "").strip()
+            k = norm_title(n)
+            # 主名一定保留；别名太短（单个汉字、三两个字母）容易和别的作品撞上，不用
+            if not k or k in seen or (i and len(k) < (2 if re.search(r"[\u4e00-\u9fff]", k) else 4)):
+                continue
+            seen.add(k)
+            out.append((n, k))
+        return out[:AUTO_MAX_NAMES]
+
+    @staticmethod
+    def _match_name(names, title):
+        """搜索结果标题里含有哪个名称；都不含返回 None。"""
+        nt = norm_title(title)
+        return next((n for n, k in names if k in nt), None)
+
+    def _search_by_names(self, ps, names, groups, known, note):
+        """groups: 每个名称对应的关键词列表。按顺序搜：搜到足够多「名字对得上的新结果」就停，否则换下一个名称（别名）再搜。"""
+        results, ids = [], set()
+        for gi, kws in enumerate(groups):
+            for kw in kws:
+                for it in ps.search(kw):
+                    if it["pwd_id"] not in ids:
+                        ids.add(it["pwd_id"])
+                        results.append(it)
+            fresh = sum(1 for it in results if it["pwd_id"] not in known and self._match_name(names, it["title"]))
+            if fresh >= AUTO_NAME_ENOUGH:
+                break
+            if gi + 1 < len(groups):
+                note("🔁", f"用「{kws[0]}」只搜到 {fresh} 个对得上的，换别名「{groups[gi + 1][0]}」再搜")
+        return results
 
     def _auto_find(self, task, ps):
         if task.get("media") == "movie":
@@ -858,7 +987,7 @@ class Engine:
             task["links"] = [l for l in task["links"] if l not in dead_auto]
             note("🧹", f"移除了 {len(dead_auto)} 个已失效的自动链接")
 
-        found = q.get_fids([_norm_path(task["savepath"])])
+        found = q.get_fids([self._dest(task)])
         have, _, _, _ = self._have_detail(task, q.ls_dir(found[0]["fid"]) if found else [])
         wanted, total, _ = self.wanted(task)
         mine = {x for s, x in have if s == S}
@@ -870,25 +999,22 @@ class Engine:
             note("⏸", f"已经有 {AUTO_MAX_LINKS} 个有效链接，不再添加")
             return {"added": [], "msg": "有效链接已满", "lines": lines}
 
-        # 有些剧在 TMDB 里的名字本身就带「第二季」，比对标题 / 搜索时要先去掉，否则会漏掉大量结果
-        base = re.sub(r"[\s._-]*(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|[Ss]eason\s*\d+|[Ss]\d{1,2})\s*$", "", task["name"]).strip() or task["name"]
-        results, ids = [], set()
-        for kw in [base] + ([f"{base} 第{S}季"] if S > 1 else []):
-            for it in ps.search(kw):
-                if it["pwd_id"] not in ids:
-                    ids.add(it["pwd_id"])
-                    results.append(it)
-        known, nm = {l["pwd_id"] for l in task["links"]}, norm_title(base)
+        names = self._search_names(task)
+        base = names[0][0]
+        groups = [[n] + ([f"{n} 第{S}季"] if S > 1 and gi < 2 else []) for gi, (n, _) in enumerate(names)]
+        known = {l["pwd_id"] for l in task["links"]}
+        results = self._search_by_names(ps, names, groups, known, note)
         skip = {"已有": 0, "名字对不上": 0, "标题写的是别的季": 0, "最近看过": 0}
         cands = []
         for it in results:
             if it["pwd_id"] in known:
                 skip["已有"] += 1
                 continue
-            if nm and nm not in norm_title(it["title"]):
+            hit = self._match_name(names, it["title"])
+            if not hit:
                 skip["名字对不上"] += 1
                 continue
-            ment = title_seasons(it["title"], base)
+            ment = title_seasons(it["title"], hit)
             if ment and S not in ment:
                 skip["标题写的是别的季"] += 1
                 continue
@@ -911,7 +1037,7 @@ class Engine:
                 note("⏸", "本轮检测数量已达上限，剩下的下次再看")
                 break
             try:
-                r = self.inspect_share(it["url"], season=S, prefs=prefs)
+                r = self.inspect_share(it["url"], season=S, prefs=prefs, share_title=it["title"])
             except QuarkError as ex:
                 note("⚠", f"读取分享失败，本轮先到这里：{ex}")
                 break
@@ -965,17 +1091,18 @@ class Engine:
             return False, f"Emby 查询失败（只按夸克目录判断）：{ex}"
         return (True, f"Emby 里已有《{matched}》") if mid else (False, "Emby 里还没有这部电影")
 
-    def _pick_movie_file(self, task, entries):
-        """从分享里挑出最合适的那一个视频。返回 (选中的文件或 None, [(被跳过的文件, 原因)], 通过筛选的候选列表)。"""
+    def _pick_movie_file(self, task, entries, share_title=""):
+        """从分享里挑出最合适的那一个视频。返回 (选中的文件或 None, [(被跳过的文件, 原因)], 通过筛选的候选列表)。
+        一个分享里有多个视频就是多个版本（4K / 1080P、HDR / 普通……）：先按你的画质要求逐个筛掉不符合的，剩下的再挑最好的。"""
         nm, skipped, cands = norm_title(task["name"]), [], []
         for f, _, _ in entries:
-            why = self._filter_reason(task, f)
+            why = self._filter_reason(task, f, share_title)
             if not why and (f.get("size", 0) or 0) < MOVIE_MIN_MB * 1024 * 1024:
                 why = f"体积小于 {MOVIE_MIN_MB} MB，多半是预告 / 花絮"
             (skipped if why else cands).append((f, why) if why else f)
         rank = {"4k": 3, "1080p": 2, "720p": 1}
         cands.sort(key=lambda f: (bool(nm) and nm in norm_title(f["file_name"]),
-                                  rank.get(quality_tags(f["file_name"])["res"], 0), f.get("size", 0) or 0), reverse=True)
+                                  rank.get(quality_tags(f["file_name"], f.get("_dirs", ()), share_title)["res"], 0), f.get("size", 0) or 0), reverse=True)
         return (cands[0] if cands else None), skipped, cands
 
     def _run_movie(self, task, manual):
@@ -1006,7 +1133,7 @@ class Engine:
                 stoken = self._get_stoken(q, link)
                 link["fails"] = 0
                 entries = self._entries(task, q, link, stoken, max_dirs=30)
-                f, skipped, _ = self._pick_movie_file(task, entries)
+                f, skipped, _ = self._pick_movie_file(task, entries, link.get("title", ""))
                 if not f:
                     why = skipped[0][1] if skipped else "没有视频文件"
                     log.info("%s：没有可转存的视频（%s）", tag, why)
@@ -1065,7 +1192,7 @@ class Engine:
             except (LinkError, QuarkError) as ex:
                 item["error"] = str(ex)
                 continue
-            f, skipped, cands = self._pick_movie_file(task, entries)
+            f, skipped, cands = self._pick_movie_file(task, entries, link.get("title", ""))
             for fx, why in skipped:
                 item["rows"].append({"file": fx["file_name"], "eps": "", "action": "skip", "why": why})
             for c in cands:
@@ -1091,10 +1218,13 @@ class Engine:
         if r["prefs_set"] and r["ok_videos"] == 0:
             if task.get("no_cam") and r["cam_videos"] == r["videos"]:
                 return "reject", "都是枪版 / 抢先版（TC、TS、CAM）"
-            return "reject", f"没有符合你要求的视频（分享里是：{'、'.join(r['quality']) or '没标注画质'}）"
-        if r.get("title_hit") is False and r["videos"] > 2:
-            return "reject", "视频文件名里都没有片名，不敢要"
-        return "ok", f"一部 {r['max_mb'] / 1024:.1f} GB 的视频（{'、'.join(r['quality']) or '没标注画质'}）"
+            return "reject", f"没有符合你要求的视频（{r.get('why_skipped') or '分享里是：' + ('、'.join(r['quality']) or '没标注画质')}）"
+        # 搜索结果的标题已经对得上片名了，所以文件 / 文件夹叫什么都行（常见的是只有一个文件、名字很怪）；
+        # 只有视频多、又都和片名无关时才不敢要，免得把别的电影合集转进来
+        if r.get("title_hit") is False and r["videos"] > 3:
+            return "reject", "里面有好几个视频，文件名里又都没有片名，不敢要"
+        extra = f"；另有 {r['skipped_videos']} 个版本不符合你的画质要求，不会转存" if r.get("skipped_videos") else ""
+        return "ok", f"一部 {r['max_mb'] / 1024:.1f} GB 的视频（{'、'.join(r['quality']) or '没标注画质'}）{extra}"
 
     def _auto_find_movie(self, task, ps):
         q = self.quark()
@@ -1124,20 +1254,17 @@ class Engine:
             return {"added": [], "msg": "有效链接已满", "lines": lines}
 
         title, year = task["name"], task.get("year") or 0
-        results, ids = [], set()
-        for kw in [title] + ([f"{title} {year}"] if year else []):
-            for it in ps.search(kw):
-                if it["pwd_id"] not in ids:
-                    ids.add(it["pwd_id"])
-                    results.append(it)
-        known, nm = {l["pwd_id"] for l in task["links"]}, norm_title(title)
+        names = self._search_names(task, strip_season=False)
+        groups = [[n] + ([f"{n} {year}"] if year else []) for n, _ in names]
+        known = {l["pwd_id"] for l in task["links"]}
+        results = self._search_by_names(ps, names, groups, known, note)
         skip = {"已有": 0, "名字对不上": 0, "年份对不上": 0, "最近看过": 0}
         cands = []
         for it in results:
             if it["pwd_id"] in known:
                 skip["已有"] += 1
                 continue
-            if nm and nm not in norm_title(it["title"]):
+            if not self._match_name(names, it["title"]):
                 skip["名字对不上"] += 1
                 continue
             years = {int(y) for y in re.findall(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", it["title"])}
@@ -1159,7 +1286,7 @@ class Engine:
                 note("⏸", "本轮检测数量已达上限，剩下的下次再看")
                 break
             try:
-                r = self.inspect_share(it["url"], season=1, prefs=prefs, title=title)
+                r = self.inspect_share(it["url"], season=1, prefs=prefs, title=title, share_title=it["title"])
             except QuarkError as ex:
                 note("⚠", f"读取分享失败，本轮先到这里：{ex}")
                 break
@@ -1188,7 +1315,7 @@ class Engine:
         if task.get("media") == "movie":
             return self._preview_movie(task)
         q = self.quark()
-        path = _norm_path(task["savepath"])
+        path = self._dest(task)
         found = q.get_fids([path])
         fid = found[0]["fid"] if found else None
         dir_items = q.ls_dir(fid) if fid else []
@@ -1202,6 +1329,8 @@ class Engine:
                "emby_have": fmt_eps(emby_have), "warnings": warnings, "links": []}
         limit_total = None if task.get("saved_total", 0) == 0 else INCREMENTAL_LIMIT
         planned = 0
+        wanted = self.wanted(task)[0]
+        solo_ep = self._solo_ep(task, have, wanted)
         for link in task["links"]:
             item = {"url": link["url"], "ban": link.get("ban", ""), "rows": [], "error": ""}
             out["links"].append(item)
@@ -1210,7 +1339,7 @@ class Engine:
             left = None if limit_total is None else max(0, limit_total - planned)
             try:
                 got = self._run_link(task, link, q, dir_cache, have, left,
-                                     trace=item["rows"], dry=True, srcs=srcs)
+                                     trace=item["rows"], dry=True, srcs=srcs, solo_ep=solo_ep)
                 planned += len(got)
             except (LinkError, QuarkError) as ex:
                 item["error"] = str(ex)
@@ -1222,7 +1351,7 @@ class Engine:
         ss = cfg["smartstrm"]
         if ss["enabled"]:
             time.sleep(min(ss.get("delay", 3), 60))
-            ok, msg = notify.trigger_smartstrm(ss, task["savepath"])
+            ok, msg = notify.trigger_smartstrm(ss, self._dest(task))
             log.info("SmartStrm：%s", msg) if ok else log.warning("SmartStrm：%s", msg)
         em = cfg["emby"]
         cli = self.emby()
@@ -1240,7 +1369,7 @@ class Engine:
             more = f"\n- …共 {len(saved)} 个" if len(saved) > 30 else ""
             ok, msg = notify.send_dingtalk(
                 dt, f"《{task['name']}》有更新",
-                f"### ✅《{task['name']}》追更\n转存到 `{task['savepath']}`\n\n{lines}{more}")
+                f"### ✅《{task['name']}》追更\n转存到 `{self._dest(task)}`\n\n{lines}{more}")
             if not ok:
                 log.warning("钉钉：%s", msg)
 

@@ -44,7 +44,7 @@ def setup(items=ITEMS, shares=None, emby_have=(), **task):
     ps = FakePS(items); eng.pansou = lambda: ps
     calls = []
     real = eng.inspect_share
-    eng.inspect_share = lambda url, season=1, prefs=None, title=None: (calls.append(url), real(url, season, prefs, title))[1]
+    eng.inspect_share = lambda url, season=1, prefs=None, title=None, share_title=None: (calls.append(url), real(url, season, prefs, title, share_title))[1]
     cfg = {"kind": "subscription", "name": "庆余年", "savepath": "/剧/庆余年", "season": 2, "total_episodes": 16,
            "auto_find": True, "links_text": "", **task}
     return store, eng, fq, ps, calls, eng.create_task(cfg)

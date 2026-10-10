@@ -186,35 +186,65 @@ _RES_RULES = [("4k", re.compile(r"2160[pi]|(?<![a-z0-9])4k(?![a-z0-9])|(?<![a-z]
               ("1080p", re.compile(r"1080[pi]|1920x1080|(?<![a-z])fhd(?![a-z])", re.I)),
               ("720p", re.compile(r"720[pi]|1280x720", re.I))]
 # 注意：只认「杜比视界」，不认单独的「杜比」——那多半是杜比音效（全景声），和画面无关
-_HDR_RE = re.compile(r"(?<![a-z])hdr|dolby[\s._-]?vision|(?<![a-z])dv(?![a-z])|杜比视界", re.I)
-# 枪版 / 抢先版（TC、TS、CAM 等）。只在「去掉扩展名的文件名」里找：.ts 是常见的视频容器扩展名，不能算枪版
+_HDR_RE = re.compile(r"(?<![a-z])hdr|dolby[\s._-]?vision|(?<![a-z])dovi(?![a-z])|(?<![a-z])dv(?![a-z])|(?<![a-z])hlg(?![a-z])|杜比视界", re.I)
+_SDR_RE = re.compile(r"(?<![a-z])sdr(?![a-z])", re.I)
+# 枪版 / 抢先版（TC、TS、CAM 等）。文件名要先去掉扩展名再找：.ts 是常见的视频容器扩展名，不能算枪版
 _CAM_RE = re.compile(r"(?<![a-z0-9])(?:hd)?(?:cam|tc|ts)(?![a-z0-9])|telesync|telecine|枪版|抢先版|抢鲜版", re.I)
 RES_LABEL = {"4k": "4K", "1080p": "1080P", "720p": "720P"}
+SRC_LABEL = {"name": "文件名", "folder": "所在文件夹名", "title": "分享标题"}
 
 
-def quality_tags(name):
-    """文件名 -> {"res": "4k"|"1080p"|"720p"|None, "hdr": bool}。没写就是 None / False。"""
-    res = next((k for k, rx in _RES_RULES if rx.search(name or "")), None)
-    return {"res": res, "hdr": bool(_HDR_RE.search(name or "")),
-            "cam": bool(_CAM_RE.search(os.path.splitext(name or "")[0]))}
+def _res_of(s, multi_unknown=False):
+    hits = [k for k, rx in _RES_RULES if rx.search(s or "")]
+    if multi_unknown and len(hits) > 1:
+        return None   # 标题 / 文件夹名里同时列了好几种分辨率（「4K 1080P 都有」），说不准是哪一种
+    return hits[0] if hits else None
 
 
-def quality_reason(want_res, want_hdr, name, no_cam=False):
+def quality_tags(name, folders=(), title=""):
     """
-    按用户选的画质要求检查一个文件名。符合返回 ""，不符合返回原因。
-    - 分辨率：文件名里写了分辨率、且不在想要的范围内才算不符合；没写的无法判断，放行。
-    - HDR "yes"：HDR 版一定会标出来，所以没有 HDR / 杜比视界 标记的视为 SDR，不符合。
-    - HDR "no"：带 HDR 标记的不符合。
+    文件 -> {"res": "4k"|"1080p"|"720p"|None, "hdr": bool, "cam": bool, "src": {...}}。
+    folders 是所在的各层文件夹名（从近到远），title 是分享标题：文件名自己没写的，沿着文件夹往上找，最后才用分享标题。
+    越靠近文件的信息越优先；文件夹 / 标题里同时出现矛盾信息（HDR 和 SDR、好几种分辨率）时视为没写。
+    src 记录每项是从哪里认出来的（name / folder / title），用来在原因里说明白。
     """
-    t = quality_tags(name)
+    name = name or ""
+    srcs = [(name, "name")] + [(c, "folder") for c in folders if c] + ([(title, "title")] if title else [])
+    res, hdr, cam, src = None, None, False, {}
+    for text, where in srcs:
+        own = where == "name"
+        if res is None:
+            r = _res_of(text, multi_unknown=not own)
+            if r:
+                res, src["res"] = r, where
+        if hdr is None:
+            h, sd = bool(_HDR_RE.search(text)), bool(_SDR_RE.search(text))
+            if h and not (sd and not own):
+                hdr, src["hdr"] = True, where
+            elif sd and not h:
+                hdr, src["hdr"] = False, where
+        if not cam and _CAM_RE.search(os.path.splitext(text)[0] if own else text):
+            cam, src["cam"] = True, where
+    return {"res": res, "hdr": bool(hdr), "cam": cam, "src": src}
+
+
+def quality_reason(want_res, want_hdr, name, no_cam=False, folders=(), title=""):
+    """
+    按用户选的画质要求检查一个文件。符合返回 ""，不符合返回原因。
+    - 分辨率：写明了分辨率、且不在想要的范围内才算不符合；没写的无法判断，放行。
+    - HDR "yes"：HDR 版一定会标出来，所以文件名 / 文件夹名 / 分享标题里都没有 HDR / 杜比视界 标记的视为 SDR，不符合。
+    - HDR "no"：任何一处（文件名、所在文件夹名、分享标题）标了 HDR 的不符合。
+    """
+    t = quality_tags(name, folders, title)
+    where = lambda k: SRC_LABEL.get(t["src"].get(k), "文件名")
     if no_cam and t["cam"]:
-        return "疑似枪版 / 抢先版（TC、TS、CAM）"
+        return f"疑似枪版 / 抢先版（TC、TS、CAM；见于{where('cam')}）"
     if want_res and t["res"] and t["res"] not in want_res:
-        return f"分辨率是 {RES_LABEL[t['res']]}，不在你要的范围（{'、'.join(RES_LABEL[r] for r in want_res if r in RES_LABEL)}）内"
+        return f"分辨率是 {RES_LABEL[t['res']]}（见于{where('res')}），不在你要的范围（{'、'.join(RES_LABEL[r] for r in want_res if r in RES_LABEL)}）内"
     if want_hdr == "yes" and not t["hdr"]:
-        return "你要 HDR，但文件名里没有 HDR / 杜比视界 标记"
+        return "你要 HDR，但文件名、所在文件夹名和分享标题里都没有 HDR / 杜比视界 标记"
     if want_hdr == "no" and t["hdr"]:
-        return "你不要 HDR，但这是 HDR 版"
+        return f"你不要 HDR，但{where('hdr')}里标了 HDR"
     return ""
 
 
@@ -236,6 +266,21 @@ def title_seasons(title, name=""):
     if n:
         for m in re.finditer(re.escape(n) + r"(\d{1,2})(?![\dA-Za-z])", norm_title(title)):
             out.add(int(m.group(1)))
+    return out
+
+
+def safe_name(s):
+    """去掉文件系统不允许的字符，连续空白压成一个空格。"""
+    return re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|]+', " ", s or "")).strip()
+
+
+def emby_folder_name(name, year=0, tmdb_id=0):
+    """Emby 推荐的文件夹命名：觉醒年代 (2021) {tmdb-117954}。年份 / TMDB 编号没有就省略。"""
+    out = safe_name(name)
+    if year:
+        out += f" ({year})"
+    if tmdb_id:
+        out += f" {{tmdb-{int(tmdb_id)}}}"
     return out
 
 

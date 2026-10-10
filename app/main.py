@@ -19,7 +19,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
 
-VERSION = "1.0.3"
+VERSION = "1.1.2"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
@@ -203,6 +203,13 @@ def create_app(store=None, engine=None):
         if task["links"] and data.get("save_existing", True):
             threading.Thread(target=engine.run_task, args=(task["id"], True), daemon=True).start()
         return jsonify(task=engine.public_task(task))
+
+    @app.post("/api/tasks/batch-delete")
+    def tasks_batch_delete():
+        ids = body().get("ids")
+        if not isinstance(ids, list) or not ids:
+            raise ValueError("请先选择要删除的订阅")
+        return jsonify(ok=True, deleted=engine.delete_tasks([str(i) for i in ids]))
 
     @app.put("/api/tasks/<tid>")
     def tasks_update(tid):
@@ -399,6 +406,20 @@ def create_app(store=None, engine=None):
                 pass
         return jsonify(d)
 
+    @app.get("/api/tmdb/person/<int:pid>")
+    def tmdb_person(pid):
+        d = tmdb_call(tmdb_or_400().person, pid)
+        annotate_mixed(d["items"])
+        return jsonify(d)
+
+    @app.get("/api/tmdb/<media>/<int:tid>/similar")
+    def tmdb_similar(media, tid):
+        if media not in ("tv", "movie"):
+            raise KeyError("未知类型")
+        d = tmdb_call(tmdb_or_400().similar, media, tid)
+        annotate(d["items"], media)
+        return jsonify(d)
+
     @app.get("/api/tmdb/movie/discover")
     def movie_discover():
         d = tmdb_call(tmdb_or_400().movie_discover, request.args.get("category", "trending"), int(request.args.get("page", 1)))
@@ -443,8 +464,11 @@ def create_app(store=None, engine=None):
             "overview": info["overview"],
         }
         payload["anime"] = bool(info.get("anime"))   # 动画（番剧 / 动画电影）：目录推荐时和普通剧集、电影分开
+        payload["aliases"] = info.get("aliases") or []   # 其他名称：主名搜不到资源时，自动找资源会换别名再搜
+        payload["emby_layout"] = bool(data.get("emby_layout", False)) and media == "tv"
+        payload["year"] = int(info.get("year") or 0)       # 剧集的年份用于「剧名 (年份) - S01E01」命名
         if media == "movie":
-            payload.update(year=int(info.get("year") or 0), release_date=info.get("release_date") or "")
+            payload["release_date"] = info.get("release_date") or ""
         if not (payload.get("savepath") or "").strip("/ "):
             raise ValueError("请选择转存目录")
         has_links = bool(parse_share_text(payload.get("links_text", "")))
@@ -496,7 +520,7 @@ def create_app(store=None, engine=None):
             season = int(d.get("season") or 1)
         except (TypeError, ValueError):
             season = 1
-        return jsonify(engine.inspect_share(d.get("url", ""), season, d.get("prefs"), d.get("title")))
+        return jsonify(engine.inspect_share(d.get("url", ""), season, d.get("prefs"), d.get("title"), d.get("share_title")))
 
     # ------------------------------------------------------------ 设置
     @app.get("/api/settings/<name>")

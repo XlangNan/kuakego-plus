@@ -45,11 +45,21 @@ class Tmdb(BaseHTTPRequestHandler):
             if with_g == "16": return [x for x in items if 16 in x["genre_ids"]]
             if without_g == "16": return [x for x in items if 16 not in x["genre_ids"]]
             return items
-        if p.startswith("/movie/"):
+        if p.startswith("/person/"):
+            d = {"id": 501, "name": "张若昀", "profile_path": None, "known_for_department": "Acting", "birthday": "1988-08-13", "place_of_birth": "北京",
+                 "biography": "中国内地男演员。" * 10,
+                 "combined_credits": {"cast": [{"id": x["id"], "media_type": "tv", "name": x["name"], "first_air_date": x["first_air_date"], "vote_average": x["vote_average"],
+                                                "poster_path": x["poster_path"], "genre_ids": x["genre_ids"], "popularity": 50 - i, "character": "范闲"} for i, x in enumerate(SHOWS[:5])] +
+                                     [{"id": MOVIES[0]["id"], "media_type": "movie", "title": MOVIES[0]["title"], "release_date": "2024-06-01", "vote_average": 7.8,
+                                       "poster_path": "/p0.jpg", "genre_ids": [18], "popularity": 60, "character": "男主"}]}}
+        elif p.endswith(("/recommendations", "/similar")):
+            d = {"results": (MOVIES[:4] if p.startswith("/movie/") else SHOWS[2:7])}
+        elif p.startswith("/movie/"):
             mv = ALL_MOVIES[int(p.split("/")[2])]
             d = {**mv, "runtime": 118, "genres": [{"id": g, "name": "动画" if g == 16 else "剧情"} for g in mv["genre_ids"]], "vote_count": 1234,
                  "tagline": "一句电影标语", "backdrop_path": None, "status": "Released",
-                 "credits": {"cast": [{"name": "演员甲", "character": "角色乙"}, {"name": "演员丙", "character": "角色丁"}]}}
+                 "original_title": "Some Movie", "alternative_titles": {"titles": [{"title": "某片", "iso_3166_1": "HK"}]},
+                 "credits": {"cast": [{"id": 501, "name": "演员甲", "character": "角色乙"}, {"id": 502, "name": "演员丙", "character": "角色丁"}]}}
         elif p == "/trending/movie/week": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 3}          # 趋势接口混着动画，由服务端去掉
         elif p == "/discover/movie": d = {"results": filt(MOVIES + ANIME_MOVIES), "total_pages": 3}
         elif p == "/search/movie": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 1}
@@ -64,7 +74,9 @@ class Tmdb(BaseHTTPRequestHandler):
                  "number_of_seasons": 2, "number_of_episodes": 46,
                  "seasons": [{"season_number": 1, "name": "第 1 季", "episode_count": 46, "air_date": "2019-11-26"},
                              {"season_number": 2, "name": "第 2 季", "episode_count": 36, "air_date": "2024-05-16"}],
-                 "credits": {"cast": [{"name": "张若昀", "character": "范闲"}, {"name": "李沁", "character": "林婉儿"}]}}
+                 "original_name": "庆余年", "first_air_date": s_["first_air_date"],
+                 "alternative_titles": {"results": [{"title": "Joy of Life", "iso_3166_1": "US"}, {"title": "慶餘年", "iso_3166_1": "TW"}]},
+                 "credits": {"cast": [{"id": 501, "name": "张若昀", "character": "范闲"}, {"id": 502, "name": "李沁", "character": "林婉儿"}]}}
         else:
             d = {"results": SHOWS, "total_pages": 3}
         b = json.dumps(d).encode()

@@ -213,7 +213,7 @@ tr:last-child td{border-bottom:0}
 .hero{margin:-20px -22px 14px;height:150px;background:var(--inp) center/cover;border-radius:16px 16px 0 0;position:relative}
 .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 30%,var(--card));border-radius:inherit}
 .dt{display:flex;gap:16px}
-.dt .pic{width:110px;flex:none;aspect-ratio:2/3;border-radius:8px;background:var(--inp) center/cover;margin-top:-60px;position:relative;z-index:1;border:2px solid var(--card)}
+.dt .pic{width:110px;flex:none;align-self:flex-start;aspect-ratio:2/3;border-radius:8px;background:var(--inp) center/cover;margin-top:-60px;position:relative;z-index:1;border:2px solid var(--card)}
 .crumbs{display:flex;flex-wrap:wrap;gap:4px;font-size:13px;margin-bottom:10px}
 .crumbs a{cursor:pointer}
 .dirs{max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
@@ -223,6 +223,22 @@ tr:last-child td{border-bottom:0}
 .cast div{flex:none;width:72px;text-align:center;font-size:11.5px}
 .cast i{display:block;width:72px;height:72px;border-radius:50%;background:var(--inp) center/cover;margin-bottom:4px}
 .cast span{display:block;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cast div[data-pid]{cursor:pointer}
+.cast div[data-pid]:hover i{outline:2px solid var(--acc);outline-offset:1px}
+.cast div[data-pid]:hover{color:var(--acc)}
+.pc .y{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pic.round{border-radius:50%}
+/* ---------- 订阅页多选 ---------- */
+.selbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5;background:var(--card);
+  padding:10px 0;margin:-4px 0 10px;border-bottom:1px solid var(--line)}
+.selbar .cnt{font-size:13px;color:var(--dim);margin-right:auto}
+.wck{display:none;position:absolute;left:6px;top:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.45);
+  border:2px solid #fff;color:#fff;place-items:center;font-size:14px;line-height:1;z-index:2}
+.selmode .wck{display:grid}
+.selmode .wb{display:none}
+.wt.sel .wck{background:var(--acc);border-color:var(--acc)}
+.wt.sel .wimg{outline:3px solid var(--acc);outline-offset:-1px}
+.selmode .wt:hover .wimg{transform:none}
 
 /* ---------- 日志 ---------- */
 .log{background:#0d1017;color:#cfd6e4;border-radius:10px;padding:12px 14px;height:520px;overflow:auto;
@@ -295,7 +311,7 @@ tr:last-child td{border-bottom:0}
         <div><label class="l">Emby 里的剧名（留空=用监控名称搜索）</label><input type="text" id="m-emby"></div>
         <div><label class="l">到期日（可选，之后不再扫描）</label><input type="date" id="m-end"></div>
       </div>
-      <label class="chk"><input type="checkbox" id="m-tree" checked> 保持分享里的子目录结构（如「第一季」「第二季」文件夹）</label>
+      <label class="chk"><input type="checkbox" id="m-tree"> 保持分享里的子目录结构（如「第一季」「第二季」文件夹；默认不勾选，所有文件平铺到目标目录）</label>
       <div id="m-q-slot"></div>
     </details>
     <div class="actions"><button class="btn pri" id="m-add">＋ 添加监控</button></div>
@@ -326,12 +342,15 @@ tr:last-child td{border-bottom:0}
 <!-- ========== 订阅追更 ========== -->
 <section class="view" id="v-subs">
   <div class="card">
-    <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录；想找新的剧 / 电影 / 动漫，去「🍿 影视推荐」</small></h2>
-    <div class="actions" style="margin-top:0"><button class="btn pri" id="s-new">＋ 搜索并订阅新剧</button>
-      <button class="btn pri" id="s-new-movie">🎬 搜索并订阅电影</button>
-      <button class="btn" id="s-refresh">刷新全部进度</button></div>
+    <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录；想找新的剧 / 电影 / 动漫，去「🍿 影视推荐」搜索并订阅</small></h2>
+    <div class="actions" style="margin-top:0"><button class="btn" id="s-refresh">刷新全部进度</button>
+      <button class="btn" id="s-select">☑ 多选 / 批量删除</button></div>
   </div>
-  <div class="card"><div id="s-filter"></div><div id="s-list"><div class="empty">加载中…</div></div></div>
+  <div class="card"><div class="selbar" id="s-selbar" style="display:none">
+      <span class="cnt" id="s-selcount">已选 0 个</span>
+      <button class="btn sm" id="s-selall">全选</button><button class="btn sm" id="s-selnone">取消选择</button>
+      <button class="btn sm danger" id="s-seldel" disabled>🗑 删除所选</button><button class="btn sm pri" id="s-selexit">完成</button></div>
+    <div id="s-filter"></div><div id="s-list"><div class="empty">加载中…</div></div></div>
 </section>
 
 <!-- ========== 钉钉 ========== -->
@@ -517,6 +536,7 @@ let cur = '', timers = [];
 function go(v) {
   if (!$('#v-' + v)) v = 'monitor';
   cur = v; location.hash = v;
+  $$('.mask').forEach(x => x.remove());   // 从弹窗里跳转时（比如订阅成功后去订阅页），叠在下面的弹窗也一起关掉
   $$('.view').forEach(e => e.classList.toggle('on', e.id === 'v-' + v));
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   timers.forEach(clearInterval); timers = [];
@@ -590,24 +610,34 @@ function mountRecent(slot, input, after) {
 const normName = s => (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 const SEASON_DIR = /^(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|season[\s._-]*\d+|s\d{1,2})$/i;
 const stripSeasonName = s => (s || '').replace(/[\s._-]*(第\s*[0-9一二三四五六七八九十]{1,3}\s*季|season\s*\d+|s\d{1,2})\s*$/i, '');
-function savePathFrom(last, name, season) {     // 把「某条历史目录」的风格套用到这部剧上
-  const suffix = season > 1 ? `/第 ${season} 季` : '';
+function savePathFrom(last, name, season, layout = false) {     // 把「某条历史目录」的风格套用到这部剧上
+  const suffix = !layout && season > 1 ? `/第 ${season} 季` : '';   // Emby 规范目录：季文件夹（Season N）由程序自己建在里面，这里不用加
   const segs = last.path.split('/').filter(Boolean);
   const base = segs.length > 1 && SEASON_DIR.test(segs.at(-1)) ? segs.slice(0, -1) : segs;
   const folder = normName(base.at(-1)), prev = normName(stripSeasonName(last.name));
   const perShow = base.length && folder && prev && folder.includes(prev);   // 只看「文件夹名里有剧名」；反过来（剧名里含文件夹名，如「某电影合集」→「电影」）不算
   return '/' + [...(perShow ? base.slice(0, -1) : base), name].join('/') + suffix;
 }
+// 订阅弹窗里点「浏览…」选了一个目录：在它下面补上这部剧 / 电影自己的文件夹，免得所有内容直接堆进所选目录。
+// 所选目录本身已经是这部的文件夹（名字对得上，或带着 {tmdb-编号}；或者选的是它里面的季文件夹）时，原样使用不重复补。
+function joinShowFolder(picked, plain, folder, season, layout, tv) {
+  const segs = (picked || '').split('/').filter(Boolean), tm = (folder.match(/\{tmdb-\d+\}/) || [''])[0], np = normName(plain);
+  const isShow = x => !!x && ((tm && x.includes(tm)) || (np && normName(x).includes(np)));
+  const last = segs.at(-1) || '', same = isShow(last) || (SEASON_DIR.test(last) && isShow(segs.at(-2)));
+  if (same) return {path: '/' + segs.join('/'), added: false};
+  return {path: '/' + [...segs, folder].join('/') + (tv && !layout && season > 1 ? `/第 ${season} 季` : ''), added: true};
+}
+const browseHint = (m, r, what) => { $('#sd-bh', m).textContent = r.added ? `已在你选的目录下补上这${what}的文件夹，可以直接修改。` : `你选的目录本身就是这${what}的文件夹，已直接使用。`; };
 const lastOf = media => RECENT_DIRS.find(d => (d.media || 'tv') === media);   // 剧集和电影各用各的历史目录，不能把电影推荐到剧集文件夹里
 const FALLBACK_DIR = {tv: '/影视/剧集', movie: '/影视/电影', anime: '/影视/动漫'};
-const defaultSavePath = (name, season, media = 'tv') => { const last = lastOf(media); return last ? savePathFrom(last, name, season)
-  : `${FALLBACK_DIR[media] || FALLBACK_DIR.tv}/${name}${media !== 'movie' && season > 1 ? `/第 ${season} 季` : ''}`; };
+const defaultSavePath = (name, season, media = 'tv', layout = false) => { const last = lastOf(media); return last ? savePathFrom(last, name, season, layout)
+  : `${FALLBACK_DIR[media] || FALLBACK_DIR.tv}/${name}${media !== 'movie' && !layout && season > 1 ? `/第 ${season} 季` : ''}`; };
 // 订阅弹窗里的「推荐目录」：每条历史目录套用到当前这部剧上的结果（去重），点一下填入
-function mountSuggest(slot, input, name, season, media = 'tv') {
+function mountSuggest(slot, input, name, season, media = 'tv', layout = false) {
   if (!slot) return;
   const seen = new Set(), sug = [];
   for (const d of RECENT_DIRS.filter(d => (d.media || 'tv') === media)) {
-    const p = savePathFrom(d, name, season);
+    const p = savePathFrom(d, name, season, layout);
     if (!seen.has(p)) { seen.add(p); sug.push({p, d}); }
     if (sug.length >= 6) break;
   }
@@ -637,9 +667,10 @@ const inText = ts => { const m = Math.round((ts * 1000 - Date.now()) / 60000); r
 /* ======================================================================
    资源搜索（PanSou）：搜索 → 检测 → 勾选 → 回填
    ====================================================================== */
-function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, movie = false, title = '', onPick}) {
+function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, movie = false, title = '', aliases = [], onPick}) {
   const m = modal(`<h3>🔎 搜索资源 <span class="sub" style="font-weight:400">来自 PanSou，只显示夸克网盘</span></h3>
     <div class="row"><div class="grow"><input type="text" id="ps-q" value="${esc(keyword)}" placeholder="输入剧名…"></div><button class="btn pri" id="ps-go">搜索</button></div>
+    ${aliases.length ? `<div class="recent" id="ps-alias"><span class="sub">其他名称（一个名字搜不到就换一个）：</span>${aliases.map(a => `<span class="chip" data-a="${esc(a)}">${esc(a)}</span>`).join('')}</div>` : ''}
     <div class="hint" id="ps-msg">先点「检测」看看里面有多少集、什么画质，再勾选。勾选多个时，从上到下就是检查优先级。</div>
     <div class="ps-list" id="ps-list"></div>
     <div class="ps-foot" id="ps-foot" style="display:none"><button class="btn sm" id="ps-all">检测前 10 个</button><span style="flex:1"></span>
@@ -654,7 +685,7 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
     if (x._r) return true;
     btn.disabled = true; btn.textContent = '检测中…';
     try {
-      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url, season, prefs, title});
+      const r = x._r = await api('/pansou/inspect', 'POST', {url: x.url, season, prefs, title, share_title: x.title});
       if (!r.ok) {
         box.innerHTML = `<span class="tag err">已失效：${esc(r.error)}</span>`;
         const ck = $('.ps-ck', row); ck.checked = false; ck.disabled = true; row.classList.add('dead');
@@ -676,12 +707,19 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
       box.innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; btn.disabled = false; btn.textContent = '重试'; return false;
     }
   }
+  const tried = new Set();
   async function search() {
     const kw = $('#ps-q', m).value.trim(); if (!kw) return;
+    tried.add(kw);
+    $$('#ps-alias .chip', m).forEach(c => c.classList.toggle('on', c.dataset.a === kw));
     msg.className = 'hint'; msg.textContent = '搜索中…（可能需要 10～30 秒）'; list.innerHTML = ''; $('#ps-foot', m).style.display = 'none';
     try {
       items = (await api('/pansou/search?kw=' + encodeURIComponent(kw))).items;
-      if (!items.length) { msg.textContent = '没有找到夸克资源，换个关键词试试（比如去掉「第二季」）'; return; }
+      if (!items.length) {
+        const next = aliases.find(a => !tried.has(a));   // 这个名字没搜到：自动换下一个别名
+        if (next) { msg.textContent = `「${kw}」没有搜到，换别名「${next}」再搜…`; $('#ps-q', m).value = next; return search(); }
+        msg.textContent = aliases.length ? '所有名称都没有搜到夸克资源，可以手动改关键词再试（比如去掉「第二季」）' : '没有找到夸克资源，换个关键词试试（比如去掉「第二季」）'; return;
+      }
       msg.textContent = `找到 ${items.length} 个夸克资源。先点「检测」看看里面有多少集、什么画质，再勾选。`;
       list.innerHTML = items.map((x, i) => `<div class="ps-row" data-i="${i}"><input type="checkbox" class="ps-ck">
         <div class="ps-main"><div class="ps-t" title="${esc(x.title)}">${esc(x.title || x.url)}</div>
@@ -694,7 +732,8 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
       $('#ps-set', m)?.addEventListener('click', () => { m.remove(); go('pansou'); });
     }
   }
-  $('#ps-go', m).onclick = search; $('#ps-q', m).onkeydown = e => { if (e.key === 'Enter') search(); };
+  $$('#ps-alias .chip', m).forEach(c => c.onclick = () => { $('#ps-q', m).value = c.dataset.a; search(); });
+  $('#ps-go', m).onclick = () => { tried.clear(); search(); }; $('#ps-q', m).onkeydown = e => { if (e.key === 'Enter') search(); };
   $('#ps-all', m).onclick = async () => {
     const rows = $$('.ps-row', m).filter(r => !items[r.dataset.i]._r).slice(0, 10), b = $('#ps-all', m); b.disabled = true;
     for (let k = 0; k < rows.length; k++) { b.textContent = `检测中 ${k + 1}/${rows.length}`; if (!(await inspect(rows[k]))) break; await new Promise(r => setTimeout(r, 500)); }
@@ -813,6 +852,8 @@ function editTask(t, reload) {
     </div>
     ${qualityBox('ed-q', t.want_res, t.want_hdr)}
     <label class="l">运行星期</label><div class="chips" id="ed-wk">${wk.map((d, i) => `<span class="chip ${t.run_weeks.includes(i + 1) ? 'on' : ''}" data-d="${i + 1}">周${d}</span>`).join('')}</div>
+    <label class="chk"${hid}><input type="checkbox" id="ed-layout" ${t.emby_layout ? 'checked' : ''}> Emby 规范目录：转存到「转存目录/Season N」，文件命名为「剧名 (年份) - S01E01」</label>
+    <div class="hint"${hid}>修改只影响之后转存的文件，已经转存的旧文件不会被移动；如果改成开启，转存目录请填「剧名 (年份) {tmdb-编号}」这一层。</div>
     <label class="chk"${hid}><input type="checkbox" id="ed-tree" ${t.keep_tree ? 'checked' : ''}> 保持子目录结构</label>
     <label class="chk"${hid}><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
     <label class="chk"${mv ? '' : ' style="display:none"'}><input type="checkbox" id="ed-nocam" ${t.no_cam ? 'checked' : ''}> 排除枪版 / 抢先版（TC、TS、CAM）</label>
@@ -830,7 +871,7 @@ function editTask(t, reload) {
       name: $('#ed-name', m).value, season: $('#ed-season', m).value, include_kw: $('#ed-inc', m).value,
       exclude_kw: $('#ed-exc', m).value, min_size_mb: $('#ed-min', m).value, total_episodes: $('#ed-total', m).value,
       rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
-      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
+      emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, emby_layout: $('#ed-layout', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
     toast('已保存', 'ok'); m.remove(); loadRecent(); reload();
@@ -879,7 +920,7 @@ function posterCard(it, showType = false) {
   const bd = [showType && it.media === 'movie' ? '<span class="t">电影</span>' : '', it.in_emby ? '<span>✓ 已入库</span>' : '', it.sub_id ? '<span class="s">已订阅</span>' : ''].join('');
   return `<div class="pc" data-id="${it.id}" data-media="${it.media || 'tv'}"><div class="img" style="${posterBg(it.poster_url)}">
     ${it.vote_average ? `<div class="rate">★ ${it.vote_average}</div>` : ''}<div class="bd">${bd}</div></div>
-    <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y">${esc(it.year || (it.first_air_date || '').slice(0, 4) || '—')}</div></div>`;
+    <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y" title="${esc(it.character || '')}">${esc(it.year || (it.first_air_date || '').slice(0, 4) || '—')}${it.character ? ' · 饰 ' + esc(it.character) : ''}</div></div>`;
 }
 // 点海报：电影 → 电影详情；剧集 / 番剧 → 剧集详情（动漫板块里两种混排，靠 data-media 区分）
 const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => (p.dataset.media === 'movie' ? showMovieDetail : showDetail)(+p.dataset.id));
@@ -929,6 +970,45 @@ $('#r-more').onclick = () => { rPage++; loadRecommend(true); };
 setBoard('tv', false);
 loaders.recommend = () => loadRecommend();
 
+/* ---------- 演员：点头像看他参演的所有作品；详情最下方：推荐相似作品。弹窗叠在上一层之上，关掉就回到上一个 ---------- */
+const castHTML = cast => cast.length ? `<label class="l" style="margin-top:14px">主演 <span class="sub">（点头像看他的所有作品）</span></label><div class="cast">${cast.map(c =>
+  `<div data-pid="${c.id || ''}" title="查看 ${esc(c.name)} 的所有作品"><i style="background-image:url('${esc(c.profile_url)}')"></i>${esc(c.name)}<span>${esc(c.character)}</span></div>`).join('')}</div>` : '';
+const bindCast = m => $$('.cast [data-pid]', m).forEach(el => { if (el.dataset.pid) el.onclick = () => showPerson(+el.dataset.pid); });
+async function loadSimilar(m, media, id) {
+  const box = document.createElement('div');
+  box.innerHTML = '<label class="l" style="margin-top:16px">推荐相似的作品</label><div class="sim"><div class="sub">加载中…</div></div>';
+  $('.modal', m).append(box);
+  try {
+    const {items} = await api(`/tmdb/${media}/${id}/similar`);
+    if (!items.length) { box.remove(); return; }
+    $('.sim', box).className = 'rail sim'; $('.sim', box).innerHTML = items.map(x => posterCard(x)).join(''); bindPosters(box);
+  } catch (_) { box.remove(); }
+}
+async function showPerson(id) {
+  const m = modal('<div class="empty">加载中…</div>', 'wide');
+  try {
+    const d = await api('/tmdb/person/' + id);
+    let f = 'all';
+    const draw = () => {
+      const shown = d.items.filter(x => f === 'all' || x.media === f);
+      $('#pp-list', m).innerHTML = shown.length ? shown.map(x => posterCard(x, true)).join('') : '<div class="empty" style="grid-column:1/-1">没有作品</div>';
+      bindPosters($('#pp-list', m));
+      $$('#pp-f .chip', m).forEach(c => c.classList.toggle('on', c.dataset.f === f));
+    };
+    $('.modal', m).innerHTML = `<button class="x">×</button>
+      <div class="sd-head"><div class="pic round" style="${posterBg(d.profile_url)}"></div>
+        <div style="min-width:0"><h3>${esc(d.name)}</h3>
+          <div class="sub">${[d.department, d.birthday, d.place_of_birth].filter(Boolean).map(esc).join(' · ')}</div>
+          ${d.biography ? `<details><summary>简介</summary><p style="font-size:12.5px;margin:6px 0 0;color:var(--dim)">${esc(d.biography)}</p></details>` : ''}</div></div>
+      <div class="toolbar" style="margin:16px 0 10px"><b style="font-size:14px">参演作品（${d.items.length}）</b>
+        <div class="chips" id="pp-f" style="margin-left:auto">${[['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) => `<span class="chip" data-f="${k}">${n}</span>`).join('')}</div></div>
+      <div class="posters" id="pp-list"></div>`;
+    $('.x', m).onclick = () => m.remove();
+    $$('#pp-f .chip', m).forEach(c => c.onclick = () => { f = c.dataset.f; draw(); });
+    draw();
+  } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
+}
+
 async function showDetail(id) {
   const m = modal('<div class="empty">加载中…</div>', 'wide');
   try {
@@ -944,8 +1024,9 @@ async function showDetail(id) {
       ${d.seasons.map(s => `<tr><td>${esc(s.name || '第 ' + s.season_number + ' 季')}</td><td>${s.episode_count}</td><td class="sub">${esc(s.air_date || '—')}</td>
         ${'emby_have' in s ? `<td>${s.emby_have}</td>` : (d.seasons.some(x => 'emby_have' in x) ? '<td>—</td>' : '')}
         <td><button class="btn sm pri" data-s="${s.season_number}">订阅此季</button></td></tr>`).join('')}</tbody></table>
-      ${d.cast.length ? `<label class="l" style="margin-top:14px">主演</label><div class="cast">${d.cast.map(c => `<div><i style="background-image:url('${esc(c.profile_url)}')"></i>${esc(c.name)}<span>${esc(c.character)}</span></div>`).join('')}</div>` : ''}`;
+      ${castHTML(d.cast)}`;
     $('.x', m).onclick = () => m.remove();
+    bindCast(m); loadSimilar(m, 'tv', id);
     $$('[data-s]', m).forEach(b => b.onclick = () => { m.remove(); subscribeDialog(d, +b.dataset.s); });
   } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
 }
@@ -968,19 +1049,24 @@ async function showMovieDetail(id) {
         ${upcoming ? `<div class="banner" style="margin:0 0 10px">这部电影 ${esc(d.release_date)} 才上映，订阅后会等上映再找片源（早期流出的多是枪版）。</div>` : ''}
         <div class="actions" style="margin-top:6px">${d.sub_id ? `<button class="btn" id="mv-open">已订阅，去查看</button>`
           : d.in_emby ? '<button class="btn" disabled>Emby 里已经有了</button>' : '<button class="btn pri" id="mv-sub">订阅这部电影</button>'}</div></div></div>
-      ${d.cast.length ? `<label class="l" style="margin-top:14px">主演</label><div class="cast">${d.cast.map(c => `<div><i style="background-image:url('${esc(c.profile_url)}')"></i>${esc(c.name)}<span>${esc(c.character)}</span></div>`).join('')}</div>` : ''}`;
+      ${castHTML(d.cast)}`;
     $('.x', m).onclick = () => m.remove();
+    bindCast(m); loadSimilar(m, 'movie', id);
     $('#mv-sub', m)?.addEventListener('click', () => { m.remove(); subscribeMovieDialog(d); });
     $('#mv-open', m)?.addEventListener('click', async () => { m.remove(); go('subs'); await loadSubs(); openSub(d.sub_id); });
   } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
 }
 
 function subscribeMovieDialog(mv) {
-  const kind = mv.anime ? 'anime' : 'movie', label = mv.year ? `${mv.name} (${mv.year})` : mv.name, last = lastOf(kind);
+  const kind = mv.anime ? 'anime' : 'movie', last = lastOf(kind);
+  const plain = mv.year ? `${mv.name} (${mv.year})` : mv.name, tmdbName = mv.folder_name || plain;   // Emby 规范：片名 (年份) {tmdb-编号}
+  const nameFor = () => $('#sd-layout', m).checked ? tmdbName : plain;
   const m = modal(`<h3>订阅电影《${esc(mv.name)}》${mv.year ? ` (${esc(mv.year)})` : ''}</h3>
     ${mv.release_date && mv.release_date > todayStr() ? `<div class="banner">这部电影 ${esc(mv.release_date)} 才上映。订阅后会等上映再找片源。</div>` : ''}
-    <div class="row"><div class="grow"><label class="l">转存目录（每部电影单独一个文件夹，Emby 推荐命名为「片名 (年份)」）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(label, 1, kind))}"></div>
+    <div class="row"><div class="grow"><label class="l">转存目录（每部电影单独一个文件夹，Emby 推荐命名为「片名 (年份)」）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(tmdbName, 1, kind, true))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
+    <div class="hint" id="sd-bh"></div>
+    <label class="chk"><input type="checkbox" id="sd-layout" checked> 文件夹按 Emby 规范命名：片名 (年份) {tmdb-编号}，方便 Emby 直接认出是哪一部</label>
     <div class="hint" style="margin-top:6px">${last ? `已参照你上次${mv.anime ? '动漫' : '电影'}的目录 ${esc(last.path)}（《${esc(last.name)}》）自动填写；点下面的推荐目录可以切换。` : `还没有${mv.anime ? '动漫' : '电影'}的历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。`}</div><div id="sd-recent"></div>
     <label class="l">分享链接（可留空，让程序自动找）</label>
     <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd" style="min-height:70px"></textarea>
@@ -992,9 +1078,19 @@ function subscribeMovieDialog(mv) {
     <div class="hint">${PANSOU_ON ? '电影只会转存最合适的那一个视频；会排除剧集、合集、预告和枪版。每次的判断理由都有记录。' : '需要先到「资源搜索」页配置 PanSou 才能用。'}</div>
     <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即检查并转存</label>
     <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
-  bindQuality($('#sd-q', m)); mountSuggest($('#sd-recent', m), $('#sd-path', m), label, 1, kind);
-  $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
-  $('#sd-search', m).onclick = () => pansouPicker({keyword: mv.name, movie: true, title: mv.name,
+  bindQuality($('#sd-q', m)); mountSuggest($('#sd-recent', m), $('#sd-path', m), tmdbName, 1, kind, true);
+  let autoPath = $('#sd-path', m).value, parent = null;      // 勾选 / 取消「规范命名」时，如果路径还是自动填的那个，就跟着换；parent = 手动浏览选的上级目录
+  const buildPath = () => parent === null ? defaultSavePath(nameFor(), 1, kind, true) : joinShowFolder(parent, mv.name, nameFor(), 1, true, false).path;
+  $('#sd-layout', m).onchange = () => {
+    const np = buildPath();
+    if ($('#sd-path', m).value === autoPath) $('#sd-path', m).value = np;
+    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), nameFor(), 1, kind, true);
+  };
+  $('#sd-browse', m).onclick = () => browse('', p => {
+    parent = p; const r = joinShowFolder(p, mv.name, nameFor(), 1, true, false);
+    $('#sd-path', m).value = autoPath = r.path; browseHint(m, r, '部电影');
+  });
+  $('#sd-search', m).onclick = () => pansouPicker({keyword: mv.name, movie: true, title: mv.name, aliases: mv.aliases || [],
     prefs: {...prefsOf(readQuality($('#sd-q', m))), no_cam: $('#sd-nocam', m).checked}, onPick: urls => appendLinks($('#sd-links', m), urls)});
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
@@ -1005,27 +1101,19 @@ function subscribeMovieDialog(mv) {
     m.remove(); toast(auto ? '已订阅，正在自动找片源…（可到订阅详情查看进度）' : '已订阅', 'ok'); go('subs');
   });
 }
-$('#s-new-movie').onclick = () => {
-  const m = modal(`<h3>搜索电影</h3><div class="row"><div class="grow"><input type="text" id="ss-q" placeholder="输入片名…"></div><button class="btn pri" id="ss-go">搜索</button></div>
-    <div id="ss-res" style="margin-top:14px"></div>`);
-  const run = guard(async () => {
-    const q = $('#ss-q', m).value.trim(); if (!q) return;
-    const {items} = await api('/tmdb/movie/search?q=' + encodeURIComponent(q));
-    $('#ss-res', m).innerHTML = items.length ? `<div class="posters">${items.slice(0, 12).map(posterCard).join('')}</div>` : '<div class="empty">没有找到</div>';
-    $$('.pc', m).forEach(p => p.onclick = () => { m.remove(); showMovieDetail(+p.dataset.id); });
-  });
-  $('#ss-go', m).onclick = run; $('#ss-q', m).onkeydown = e => e.key === 'Enter' && run(); $('#ss-q', m).focus();
-};
-
 /* ======================================================================
    订阅追更
    ====================================================================== */
 function subscribeDialog(show, season = 1) {
   const kind = show.anime ? 'anime' : 'tv', kindName = show.anime ? '动漫' : '剧集';   // 动漫和普通剧集各记各的目录
+  const tmdbName = show.folder_name || show.name;                                       // Emby 规范：剧名 (年份) {tmdb-编号}
+  const nameFor = () => $('#sd-layout', m).checked ? tmdbName : show.name;
   const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
     <div class="row"><div style="width:110px"><label class="l">季号</label><input type="number" id="sd-season" min="0" value="${season}"></div>
-    <div class="grow"><label class="l">转存目录</label><input type="text" id="sd-path" value="${esc(defaultSavePath(show.name, season, kind))}"></div>
+    <div class="grow"><label class="l">转存目录（剧集文件夹）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(tmdbName, season, kind, true))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
+    <label class="chk"><input type="checkbox" id="sd-layout" checked> <span>按 Emby 规范建目录：<b>剧名 (年份) {tmdb-编号}</b> / <b>Season N</b> / <b>剧名 (年份) - S01E01</b>.mp4</span></label>
+    <div class="hint" id="sd-struct"></div><div class="hint" id="sd-bh"></div>
     <div class="hint" style="margin-top:6px">${lastOf(kind)
       ? `已参照你上次${kindName}的目录 ${esc(lastOf(kind).path)}（《${esc(lastOf(kind).name)}》）自动填写，每部剧单独一个文件夹；点下面的推荐目录可以切换。`
       : '还没有历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。'}</div><div id="sd-recent"></div>
@@ -1037,43 +1125,41 @@ function subscribeDialog(show, season = 1) {
     ${qualityBox('sd-q')}
     <label class="chk"><input type="checkbox" id="sd-auto" ${PANSOU_ON ? 'checked' : 'disabled'}> 🤖 自动找资源：订阅后自动搜索并添加分享链接，之后定时检查有没有新资源（推荐）</label>
     <div class="hint">${PANSOU_ON ? '添加前会先检测内容：必须是这一季、画质符合、能补上你缺的集数才会加；每次的判断理由都有记录。你自己填的链接优先级最高。' : '需要先到「资源搜索」页配置 PanSou 才能用。'}</div>
-    <label class="chk"><input type="checkbox" id="sd-tree" checked> 保持分享里的子目录结构</label>
+    <label class="chk"><input type="checkbox" id="sd-tree"> 保持分享里的子目录结构（默认不勾选：统一放进上面的目录并按集命名）</label>
     <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即转存缺少的集数</label>
     <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
   $('#sd-search', m).onclick = () => {
     const sn = +$('#sd-season', m).value, eps = (show.seasons || []).find(s => s.season_number === sn)?.episode_count || 0;
-    pansouPicker({keyword: show.name, total: eps, season: sn, prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
+    pansouPicker({keyword: show.name, total: eps, season: sn, aliases: show.aliases || [], prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
   };
   bindQuality($('#sd-q', m));
-  let autoPath = $('#sd-path', m).value;      // 改季号时，如果路径还是自动填的那个，就跟着换（带不带「第 N 季」）
-  const refreshPaths = () => {
-    const s = +$('#sd-season', m).value || 1, np = defaultSavePath(show.name, s, kind);
-    if ($('#sd-path', m).value === autoPath) $('#sd-path', m).value = np;
-    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), show.name, s, kind);
+  let autoPath = $('#sd-path', m).value, parent = null;      // 改季号时，如果路径还是自动填的那个，就跟着换（带不带「第 N 季」）；parent = 手动浏览选的上级目录
+  const layoutOn = () => $('#sd-layout', m).checked;
+  const refreshStruct = () => {
+    const s = +$('#sd-season', m).value || 0, p = $('#sd-path', m).value.replace(/\/+$/, '');
+    $('#sd-struct', m).textContent = layoutOn() ? `实际转存到：${p}/${s ? 'Season ' + s : 'Specials'}/　文件命名：${show.name}${show.year ? ' (' + show.year + ')' : ''} - S${String(s).padStart(2, '0')}E01.mp4` : `实际转存到：${p}`;
   };
-  $('#sd-season', m).addEventListener('input', refreshPaths); refreshPaths();
-  $('#sd-browse', m).onclick = () => browse('', p => $('#sd-path', m).value = p);
+  const refreshPaths = () => {
+    const s = +$('#sd-season', m).value || 1,
+      np = parent === null ? defaultSavePath(nameFor(), s, kind, layoutOn()) : joinShowFolder(parent, show.name, nameFor(), s, layoutOn(), true).path;
+    if ($('#sd-path', m).value === autoPath) $('#sd-path', m).value = np;
+    autoPath = np; mountSuggest($('#sd-recent', m), $('#sd-path', m), nameFor(), s, kind, layoutOn()); refreshStruct();
+  };
+  $('#sd-season', m).addEventListener('input', refreshPaths); $('#sd-layout', m).onchange = refreshPaths;
+  $('#sd-path', m).addEventListener('input', refreshStruct); refreshPaths();
+  $('#sd-browse', m).onclick = () => browse('', p => {
+    parent = p; const r = joinShowFolder(p, show.name, nameFor(), +$('#sd-season', m).value || 1, layoutOn(), true);
+    $('#sd-path', m).value = autoPath = r.path; browseHint(m, r, '部剧'); refreshStruct();
+  });
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
     await api('/subscriptions', 'POST', {tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
       links_text: $('#sd-links', m).value, interval: $('#sd-int', m).value, total_episodes: $('#sd-total', m).value,
-      keep_tree: $('#sd-tree', m).checked, save_existing: $('#sd-exist', m).checked, auto_find: $('#sd-auto', m).checked, ...readQuality($('#sd-q', m))});
+      keep_tree: $('#sd-tree', m).checked, emby_layout: layoutOn(), save_existing: $('#sd-exist', m).checked, auto_find: $('#sd-auto', m).checked, ...readQuality($('#sd-q', m))});
     const auto = $('#sd-auto', m).checked; loadRecent();
     m.remove(); toast(auto ? '已订阅，正在自动搜索资源…（可到订阅详情查看进度）' : '已订阅', 'ok'); go('subs');
   });
 }
-$('#s-new').onclick = () => {
-  const m = modal(`<h3>搜索剧集</h3><div class="row"><div class="grow"><input type="text" id="ss-q" placeholder="输入剧名…"></div><button class="btn pri" id="ss-go">搜索</button></div>
-    <div id="ss-res" style="margin-top:14px"></div>`);
-  const run = guard(async () => {
-    const q = $('#ss-q', m).value.trim(); if (!q) return;
-    const {items} = await api('/tmdb/search?q=' + encodeURIComponent(q));
-    $('#ss-res', m).innerHTML = items.length ? `<div class="posters">${items.slice(0, 12).map(posterCard).join('')}</div>` : '<div class="empty">没有找到</div>';
-    $$('.pc', m).forEach(p => p.onclick = () => { m.remove(); showDetail(+p.dataset.id); });
-  });
-  $('#ss-go', m).onclick = run; $('#ss-q', m).onkeydown = e => e.key === 'Enter' && run(); $('#ss-q', m).focus();
-};
-
 let subsData = [], subModal = null;
 const liveProg = {};
 const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleString('zh-CN', {hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : '';
@@ -1089,7 +1175,7 @@ function movieTileHTML(t) {
   const state = done ? '✓ 已入库' : upcoming ? `未上映 · ${t.release_date}` : t.status === 'nolinks' ? (t.auto_find ? '找片源中…' : '待添加链接') : s ? '等待入库' : '未检查';
   const d = t.links.filter(l => l.ban).length;
   return `<div class="wt" data-id="${t.id}">
-    <div class="wimg" style="${posterBg(t.poster)}">
+    <div class="wimg" style="${posterBg(t.poster)}"><span class="wck">✓</span>
       ${t.poster ? '' : `<span class="wph">${esc(t.name)}</span>`}
       ${b && !done ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}<span class="wm" style="background:rgba(0,0,0,.62)">🎬</span>
       <div class="wov"><div class="wbar"><i style="width:${done ? 100 : 0}%"></i></div>${state}</div></div>
@@ -1101,7 +1187,7 @@ function tileHTML(t) {
   const s = t.snap, b = badgeOf(t), base = s ? (s.aired ?? s.total ?? 0) : 0;
   const pct = s && base ? Math.min(100, Math.round(s.have / base * 100)) : 0;
   return `<div class="wt" data-id="${t.id}">
-    <div class="wimg" style="${posterBg(t.poster)}">
+    <div class="wimg" style="${posterBg(t.poster)}"><span class="wck">✓</span>
       ${t.poster ? '' : `<span class="wph">${esc(t.name)}</span>`}
       ${b ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}${s && s.missing_n ? `<span class="wm">缺 ${s.missing_n}</span>` : ''}
       <div class="wov"><div class="wbar"><i style="width:${pct}%"></i></div>${s ? `${s.have}${base ? ' / ' + base : ''} 集` : '未扫描'}</div></div>
@@ -1119,10 +1205,41 @@ function renderWall() {
     `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('')}</div>` : '';
   $$('#s-filter .chip').forEach(c => c.onclick = () => { subsFilter = c.dataset.f; renderWall(); });
   const shown = tasks.filter(t => subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie'));
-  box.innerHTML = shown.length ? `<div class="wall">${shown.map(tileHTML).join('')}</div>`
-    : '<div class="empty">还没有订阅。点上面「搜索并订阅新剧 / 电影」，或去「影视推荐」点一部。</div>';
-  $$('.wt', box).forEach(el => el.onclick = () => openSub(el.dataset.id));
+  for (const id of [...selSet]) if (!tasks.some(t => t.id === id)) selSet.delete(id);   // 已经不存在的（比如被删了）不再保留选中
+  box.innerHTML = shown.length ? `<div class="wall ${selMode ? 'selmode' : ''}">${shown.map(tileHTML).join('')}</div>`
+    : '<div class="empty">还没有订阅。去「🍿 影视推荐」搜索或点一部，进详情页就能订阅。</div>';
+  $$('.wt', box).forEach(el => {
+    el.classList.toggle('sel', selSet.has(el.dataset.id));
+    el.onclick = () => selMode ? toggleSel(el.dataset.id, el) : openSub(el.dataset.id);
+  });
+  renderSelBar();
 }
+/* ---------- 多选 / 批量删除 ---------- */
+let selMode = false; const selSet = new Set();
+const shownIds = () => subsData.filter(t => subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie')).map(t => t.id);
+function renderSelBar() {
+  $('#s-selbar').style.display = selMode ? '' : 'none';
+  $('#s-select').style.display = selMode ? 'none' : '';
+  $('#s-selcount').textContent = selSet.size ? `已选 ${selSet.size} 个` : '点海报选择要删除的订阅';
+  $('#s-seldel').disabled = !selSet.size;
+  const ids = shownIds(); $('#s-selall').textContent = ids.length && ids.every(i => selSet.has(i)) ? '取消全选' : '全选';
+}
+function toggleSel(id, el) {
+  selSet.has(id) ? selSet.delete(id) : selSet.add(id);
+  el?.classList.toggle('sel', selSet.has(id)); renderSelBar();
+}
+function setSelMode(on) { selMode = on; if (!on) selSet.clear(); renderWall(); }
+$('#s-select').onclick = () => setSelMode(true);
+$('#s-selexit').onclick = () => setSelMode(false);
+$('#s-selall').onclick = () => { const ids = shownIds(), all = ids.every(i => selSet.has(i)); ids.forEach(i => all ? selSet.delete(i) : selSet.add(i)); renderWall(); };
+$('#s-selnone').onclick = () => { selSet.clear(); renderWall(); };
+$('#s-seldel').onclick = guard(async () => {
+  const sel = subsData.filter(t => selSet.has(t.id)); if (!sel.length) return;
+  const names = sel.slice(0, 6).map(t => `《${t.name}》`).join('、') + (sel.length > 6 ? ` 等 ${sel.length} 个` : '');
+  if (!confirm(`删除选中的 ${sel.length} 个订阅？\n${names}\n\n只删除订阅记录，已转存到网盘的文件不会被删除。`)) return;
+  const r = await api('/tasks/batch-delete', 'POST', {ids: sel.map(t => t.id)});
+  toast(`已删除 ${r.deleted} 个订阅`, 'ok'); selSet.clear(); await loadSubs();
+});
 async function loadSubs() {
   subsData = (await api('/tasks?kind=subscription')).tasks;
   renderWall();
@@ -1215,13 +1332,17 @@ function renderSub(m, t, tab) {
     await api(`/tasks/${t.id}/find`, 'POST'); toast('正在搜索，过几秒刷新就能看到判断记录', 'ok');
     setTimeout(() => reload('links'), 4000); setTimeout(() => reload('links'), 12000);
   }));
-  $('[data-psearch]', m)?.addEventListener('click', () => pansouPicker({
-    keyword: t.name, total: t.media === 'movie' ? 0 : (t.snap?.total || 0), aired: t.media === 'movie' ? 0 : (t.snap?.aired || 0), season: t.season,
-    movie: t.media === 'movie', title: t.name, prefs: {res: t.want_res, hdr: t.want_hdr, no_cam: t.no_cam},
-    onPick: guard(async urls => {
-      await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).concat(urls).join('\n')});
-      toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
-    })}));
+  $('[data-psearch]', m)?.addEventListener('click', guard(async () => {
+    let aliases = t.aliases || [];   // 老订阅没存过别名：从 TMDB 取一次（取不到也不影响搜索）
+    if (!aliases.length && t.tmdb_id) aliases = await api(`/tmdb/${t.media === 'movie' ? 'movie' : 'tv'}/${t.tmdb_id}`).then(d => d.aliases || []).catch(() => []);
+    pansouPicker({
+      keyword: t.name, total: t.media === 'movie' ? 0 : (t.snap?.total || 0), aired: t.media === 'movie' ? 0 : (t.snap?.aired || 0), season: t.season,
+      movie: t.media === 'movie', title: t.name, aliases, prefs: {res: t.want_res, hdr: t.want_hdr, no_cam: t.no_cam},
+      onPick: guard(async urls => {
+        await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).concat(urls).join('\n')});
+        toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
+      })});
+  }));
   $('[data-resetlk]', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); await reload('links'); }));
   $$('[data-act]', m).forEach(x => x.onclick = guard(async () => {
     const a = x.dataset.act;

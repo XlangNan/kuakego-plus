@@ -227,6 +227,7 @@ tr:last-child td{border-bottom:0}
 .cast div[data-pid]:hover i{outline:2px solid var(--acc);outline-offset:1px}
 .cast div[data-pid]:hover{color:var(--acc)}
 .pc .y{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actors{margin:0 0 16px}
 .pic.round{border-radius:50%}
 /* ---------- 订阅页多选 ---------- */
 .selbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5;background:var(--card);
@@ -924,19 +925,24 @@ function posterCard(it, showType = false) {
 }
 // 点海报：电影 → 电影详情；剧集 / 番剧 → 剧集详情（动漫板块里两种混排，靠 data-media 区分）
 const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => (p.dataset.media === 'movie' ? showMovieDetail : showDetail)(+p.dataset.id));
+const actorRow = people => `<div class="actors"><label class="l">演员</label><div class="cast">${people.map(p =>
+  `<div data-pid="${p.id}" title="${esc(p.known_for.join('、'))}"><i style="background-image:url('${esc(p.profile_url)}')"></i>${esc(p.name)}<span>${esc(p.known_for[0] || '')}</span></div>`).join('')}</div></div>`;
 async function loadRecommend(append = false) {
   const body = $('#r-body'), more = $('#r-more'), sc = rScope, my = ++rReq, typed = sc === 'anime';
   const stale = () => my !== rReq;   // 加载期间用户切了板块 / 分类：丢掉过期的结果，免得串台
   try {
     if (rQuery || rCat !== 'home') {
       if (!append) { rPage = 1; body.innerHTML = '<div class="empty">加载中…</div>'; }
-      const d = rQuery ? await api(`/tmdb/search?scope=${sc}&q=${encodeURIComponent(rQuery)}&page=${rPage}`)
-        : await api(`/tmdb/discover?scope=${sc}&category=${rCat}&sort=${$('#r-sort').value}&page=${rPage}`);
+      const first = !append && !!rQuery;   // 演员只在第一页搜索时查；"加载更多"不重复
+      const ppl = first ? api(`/tmdb/person-search?q=${encodeURIComponent(rQuery)}`).then(r => r.items || []).catch(() => []) : Promise.resolve([]);
+      const [d, people] = await Promise.all([rQuery ? api(`/tmdb/search?scope=${sc}&q=${encodeURIComponent(rQuery)}&page=${rPage}`)
+        : api(`/tmdb/discover?scope=${sc}&category=${rCat}&sort=${$('#r-sort').value}&page=${rPage}`), ppl]);
       if (stale()) return;
       rTotal = d.total_pages;
-      if (!append) body.innerHTML = '<div class="posters"></div>';
-      if (!d.items.length && !append) body.innerHTML = '<div class="empty">没有找到结果</div>';
+      if (!append) body.innerHTML = (people.length ? actorRow(people) : '') + '<div class="posters"></div>';
+      if (!d.items.length && !append) { if (!people.length) body.innerHTML = '<div class="empty">没有找到结果</div>'; else $('.posters', body).remove(); }
       else $('.posters', body).insertAdjacentHTML('beforeend', d.items.map(x => posterCard(x, typed)).join(''));
+      $$('.actors [data-pid]', body).forEach(el => el.onclick = () => showPerson(+el.dataset.pid));
       bindPosters(body); more.style.display = rPage < rTotal ? '' : 'none';
     } else {
       more.style.display = 'none'; body.innerHTML = '<div class="empty">加载中…</div>';

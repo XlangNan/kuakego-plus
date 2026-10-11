@@ -94,6 +94,35 @@ def test_weird_single_video_not_guessed_when_several_episodes_missing(env):
     assert fq.saves == []
 
 
+def test_episodes_beyond_season_total_are_not_saved(env):
+    store, eng = env; no_emby(store, eng)
+    shares = {"w": {"files": [(f"我的大叔.S01E{i:02d}.1080p.mkv", 2 * G) for i in (1, 2, 17, 28)]}}
+    fq, t = mk(eng, shares, ["w"], kind="subscription", total_episodes=16, savepath="/剧/我的大叔")
+    eng.run_task(t["id"], manual=True)
+    assert [n for _, n in fq.saves] == ["我的大叔.S01E01.1080p.mkv", "我的大叔.S01E02.1080p.mkv"]   # E17 / E28 超过总集数 16，不转
+
+
+def test_other_version_tag_in_title_is_rejected():
+    names = [("我的大叔", "我的大叔")]
+    t = "秋雪漫过的冬天 / 我的大叔(中国版) / 谢谢你听见我 / 你一定要幸福呀(2026)【4K.60fps】"
+    assert E.Engine._other_version({"name": "我的大叔", "aliases": []}, names, t) == "中国版"
+    assert E.Engine._other_version({"name": "我的大叔(中国版)", "aliases": []}, names, t) is None
+    assert E.Engine._other_version({"name": "我的大叔", "aliases": []}, names, "我的大叔 全16集 4K") is None
+
+
+def test_title_upto_and_single_ep_judge():
+    assert E.Engine._title_upto("Doctor X 2026 更至第1集 1080p") == 1
+    assert E.Engine._title_upto("某剧 更新至12集") == 12 and E.Engine._title_upto("某剧 全16集") is None
+    store, eng = new_env()
+    r = {"ok": True, "seasons_explicit": [], "eps_list": [(1, 1)], "eps_ok_list": [(1, 1)], "prefs_set": False, "videos": 1,
+         "avg_mb": 800, "unparsed": 0, "quality": []}
+    task = {"season": 1}
+    assert eng._judge(task, {1}, r, set(), {1, 2}, 12, "Doctor X 更至第1集 1080p")[0] == "ok"
+    assert eng._judge(task, {1}, r, set(), {1, 2}, 12, "Doctor X 全12集 1080p")[0] == "reject"
+    r2 = {**r, "eps_list": [(1, 28)], "eps_ok_list": [(1, 28)]}
+    assert eng._judge(task, {1}, {**r2, "eps_list": [(1, i) for i in range(1, 29)], "eps_ok_list": [(1, i) for i in range(1, 29)]}, set(), set(range(1, 17)), 16, "t")[0] == "reject"
+
+
 def test_auto_find_accepts_single_weird_episode_resource():
     shares = {"one": {"files": [("dir", "怪目录", [("xYz.2160p.mkv", 2 * G)])]}}
     store, eng, fq, ps, calls, t = af_setup(items=[item("one", "庆余年 第8集 2160P")], shares=shares, season=1, total_episodes=8,
@@ -168,6 +197,18 @@ def test_person_credits_sorted_deduped_and_filtered():
     d = fake_tmdb({"/person/7": {"id": 7, "name": "某演员", "profile_path": "/p", "biography": "x" * 900, "combined_credits": cc}}).person(7)
     assert [(x["media"], x["id"]) for x in d["items"]] == [("movie", 2), ("tv", 1)] and d["items"][1]["character"] == "甲"
     assert d["name"] == "某演员" and len(d["biography"]) == 500 and d["profile_url"].endswith("/w185/p")
+
+
+def test_person_search_filters_and_sorts():
+    res = [{"id": 1, "name": "张若昀", "profile_path": "/a", "known_for_department": "Acting", "popularity": 3, "known_for": [{"name": "庆余年"}]},
+           {"id": 2, "name": "无头像", "profile_path": None, "known_for": [{"name": "X"}], "popularity": 99},
+           {"id": 3, "name": "无作品", "profile_path": "/c", "known_for": [], "popularity": 99},
+           {"id": 4, "name": "Tom Hanks", "profile_path": "/d", "known_for_department": "Acting", "popularity": 60, "known_for": [{"title": "Cast Away"}]},
+           {"id": 5, "name": "路人", "profile_path": "/e", "known_for_department": "Crew", "popularity": 1, "known_for": [{"name": "Y"}]}]
+    d = fake_tmdb({"/search/person": {"results": res}}).person_search("张若昀")
+    assert [x["id"] for x in d["items"]] == [1, 4]          # 名字命中的在前；别名命中但热度高的保留；低热度杂音丢掉
+    assert d["items"][0]["known_for"] == ["庆余年"] and d["items"][0]["profile_url"].endswith("/w185/a")
+    assert fake_tmdb({"/search/person": {"results": []}}).person_search("庆余年")["items"] == []
 
 
 def test_similar_uses_recommendations_then_similar():

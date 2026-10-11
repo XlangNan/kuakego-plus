@@ -187,6 +187,29 @@ class Tmdb:
                 "place_of_birth": d.get("place_of_birth") or "", "department": d.get("known_for_department") or "",
                 "items": items[:90]}
 
+    def person_search(self, q, limit=8):
+        """按名字搜演员。没有头像、没有代表作的人丢掉；演员排前面，同类再按热度。
+        名字和搜索词对不上（比如用中文名搜外国演员，靠别名命中）的，要热度够高才留，免得把搜剧名时的杂音带出来。"""
+        d = self._get("/search/person", 600, query=q, page=1)
+        nq, rows = norm_title(q), []
+        for x in d.get("results") or []:
+            known = [k.get("name") or k.get("title") or "" for k in (x.get("known_for") or [])]
+            known = [k for k in known if k]
+            if not x.get("profile_path") or not known:
+                continue
+            nn = norm_title(x.get("name") or "")
+            hit = bool(nn and nq and (nq in nn or nn in nq))
+            pop = x.get("popularity") or 0
+            if not hit and pop < 5:
+                continue
+            rows.append({"id": x["id"], "name": x.get("name") or "", "profile_url": self._url(x["profile_path"], "w185"),
+                         "department": x.get("known_for_department") or "", "known_for": known[:3],
+                         "_k": (0 if hit else 1, 0 if x.get("known_for_department") == "Acting" else 1, -pop)})
+        rows.sort(key=lambda r: r["_k"])
+        for r in rows:
+            r.pop("_k")
+        return {"items": rows[:limit]}
+
     def similar(self, media, tmdb_id):
         """推荐相似的作品：先取 TMDB 的「推荐」，不够再补「相似」。"""
         media = "movie" if media == "movie" else "tv"

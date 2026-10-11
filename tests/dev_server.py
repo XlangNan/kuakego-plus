@@ -45,7 +45,11 @@ class Tmdb(BaseHTTPRequestHandler):
             if with_g == "16": return [x for x in items if 16 in x["genre_ids"]]
             if without_g == "16": return [x for x in items if 16 not in x["genre_ids"]]
             return items
-        if p.startswith("/person/"):
+        if p == "/search/person":
+            hit = "张若昀" in q.get("query", [""])[0]
+            d = {"results": [{"id": 501, "name": "张若昀", "profile_path": "/z.jpg", "known_for_department": "Acting", "popularity": 30,
+                              "known_for": [{"name": SHOWS[0]["name"]}, {"title": "某电影"}]}] if hit else [], "total_pages": 1}
+        elif p.startswith("/person/"):
             d = {"id": 501, "name": "张若昀", "profile_path": None, "known_for_department": "Acting", "birthday": "1988-08-13", "place_of_birth": "北京",
                  "biography": "中国内地男演员。" * 10,
                  "combined_credits": {"cast": [{"id": x["id"], "media_type": "tv", "name": x["name"], "first_air_date": x["first_air_date"], "vote_average": x["vote_average"],

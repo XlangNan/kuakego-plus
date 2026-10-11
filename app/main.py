@@ -19,7 +19,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
 
-VERSION = "1.1.2"
+VERSION = "1.1.5"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
@@ -405,6 +405,13 @@ def create_app(store=None, engine=None):
             except Exception:
                 pass
         return jsonify(d)
+
+    @app.get("/api/tmdb/person-search")
+    def tmdb_person_search():
+        q, tm = request.args.get("q", "").strip(), tmdb_or_400()
+        if not q:
+            return jsonify(items=[])
+        return jsonify(tmdb_call(tm.person_search, q))
 
     @app.get("/api/tmdb/person/<int:pid>")
     def tmdb_person(pid):

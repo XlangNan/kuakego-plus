@@ -553,6 +553,7 @@ class Engine:
         chosen = {}   # 集数 -> 已选中的候选，同一集有多个版本（4K / 1080P、HDR / 普通）时挑最好的那个
         videos = [f["file_name"] for f, _, _ in entries if is_video(f["file_name"])]
         solo_name = videos[0] if len(videos) == 1 else None
+        _, season_total, _src = self.wanted(task)
 
         def tr(name, eps, action, why):
             if trace is not None:
@@ -586,6 +587,9 @@ class Engine:
                     continue
             if fname in baseline:
                 tr(fname, eps, "skip", "添加监控时就已存在（当时选了只追新）")
+                continue
+            if season_total and eps and any(sn == task["season"] and e > season_total for sn, e in eps):
+                tr(fname, eps, "skip", f"集号超过本季总集数 {season_total}，多半是花絮 / 特辑 / 别的版本，不转存")
                 continue
             rank = self._version_rank(f, share_title)
             prev = chosen.get(tuple(eps)) if eps else None
@@ -906,17 +910,37 @@ class Engine:
             if r["prefs_set"] and everything:
                 return "reject", f"有第 {S} 季的集，但没有符合你画质要求的（{r.get('why_skipped') or '分享里是：' + ('、'.join(r['quality']) or '没标注画质')}）", 0
             return "reject", f"没有识别到第 {S} 季的集数", 0
-        if total and max(rel) > total * 1.5 + 5:
+        if total and max(rel) > total + max(2, total // 5):
             return "reject", f"最大集号 {max(rel)} 远超本季总集数 {total}，可能不是这部剧或是合集", 0
         if r["videos"] and r["avg_mb"] < AUTO_MIN_AVG_MB:
             return "reject", f"平均每个视频只有 {r['avg_mb']} MB，多半是花絮 / 预告", 0
         useful = (rel & need) if need is not None else (rel - mine)
         if not useful:
             return "reject", f"现在能提供 {fmt_eps([(S, x) for x in rel])}，没有你缺的集", 0
-        if len(rel) < 2 and not (need is not None and len(need) == 1):
+        if len(rel) < 2 and not (need is not None and len(need) == 1) and self._title_upto(title) != max(rel):
+            # 标题写着「更至第 N 集」且正好等于这里唯一的一集：刚开播的新剧，只有 1 集就是它本来的样子
             return "reject", "只有 1 集，不像完整的资源", 0
         extra = f"（另有 {r['skipped_videos']} 个不符合画质要求的视频会被跳过）" if r.get("skipped_videos") else ""
         return "ok", f"能补你缺的 {len(useful)} 集：{fmt_eps([(S, x) for x in useful])}{extra}", len(useful)
+
+    _VERSION_TAG = r"(中国版|国产版|国版|中版|大陆版|日本?版|韩国?版|美国?版|泰国?版|英国?版|港版|台版|翻拍版?|重制版?|真人版)"
+
+    @classmethod
+    def _other_version(cls, task, names, title):
+        """标题里「名字(中国版)」这类标注，说明是同名剧的另一个国家 / 翻拍版本。
+        订阅本身（名称、别名）没带这个标注的话，就不是要的那一部，返回标注文字；没有返回 None。"""
+        mine = " ".join([task.get("name", "")] + list(task.get("aliases") or []))
+        for n, _ in names:
+            for m in re.finditer(re.escape(n) + r"\s*[（(\[【]\s*" + cls._VERSION_TAG, title or ""):
+                if m.group(1) not in mine:
+                    return m.group(1)
+        return None
+
+    @staticmethod
+    def _title_upto(title):
+        """标题里「更至 / 更新至 / 连载至 第 N 集」的 N；没写返回 None。"""
+        m = re.search(r"(?:更新?至|更新?到|连载至|连载到)\s*(?:第\s*)?(\d{1,4})\s*[集话話期]?", title or "")
+        return int(m.group(1)) if m else None
 
     # ---- 名称 / 别名 ----
     @staticmethod
@@ -1004,7 +1028,7 @@ class Engine:
         groups = [[n] + ([f"{n} 第{S}季"] if S > 1 and gi < 2 else []) for gi, (n, _) in enumerate(names)]
         known = {l["pwd_id"] for l in task["links"]}
         results = self._search_by_names(ps, names, groups, known, note)
-        skip = {"已有": 0, "名字对不上": 0, "标题写的是别的季": 0, "最近看过": 0}
+        skip = {"已有": 0, "名字对不上": 0, "标题写的是别的季": 0, "标题标的是别的版本": 0, "最近看过": 0}
         cands = []
         for it in results:
             if it["pwd_id"] in known:
@@ -1013,6 +1037,9 @@ class Engine:
             hit = self._match_name(names, it["title"])
             if not hit:
                 skip["名字对不上"] += 1
+                continue
+            if self._other_version(task, names, it["title"]):
+                skip["标题标的是别的版本"] += 1   # 例如「我的大叔(中国版)」不是韩剧原版
                 continue
             ment = title_seasons(it["title"], hit)
             if ment and S not in ment:
@@ -1258,7 +1285,7 @@ class Engine:
         groups = [[n] + ([f"{n} {year}"] if year else []) for n, _ in names]
         known = {l["pwd_id"] for l in task["links"]}
         results = self._search_by_names(ps, names, groups, known, note)
-        skip = {"已有": 0, "名字对不上": 0, "年份对不上": 0, "最近看过": 0}
+        skip = {"已有": 0, "名字对不上": 0, "年份对不上": 0, "标题标的是别的版本": 0, "最近看过": 0}
         cands = []
         for it in results:
             if it["pwd_id"] in known:
@@ -1266,6 +1293,9 @@ class Engine:
                 continue
             if not self._match_name(names, it["title"]):
                 skip["名字对不上"] += 1
+                continue
+            if self._other_version(task, names, it["title"]):
+                skip["标题标的是别的版本"] += 1
                 continue
             years = {int(y) for y in re.findall(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", it["title"])}
             if year and years and not (years & {year - 1, year, year + 1}):

@@ -5,8 +5,8 @@
 <p align="center">夸克网盘追更工具：一部剧挂多个分享链接，按顺序检查，<b>只转存 Emby 里缺少的集数</b>。<br>
 自带 Web 管理界面，Docker 一键部署。</p>
 
----
-QQ讨论群：1127487832
+<p align="center">Docker 镜像：<code>xlangnan/kuakego-plus:latest</code>　｜　QQ 讨论群：<b>1127487832</b></p>
+
 ---
 
 ## 来源与致谢
@@ -262,12 +262,12 @@ volumes:
 
 **Cookie 失效？** 页面顶部会出现黄色提示，重新粘贴即可。自动签到需要 Cookie 里含 `kps` / `sign` / `vcode`（需从手机端抓取）。
 
-**国内自己构建镜像时 pip 超时？** Dockerfile 默认使用清华镜像源。可覆盖：`docker build --build-arg PIP_INDEX_URL=https://pypi.org/simple -t kuakego-plus .`
+**国内自己构建镜像时 pip 超时？** Dockerfile 默认使用清华镜像源。可覆盖：`docker build --build-arg PIP_INDEX_URL=https://pypi.org/simple -t xlangnan/kuakego-plus:latest .`
 
 ## 自行构建
 
 ```bash
-git clone https://github.com/<你的GitHub用户名>/kuakego-plus.git
+git clone https://github.com/XlangNan/kuakego-plus.git
 cd kuakego-plus
 # 编辑 docker-compose.yml 里的 WEBUI_PASSWORD
 docker compose up -d --build
@@ -283,6 +283,11 @@ docker compose up -d --build
    - `DOCKERHUB_USERNAME`：你的 Docker Hub 用户名
    - `DOCKERHUB_TOKEN`：上一步生成的令牌
 4. 推送到 `main` 分支会生成 `latest` 镜像；打版本标签（如 `git tag v1.0.3 && git push origin v1.0.3`）会额外生成 `1.0.3`、`1.0` 标签。
+
+## 交流与反馈
+
+- QQ 讨论群：**1127487832**（使用问题、功能建议、Bug 反馈都可以来）
+- GitHub：<https://github.com/XlangNan/kuakego-plus>（也可以直接提 Issue）
 
 ## 开发与测试
 

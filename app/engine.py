@@ -13,6 +13,7 @@ from datetime import date, datetime
 from . import notify
 from .emby import Emby
 from .logbuf import log
+from .maintenance import Maintenance
 from .pansou import PanSouError
 from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
                      quality_reason, quality_tags, safe_name, title_seasons,
@@ -73,6 +74,7 @@ class Engine:
         self.pending = set()   # 排队/运行中的任务 id
         self.running = None    # 正在运行的任务 id
         self._q, self._q_cookie = None, None
+        self.maint = Maintenance(self)
         self._seed_recent()
         self._seed_recent_dirs()
 
@@ -164,7 +166,7 @@ class Engine:
             "kind": kind, "want_res": want_res, "want_hdr": want_hdr,
             "media": media, "anime": bool(pick("anime", False)), "year": year, "release_date": (pick("release_date", "") or "").strip(),
             "no_cam": bool(pick("no_cam", media == "movie")), "done": bool(pick("done", False)),
-            "auto_find": bool(pick("auto_find", False)),
+            "auto_find": bool(pick("auto_find", False)), "upgrade_watch": bool(pick("upgrade_watch", False)),
             "strict_season": bool(pick("strict_season", kind == "subscription")),
             "name": name, "links": links, "savepath": savepath, "interval": interval,
             "enabled": bool(pick("enabled", True)),
@@ -288,6 +290,7 @@ class Engine:
         d["auto_find"] = bool(t.get("auto_find"))
         d["media"], d["year"], d["done"] = t.get("media", "tv"), t.get("year", 0), bool(t.get("done"))
         d["anime"] = bool(t.get("anime"))
+        d["upgrade_watch"], d["upgrade"] = bool(t.get("upgrade_watch")), t.get("upgrade") or None
         d["release_date"], d["no_cam"] = t.get("release_date", ""), bool(t.get("no_cam"))
         d["want_res"], d["want_hdr"] = t.get("want_res", []), t.get("want_hdr", "any")
         f = t.get("find") or {}
@@ -297,7 +300,7 @@ class Engine:
         live = [l for l in t["links"] if not l.get("ban")]
         if d["expired"]:
             d["status"] = "expired"
-        elif t.get("media") == "movie" and t.get("done"):
+        elif t.get("done"):
             d["status"] = "done"
         elif not t.get("enabled", True):
             d["status"] = "paused"
@@ -730,13 +733,14 @@ class Engine:
                 link["fails"] = link.get("fails", 0) + 1
                 log.warning("%s：%s（连续失败 %d 次）", tag, e, link["fails"])
                 if e.permanent or link["fails"] >= 3:
-                    link["ban"] = str(e)
+                    link["ban"], link["ban_ts"] = str(e), int(time.time())
                     banned.append(f"{link['url']}：{e}")
                 errors.append(str(e))
             except QuarkError as e:
                 log.error("%s：%s", tag, e)
                 errors.append(str(e))
                 if "容量" in str(e) or "空间" in str(e):
+                    self.maint.alert_space(f"《{task['name']}》转存失败：{e}") if self.maint._due("alert_space", 24 * 3600) else None
                     break  # 网盘满了，后面的链接没必要继续
             time.sleep(random.uniform(0.8, 2.0))
 
@@ -872,6 +876,10 @@ class Engine:
     def _finish_find(self, task, res):
         f, now = self._find_state(task), time.time()
         hours = 1 if res.get("error") else max(1, int(self.store.data["pansou"].get("auto_interval") or 6))
+        s = task.get("snap") or {}
+        if (not res.get("error") and not res.get("added") and self.store.data["auto"].get("missing_retry")
+                and s.get("missing_n") and task.get("media") != "movie"):
+            hours = min(hours, 2)   # 已播出的集还缺着：别等那么久，2 小时后再搜一次
         with self.store.lock:
             f["last"], f["next"] = int(now), int(now + hours * 3600 + random.randint(0, 600))
             f["last_msg"] = res["msg"]
@@ -1188,7 +1196,7 @@ class Engine:
                 link["fails"] = link.get("fails", 0) + 1
                 log.warning("%s：%s（连续失败 %d 次）", tag, ex, link["fails"])
                 if ex.permanent or link["fails"] >= 3:
-                    link["ban"] = str(ex)
+                    link["ban"], link["ban_ts"] = str(ex), int(time.time())
                     banned.append(f"{link['url']}：{ex}")
                 errors.append(str(ex))
             except QuarkError as ex:
@@ -1528,6 +1536,7 @@ class Engine:
 
     def tick(self):
         self._daily_sign()
+        self.maint.tick()
         with self.store.lock:
             due = [t["id"] for t in self.store.data["tasks"] if self.is_due(t)]
         for tid in due:

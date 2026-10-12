@@ -4,7 +4,7 @@
 
 *English: a self-hosted Quark Drive auto-save tool with a web UI. One show can have several share links, checked in order; only the episodes missing from your Emby library are saved. Supports TMDB recommendations, Emby, SmartStrm and DingTalk integration.*
 
-源码与完整文档：<https://github.com/你的GitHub用户名/kuakego-plus>
+源码与完整文档：<https://github.com/XlangNan/kuakego-plus>
 
 ## 来源
 
@@ -28,7 +28,7 @@ docker run -d \
   -e WEBUI_USERNAME=admin \
   -e WEBUI_PASSWORD=请改成你自己的密码 \
   -v /你的路径/kuakego-plus/config:/app/config \
-  你的DockerHub用户名/kuakego-plus:latest
+  xlangnan/kuakego-plus:latest
 ```
 
 打开 `http://服务器IP:5005`，用户名 `admin`，密码为你设置的 `WEBUI_PASSWORD`。未设置密码时会随机生成并打印在日志里：`docker logs kuakego-plus`。
@@ -38,7 +38,7 @@ docker run -d \
 ```yaml
 services:
   kuakego-plus:
-    image: 你的DockerHub用户名/kuakego-plus:latest
+    image: xlangnan/kuakego-plus:latest
     container_name: kuakego-plus
     restart: unless-stopped
     ports:
@@ -65,7 +65,7 @@ services:
 
 **镜像标签：** `latest`（最新）、`x.y.z` / `x.y`（版本号）。支持 `linux/amd64` 和 `linux/arm64`。
 
-**升级：** `docker pull 你的DockerHub用户名/kuakego-plus:latest`，删除旧容器后用同样的命令重新运行；`config` 里的数据不会丢。
+**升级：** `docker pull xlangnan/kuakego-plus:latest`，删除旧容器后用同样的命令重新运行；`config` 里的数据不会丢。
 
 ## 功能介绍
 
@@ -141,3 +141,5 @@ docker run -d --name pansou -p 8888:8888 \
 - 仅自动化你**自己账号**里的转存操作，请遵守相关法律与服务条款、尊重版权，使用风险自负，请保持低频。
 - 建议不要直接暴露到公网，远程访问请使用反向代理加 HTTPS 或 VPN。
 - **本产品使用 TMDB API，但未经 TMDB 认可或认证。**
+
+**QQ 讨论群：1127487832**

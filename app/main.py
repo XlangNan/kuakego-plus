@@ -16,13 +16,13 @@ from .logbuf import log, ring, setup as setup_log
 from .quark import Quark, QuarkError
 from .pansou import PanSou, PanSouError
 from .parser import parse_share_text
-from .store import CONFIG_DIR, Store
+from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.5.2"
+VERSION = "1.6.4"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
+SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou", "auto")
 
 
 def create_app(store=None, engine=None):
@@ -558,6 +558,109 @@ def create_app(store=None, engine=None):
             store.data["recent_dirs"] = [d for d in store.data["recent_dirs"] if path and d["path"] != path]
             store.save()
         return jsonify(ok=True)
+
+    # ------------------------------------------------------------ 维护 / 备份 / 批量
+    @app.get("/api/transfers")
+    def transfers():
+        """转存记录：每次有新文件入库的事件（最近 200 条），可按任务过滤。"""
+        tid = request.args.get("task_id")
+        with store.lock:
+            items = [r for r in store.data["recent"] if not tid or r.get("task_id") == tid]
+        return jsonify(items=items)
+
+    @app.post("/api/tasks/<tid>/purge-links")
+    def tasks_purge_links(tid):
+        t = engine.find(tid)
+        if not t:
+            raise KeyError("任务不存在")
+        with store.lock:
+            n = len(t["links"])
+            t["links"] = [l for l in t["links"] if not l.get("ban")]
+            store.save()
+        return jsonify(ok=True, removed=n - len(t["links"]))
+
+    @app.post("/api/maintenance/purge-dead")
+    def maint_purge_dead():
+        return jsonify(ok=True, removed=engine.maint.purge_dead_links(force=True))
+
+    @app.post("/api/tasks/<tid>/upgrade-check")
+    def tasks_upgrade_check(tid):
+        t = engine.find(tid)
+        if not t or t.get("kind") != "subscription":
+            raise KeyError("任务不存在")
+        if not engine.pansou():
+            raise ValueError("资源搜索还没有启用：请先到「通知联动 → 资源搜索」配置 PanSou")
+        if not t.get("upgrade_watch"):
+            raise ValueError("这个订阅没有开启「洗版提醒」")
+        res = engine.maint.check_upgrades(tid)
+        return jsonify(ok=True, upgrade=t.get("upgrade"), checked=bool(res))
+
+    @app.post("/api/maintenance/digest")
+    def maint_digest():
+        if not store.data["dingtalk"].get("webhook"):
+            raise ValueError("请先配置钉钉 Webhook")
+        text = engine.maint.daily_digest(force=True)
+        if not text:
+            raise ValueError("发送失败，详见日志")
+        return jsonify(ok=True, text=text)
+
+    @app.get("/api/backup")
+    def backup_get():
+        import json as _json
+        data = _json.dumps(store.data, ensure_ascii=False, indent=2)
+        name = time.strftime("kuakego-backup-%Y%m%d-%H%M%S.json")
+        return Response(data, mimetype="application/json",
+                        headers={"Content-Disposition": f"attachment; filename={name}"})
+
+    @app.post("/api/restore")
+    def backup_restore():
+        import json as _json, shutil
+        raw = request.get_data()
+        try:
+            data = _json.loads(raw.decode("utf-8"))
+        except Exception:
+            raise ValueError("文件不是有效的 JSON 备份")
+        if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+            raise ValueError("这不是 kuakego-plus 的备份文件（缺少 tasks）")
+        for t in data["tasks"]:
+            if not isinstance(t, dict) or "id" not in t or not isinstance(t.get("links", []), list):
+                raise ValueError("备份里的订阅数据格式不对")
+        with store.lock:
+            if os.path.exists(store.path):
+                shutil.copyfile(store.path, store.path + ".bak")   # 恢复前留一份当前配置
+            store.data = _merge(DEFAULTS, data)
+            store.save()
+        acct["ts"] = 0
+        return jsonify(ok=True, tasks=len(store.data["tasks"]))
+
+    @app.post("/api/batch/inspect")
+    def batch_inspect():
+        """批量粘贴：一次识别多个分享链接，逐个检测内容并猜名称，前端确认后再逐个创建。"""
+        text = body().get("text", "")
+        links = parse_share_text(text)
+        if not links:
+            raise ValueError("没有识别到夸克分享链接")
+        if len(links) > 20:
+            raise ValueError("一次最多 20 个链接")
+        lines = text.splitlines()
+        out = []
+        for l in links:
+            guess = ""
+            for i, ln in enumerate(lines):
+                if l["pwd_id"] in ln:
+                    guess = re.sub(r"https?://\S+|提取码.*|pwd=\S+|[：:]\s*$", "", ln).strip(" -—|·\t")
+                    if not guess and i:
+                        guess = re.sub(r"https?://\S+", "", lines[i - 1]).strip(" -—|·\t")
+                    break
+            item = {"url": l["url"], "pwd_id": l["pwd_id"], "name": guess[:60], "ok": False, "error": ""}
+            try:
+                r = engine.inspect_share(l["url"], 1)
+                item.update(ok=bool(r.get("ok")), error=r.get("error", ""), videos=r.get("videos", 0), eps=r.get("eps", ""),
+                            quality=r.get("quality", []), size_gb=r.get("size_gb", 0), sample=r.get("sample", []))
+            except QuarkError as e:
+                item["error"] = str(e)
+            out.append(item)
+        return jsonify(items=out)
 
     # ------------------------------------------------------------ 资源搜索（PanSou）
     @app.get("/api/pansou/search")

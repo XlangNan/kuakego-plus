@@ -369,6 +369,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
 }
 .rhead{position:sticky;top:0;z-index:8;background:var(--card);margin:-20px -22px 16px;padding:20px 22px 12px;border-radius:16px 16px 0 0;border-bottom:1px solid var(--line)}
 .rhead .board{margin:-6px 0 14px}
+#int-tabs{flex-wrap:wrap;overflow:visible;row-gap:0}
 
 /* ---------- 追剧日历 ---------- */
 .cal .chips{margin-bottom:6px}
@@ -410,12 +411,41 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
   .cal-title{font-size:16px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* 右侧概况：线条图标，和侧栏一致 */
+.sumrow .sl{display:flex;align-items:center;gap:9px;color:var(--dim)}
+.sumrow .ic{width:17px;height:17px;flex:none}
+.sumrow:hover .sl{color:var(--fg)}
+.sumrow:has(b.warn) .ic{color:var(--warn)}.sumrow:has(b.err) .ic{color:var(--err)}
+h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px;color:var(--acc)}
+/* 品牌区：图标在上、名字在下，两个小按钮并排放最下面，窄侧栏也不会被挤掉 */
+@media(min-width:861px){
+  .brand{flex-direction:column;align-items:center;gap:6px;text-align:center}
+  .brand b{flex:none;white-space:normal}
+  .brand-btns{display:flex;gap:6px}
+}
+@media(max-width:860px){.brand-btns{display:flex;gap:6px}}
+/* 侧栏折叠：只留图标（宽屏才有，窄屏侧栏本来就是顶部横条） */
+@media(min-width:861px){
+  aside{transition:width .18s}
+  body.side-min aside{width:68px;padding:18px 8px;align-items:center}
+  body.side-min .brand{padding:0;gap:8px}
+  body.side-min .brand-btns{flex-direction:column}
+  body.side-min .brand b,body.side-min nav button span,body.side-min .side-foot{display:none}
+  body.side-min .who{width:36px;height:36px;padding:0;font-size:0;display:flex;align-items:center;justify-content:center}
+  body.side-min .who::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ok)}
+  body.side-min .who.off::before{background:var(--warn)}
+  body.side-min nav{width:100%}
+  body.side-min nav button{justify-content:center;padding:11px 0}
+  body.side-min nav button.on::before{left:-8px}
+  body.side-min #sideBtn{transform:none}
+}
+@media(max-width:860px){#sideBtn{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
 <aside>
-  <div class="brand"><img class="logo" src="/favicon.svg" alt="" width="28" height="28"><b>kuakego-plus</b><button class="theme" id="themeBtn" title="切换主题">🌙</button></div>
+  <div class="brand"><img class="logo" src="/favicon.svg" alt="" width="28" height="28"><b>kuakego-plus</b><div class="brand-btns"><button class="theme" id="themeBtn" title="切换主题">🌙</button><button class="theme" id="sideBtn" title="折叠侧栏">«</button></div></div>
   <div class="who off" id="who">检查登录状态…</div>
   <nav id="nav">
     <button data-v="monitor"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="1.4"/></svg><span>分享监控</span></button>
@@ -512,7 +542,8 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
   <div class="card">
     <h2>📺 订阅追更 <small>点海报查看详情、分享链接和转存记录；想找新的剧 / 电影 / 动漫，去「🍿 影视推荐」搜索并订阅</small></h2>
     <div class="actions" style="margin-top:0"><button class="btn" id="s-refresh">刷新全部进度</button>
-      <button class="btn" id="s-select">☑ 多选 / 批量删除</button></div>
+      <button class="btn" id="s-select">☑ 多选 / 批量删除</button>
+      <button class="btn" id="s-batch">📋 批量粘贴链接</button><button class="btn" id="s-purge" title="移除所有订阅里已标记失效的分享链接">🧹 清理失效链接</button></div>
   </div>
   <div class="card"><div class="selbar" id="s-selbar" style="display:none">
       <span class="cnt" id="s-selcount">已选 0 个</span>
@@ -528,6 +559,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
   <button class="bt" data-v="tmdb">🎯 TMDB 设置</button>
   <button class="bt" data-v="pansou">🔎 PanSou 资源搜索</button>
   <button class="bt" data-v="emby">📹 Emby 联动</button>
+  <button class="bt" data-v="auto">⚙️ 自动化与备份</button>
 </div>
 <section class="view" id="v-dingtalk">
   <div class="card">
@@ -542,6 +574,29 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
     <label class="chk"><input type="checkbox" id="d-err"> 分享链接失效时通知</label>
     <div class="actions"><button class="btn pri" data-save="dingtalk">保存</button><button class="btn" data-test="dingtalk">发送测试消息</button></div>
     <div class="hint" id="dingtalk-msg"></div>
+  </div>
+</section>
+
+<!-- ========== 自动化与备份 ========== -->
+<section class="view" id="v-auto">
+  <div class="card">
+    <h2>⚙️ 自动化</h2>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="au-finish"> 🏁 本季收齐且已完结，自动停止追更（可在订阅详情里恢复）</label>
+    <label class="chk"><input type="checkbox" id="au-retry"> 🔁 已播出的集还缺着时，缩短自动找资源的间隔（2 小时一次）</label>
+    <label class="chk"><input type="checkbox" id="au-acct"> 🔔 Cookie 失效 / 网盘空间不足时发钉钉通知</label>
+    <div class="row"><div class="grow"><label class="l">失效链接保留几天后自动清理（0 = 不自动清理）</label><input type="number" id="au-purge" min="0" max="365"></div></div>
+    <label class="chk"><input type="checkbox" id="au-digest"> 📰 每天发送追剧日报到钉钉（今天入库 / 今天播出 / 缺集 / 异常）</label>
+    <div class="row"><div class="grow"><label class="l">日报发送时间（几点之后发，0-23）</label><input type="number" id="au-hour" min="0" max="23"></div></div>
+    <div class="actions"><button class="btn pri" data-save="auto">保存</button><button class="btn" id="au-digest-now">立即发一份日报</button>
+      <button class="btn" id="au-purge-now">立即清理失效链接</button></div>
+    <div class="hint" id="auto-msg">日报和通知都走「钉钉通知」里配置的机器人；洗版提醒在每个订阅的「分享链接」页单独开启。</div>
+  </div>
+  <div class="card">
+    <h2>💾 配置备份与恢复</h2>
+    <div class="hint" style="margin:0 0 8px">备份包含所有订阅、设置，以及 <b>夸克 Cookie 和各种密钥</b>，请妥善保管，不要发给别人。恢复会整体替换当前配置（恢复前会自动留一份 config.json.bak）。</div>
+    <div class="actions"><a class="btn pri" href="/api/backup" download>⬇ 导出备份</a>
+      <button class="btn" id="bk-restore">⬆ 导入备份…</button><input type="file" id="bk-file" accept=".json,application/json" style="display:none"></div>
+    <div class="hint" id="bk-msg"></div>
   </div>
 </section>
 
@@ -647,21 +702,23 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
 <!-- ========== 日志 ========== -->
 <section class="view" id="v-logs">
   <div class="card">
-    <h2>📜 运行日志</h2>
-    <div class="toolbar"><label class="chk" style="margin:0"><input type="checkbox" id="l-warn"> 只看警告 / 错误</label>
+    <h2>📜 日志</h2>
+    <div class="chips" style="margin-bottom:10px"><span class="chip on" data-lt="run">运行日志</span><span class="chip" data-lt="xfer">转存记录</span></div>
+    <div id="l-xfer" style="display:none"></div>
+    <div id="l-run"><div class="toolbar"><label class="chk" style="margin:0"><input type="checkbox" id="l-warn"> 只看警告 / 错误</label>
       <button class="btn sm" id="l-refresh">刷新</button><button class="btn sm danger" id="l-clear">清空</button></div>
-    <div class="log" id="l-box"></div>
+    <div class="log" id="l-box"></div></div>
   </div>
 </section>
 </div>
 <div class="rside" id="rail">
   <div class="card">
-    <h2>📥 最近入库</h2>
+    <h2 class="hic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></svg>最近入库</h2>
     <div class="stats"><div><b id="st-today">0</b><span>今天</span></div><div><b id="st-week">0</b><span>近 7 天</span></div><div><b id="st-total">0</b><span>累计</span></div></div>
     <div class="hint" id="rc-next" style="margin:0 0 6px"></div>
     <div id="rc-list"><div class="empty" style="padding:20px 0">加载中…</div></div>
   </div>
-  <div class="card"><h2>📊 概况</h2><div id="rc-sum"></div></div>
+  <div class="card"><h2 class="hic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>概况</h2><div id="rc-sum"></div></div>
 </div></div></main>
 </div>
 
@@ -694,6 +751,15 @@ function setTheme(t) {
 }
 let saved = 'light'; try { saved = localStorage.getItem('qp-theme') || 'light'; } catch (_) {}
 setTheme(saved);
+/* ---------- 侧栏折叠 ---------- */
+function setSide(min) {
+  document.body.classList.toggle('side-min', min); $('#sideBtn').textContent = min ? '»' : '«'; $('#sideBtn').title = min ? '展开侧栏' : '折叠侧栏';
+  try { localStorage.setItem('qp-side-min', min ? '1' : ''); } catch (_) {}
+}
+$$('#nav button').forEach(b => b.title = b.textContent.trim());
+let sideMin = false; try { sideMin = !!localStorage.getItem('qp-side-min'); } catch (_) {}
+setSide(sideMin);
+$('#sideBtn').onclick = () => setSide(!document.body.classList.contains('side-min'));
 $('#themeBtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 
 /* ---------- 弹窗 ---------- */
@@ -713,11 +779,11 @@ const PAGE_HEAD = {
   monitor: ['分享监控', '粘贴夸克分享链接，有新集数时自动转存'],
   recommend: ['影视推荐', '看看正在热播的剧集、电影和动漫，一键订阅'],
   subs: ['订阅追更', '订阅的剧集和电影，缺的集数会自动补齐'],
-  integrations: ['通知联动', '钉钉、SmartStrm、TMDB、PanSou、Emby 的连接设置'],
+  integrations: ['通知联动', '钉钉、SmartStrm、TMDB、PanSou、Emby 的连接设置，以及自动化与备份'],
   account: ['账号登录', '登录夸克账号后才能转存文件'],
   logs: ['运行日志', '最近的运行记录，出错时先看这里'],
 };
-const INT_VIEWS = ['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby'];
+const INT_VIEWS = ['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'auto'];
 let lastInt = 'dingtalk';
 function go(v) {
   if (v === 'integrations') v = lastInt;
@@ -1369,7 +1435,7 @@ function badgeOf(t) {
   if (t.state === 'running') return ['扫描中', 'info'];
   if (t.state === 'queued') return ['排队中', 'info'];
   if (t.status === 'nolinks' && t.auto_find) return ['找资源中', 'info'];
-  return ({done: ['已入库', 'ok'], invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
+  return ({done: [t.media === 'movie' ? '已入库' : '已完结', 'ok'], invalid: ['链接失效', 'err'], error: ['出错', 'err'], paused: ['已暂停', 'mute'], nolinks: ['待添加链接', 'warn'],
            expired: ['已到期', 'mute'], complete: ['已追完', 'ok']})[t.status] || null;
 }
 function movieTileHTML(t) {
@@ -1398,18 +1464,32 @@ function tileHTML(t) {
       return d && d < t.links.length ? `<div class="wsub" style="color:var(--warn)">第 ${t.season} 季 · ⚠ ${d} 个链接失效</div>`
         : `<div class="wsub">第 ${t.season} 季 · ${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
 }
-let subsFilter = 'all';
+let subsFilter = 'all', subsStatus = 'all', subsSort = 'default';
+const SUB_STATUS = [['all', '全部状态'], ['missing', '缺集'], ['dead', '链接失效'], ['done', '已完结'], ['paused', '已暂停']];
+const SUB_SORT = [['default', '默认顺序'], ['recent', '最近扫描'], ['name', '名称'], ['missing', '缺集最多']];
+function visibleSubs() {
+  const st = {missing: t => t.snap && t.snap.missing_n > 0 && !t.done, dead: t => t.links.some(l => l.ban),
+              done: t => t.done, paused: t => !t.enabled || t.status === 'paused'}[subsStatus];
+  const out = subsData.filter(t => (subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie')) && (!st || st(t)));
+  const key = {recent: t => -(Date.parse((t.last_run || '').replace(' ', 'T')) || 0), name: t => t.name,
+               missing: t => -((t.snap && t.snap.missing_n) || 0)}[subsSort];
+  return key ? out.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -1 : x > y ? 1 : 0; }) : out;
+}
 function renderWall() {
   const tasks = subsData, box = $('#s-list');
   const hasMv = tasks.some(t => t.media === 'movie'), hasTv = tasks.some(t => t.media !== 'movie');
   if (subsFilter !== 'all' && !(subsFilter === 'movie' ? hasMv : hasTv)) subsFilter = 'all';
-  $('#s-filter').innerHTML = hasMv && hasTv ? `<div class="chips" style="margin-bottom:12px">${[['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) =>
-    `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('')}</div>` : '';
-  $$('#s-filter .chip').forEach(c => c.onclick = () => { subsFilter = c.dataset.f; renderWall(); });
-  const shown = tasks.filter(t => subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie'));
+  $('#s-filter').innerHTML = tasks.length ? `<div class="chips" style="margin-bottom:12px;align-items:center">
+    ${hasMv && hasTv ? [['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) => `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('') + '<span class="sub">｜</span>' : ''}
+    ${SUB_STATUS.map(([k, n]) => `<span class="chip ${subsStatus === k ? 'on' : ''}" data-st="${k}">${n}</span>`).join('')}
+    <select id="s-sort" style="width:auto;margin-left:auto;padding:5px 8px">${SUB_SORT.map(([k, n]) => `<option value="${k}" ${subsSort === k ? 'selected' : ''}>排序：${n}</option>`).join('')}</select></div>` : '';
+  $$('#s-filter [data-f]').forEach(c => c.onclick = () => { subsFilter = c.dataset.f; renderWall(); });
+  $$('#s-filter [data-st]').forEach(c => c.onclick = () => { subsStatus = c.dataset.st; renderWall(); });
+  $('#s-sort')?.addEventListener('change', e => { subsSort = e.target.value; renderWall(); });
+  const shown = visibleSubs();
   for (const id of [...selSet]) if (!tasks.some(t => t.id === id)) selSet.delete(id);   // 已经不存在的（比如被删了）不再保留选中
   box.innerHTML = shown.length ? `<div class="wall ${selMode ? 'selmode' : ''}">${shown.map(tileHTML).join('')}</div>`
-    : '<div class="empty">还没有订阅。去「🍿 影视推荐」搜索或点一部，进详情页就能订阅。</div>';
+    : (tasks.length ? '<div class="empty">没有符合筛选条件的订阅。</div>' : '<div class="empty">还没有订阅。去「🍿 影视推荐」搜索或点一部，进详情页就能订阅。</div>');
   $$('.wt', box).forEach(el => {
     el.classList.toggle('sel', selSet.has(el.dataset.id));
     el.onclick = () => selMode ? toggleSel(el.dataset.id, el) : openSub(el.dataset.id);
@@ -1418,7 +1498,7 @@ function renderWall() {
 }
 /* ---------- 多选 / 批量删除 ---------- */
 let selMode = false; const selSet = new Set();
-const shownIds = () => subsData.filter(t => subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie')).map(t => t.id);
+const shownIds = () => visibleSubs().map(t => t.id);
 function renderSelBar() {
   $('#s-selbar').style.display = selMode ? '' : 'none';
   $('#s-select').style.display = selMode ? 'none' : '';
@@ -1479,6 +1559,7 @@ function renderSub(m, t, tab) {
         : (base ? '<div class="sub" style="color:var(--ok)">✓ 已播出的都齐了</div>' : '')}
       <div class="sub" style="margin-top:4px">${live ? esc(live.emby) + ' · ' : ''}更新于 ${esc(fmtTs(s.ts))}</div>`
       : '<div class="sub">还没有进度数据。点「刷新进度」，或等第一次扫描完成。</div>';
+    if (t.done) panel += `<div class="banner" style="margin:10px 0 0">🏁 本季已收齐，已自动停止追更。<button class="btn xs" data-act="resume" style="margin-left:8px">恢复追更</button></div>`;
     panel += `${qualityTags(t).length ? `<div class="sub" style="margin-top:10px">画质要求：${qualityTags(t).map(x => `<span class="tag info">${esc(x)}</span>`).join(' ')}</div>` : ''}
       <div class="sub" style="margin-top:10px">每 ${t.interval} 分钟扫描一次 · ${esc(nextIn(t) || (t.enabled ? '' : '已暂停'))} · 累计转存 ${t.saved_total || 0} 个</div>
       <div class="sub">最近：${esc(t.last_run || '—')} ${esc(t.last_msg || '')}</div>
@@ -1490,7 +1571,12 @@ function renderSub(m, t, tab) {
       <div class="sub" style="margin-top:4px">${!PANSOU_ON ? '需要先到「资源搜索」页配置 PanSou' : t.auto_find ? (af.last ? `上次搜索 ${esc(fmtTs(af.last))}：${esc(af.msg || '—')} · 下次${esc(inText(af.next))}` : '还没有搜索过，马上就会搜') : '开启后会定时搜索新资源并自动添加（添加前会检测内容并按画质要求筛选）'}</div>
       <div class="actions" style="margin-top:8px"><button class="btn xs" data-findnow ${PANSOU_ON ? '' : 'disabled'}>立即搜索一次</button></div>
       ${af.log && af.log.length ? `<details style="margin-top:6px"><summary>判断记录（${af.log.length}）</summary><div class="files" style="max-height:220px">${af.log.map(x => `<div>${esc(fmtTs(x.ts))}　${esc(x.text)}</div>`).join('')}</div></details>` : ''}</div>`;
-    panel = autoBox + (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
+    const up = t.upgrade, upBox = `<div style="margin:0 0 12px;padding:10px 12px;background:var(--bg);border-radius:10px">
+      <label class="chk" style="margin:0"><input type="checkbox" data-upgtoggle ${t.upgrade_watch ? 'checked' : ''} ${PANSOU_ON ? '' : 'disabled'}> ⬆️ 洗版提醒</label>
+      <div class="sub" style="margin-top:4px">${!PANSOU_ON ? '需要先配置 PanSou' : t.upgrade_watch ? (up ? `${esc(fmtTs(up.ts))} 检查：${esc(up.msg)}` : '收齐后每天检查一次有没有更高画质（4K / 1080P）的资源，只通知不自动替换') : '已经收齐的剧 / 电影，发现更高画质资源时提醒你，不会自动替换已有文件'}</div>
+      ${up && up.items && up.items.length ? `<div class="files" style="margin-top:6px">${up.items.map(i => `<div>${({3: '4K', 2: '1080P', 1: '720P'})[i.res]}　${esc(i.title)}　<a href="${esc(i.url)}" target="_blank" rel="noopener">打开</a></div>`).join('')}</div>` : ''}
+      ${t.upgrade_watch && PANSOU_ON ? '<div class="actions" style="margin-top:8px"><button class="btn xs" data-upgnow>立即检查</button></div>' : ''}</div>`;
+    panel = autoBox + upBox + (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
         <span class="u" title="${esc((l.title ? l.title + '\n' : '') + l.url)}">${l.auto ? '🤖 ' : ''}${esc(l.auto && l.title ? l.title : shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
         <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1499,7 +1585,7 @@ function renderSub(m, t, tab) {
       + `<div class="sub" style="margin-top:6px">从上到下就是检查顺序；后面的链接只补前面没有的集数。</div>
       <div class="addlk"><textarea id="sd-add" placeholder="粘贴新的分享链接（可多个）"></textarea><button class="btn sm" data-add>添加</button></div>
       <div class="actions" style="margin-top:8px"><button class="btn xs" data-psearch>🔎 搜索资源</button></div>
-      ${dead ? '<div class="actions" style="margin-top:8px"><button class="btn xs" data-resetlk>重置失效标记</button></div>' : ''}`;
+      ${dead ? '<div class="actions" style="margin-top:8px"><button class="btn xs" data-resetlk>重置失效标记</button><button class="btn xs danger" data-purgelk>清理失效链接</button></div>' : ''}`;
   } else {
     panel = t.history && t.history.length ? t.history.map(x => `<div class="hrow"><span class="sub">${esc(x.time)}</span>
         <span class="tag ${tagCls[x.status] || 'mute'}">${tagTxt[x.status] || x.status}</span> ${esc(x.msg)}
@@ -1545,10 +1631,23 @@ function renderSub(m, t, tab) {
         toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
       })});
   }));
+  $('[data-upgtoggle]', m)?.addEventListener('change', guard(async e => {
+    await api('/tasks/' + t.id, 'PUT', {upgrade_watch: e.target.checked}); toast(e.target.checked ? '已开启洗版提醒' : '已关闭洗版提醒', 'ok'); await reload('links');
+  }));
+  $('[data-upgnow]', m)?.addEventListener('click', guard(async e => {
+    e.target.disabled = true; e.target.textContent = '检查中…';
+    try { const r = await api(`/tasks/${t.id}/upgrade-check`, 'POST'); toast(r.checked ? '检查完成' : '这个订阅还没收齐，收齐后才会检查', 'ok'); await reload('links'); }
+    finally { e.target.disabled = false; }
+  }));
+  $('[data-purgelk]', m)?.addEventListener('click', guard(async () => {
+    if (!confirm('移除这个订阅里所有已失效的分享链接？')) return;
+    const r = await api(`/tasks/${t.id}/purge-links`, 'POST'); toast(`已清理 ${r.removed} 个失效链接`, 'ok'); await reload('links');
+  }));
   $('[data-resetlk]', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); await reload('links'); }));
   $$('[data-act]', m).forEach(x => x.onclick = guard(async () => {
     const a = x.dataset.act;
     if (a === 'run') { await api(`/tasks/${t.id}/run`, 'POST'); toast('已开始扫描，详见运行日志', 'ok'); setTimeout(() => reload(), 900); }
+    else if (a === 'resume') { await api('/tasks/' + t.id, 'PUT', {done: false}); toast('已恢复追更', 'ok'); await reload('info'); }
     else if (a === 'preview') previewTask(t);
     else if (a === 'prog') { x.disabled = true; x.textContent = '读取中…'; try { liveProg[t.id] = await api(`/tasks/${t.id}/progress`); await reload('info'); } finally { x.disabled = false; } }
     else if (a === 'edit') editTask(t, () => reload());
@@ -1566,6 +1665,48 @@ $('#s-refresh').onclick = guard(async () => {   // 依次实时查询所有订�
     await loadSubs();
   } finally { btn.disabled = false; btn.textContent = '刷新全部进度'; }
 });
+$('#s-purge').onclick = guard(async () => {
+  const n = subsData.reduce((a, t) => a + t.links.filter(l => l.ban).length, 0);
+  if (!n) return toast('没有失效的分享链接', 'ok');
+  if (!confirm(`移除所有订阅里共 ${n} 个已失效的分享链接？`)) return;
+  const r = await api('/maintenance/purge-dead', 'POST'); toast(`已清理 ${r.removed} 个失效链接`, 'ok'); await loadSubs();
+});
+/* ---------- 批量粘贴链接 ---------- */
+function batchDialog() {
+  const m = modal(`<button class="x">×</button><h3 style="margin:0 0 6px">📋 批量粘贴链接</h3>
+    <div class="hint" style="margin:0 0 8px">一次粘贴多个夸克分享链接（最多 20 个）。链接前面的一行文字会当作名称，也可以在下一步里改。</div>
+    <textarea id="bt-text" style="min-height:130px" placeholder="某某剧 https://pan.quark.cn/s/xxxx 提取码：abcd&#10;另一部 https://pan.quark.cn/s/yyyy"></textarea>
+    <div class="actions"><button class="btn pri" id="bt-go">识别并检测</button></div><div id="bt-res"></div>`, 'wide');
+  $('.x', m).onclick = () => m.remove();
+  $('#bt-go', m).onclick = guard(async e => {
+    e.target.disabled = true; e.target.textContent = '检测中…（每个链接要读一次夸克）';
+    try {
+      const {items} = await api('/batch/inspect', 'POST', {text: $('#bt-text', m).value});
+      await loadRecent();
+      const root = RECENT_DIRS.length ? RECENT_DIRS[0].path.replace(/\/[^/]*$/, '') || '/' : '/';
+      $('#bt-res', m).innerHTML = `<div class="row" style="margin-top:12px"><div class="grow"><label class="l">统一保存到（每个资源会在这里建一个以名称命名的文件夹）</label>
+        <input type="text" id="bt-root" value="${esc(root)}"></div></div>
+        <table style="margin-top:8px"><thead><tr><th></th><th>名称</th><th>内容</th></tr></thead><tbody>${items.map((it, i) => `<tr data-i="${i}">
+          <td><input type="checkbox" ${it.ok ? 'checked' : 'disabled'}></td>
+          <td><input type="text" class="bt-name" value="${esc(it.name || (it.sample && it.sample[0]) || '')}" ${it.ok ? '' : 'disabled'}></td>
+          <td class="sub">${it.ok ? `${it.videos} 个视频${it.eps ? ' · ' + esc(it.eps) : ''}${it.quality.length ? ' · ' + esc(it.quality.join('/')) : ''} · ${it.size_gb} GB` : `<span style="color:var(--err)">✗ ${esc(it.error || '无法读取')}</span>`}</td></tr>`).join('')}</tbody></table>
+        <div class="actions"><button class="btn pri" id="bt-add">添加选中的 ${items.filter(i => i.ok).length} 个为监控任务</button></div>`;
+      $('#bt-add', m).onclick = guard(async ev => {
+        ev.target.disabled = true; let ok = 0; const errs = [], base = $('#bt-root', m).value.trim().replace(/\/+$/, '');
+        for (const tr of $$('#bt-res tbody tr', m)) {
+          if (!$('input[type=checkbox]', tr).checked) continue;
+          const it = items[+tr.dataset.i], name = $('.bt-name', tr).value.trim();
+          if (!name) { errs.push('有一行没填名称'); continue; }
+          try { await api('/tasks', 'POST', {kind: 'monitor', name, savepath: base + '/' + name.replace(/[\\/:*?"<>|]/g, ' '), links_text: it.url, save_existing: true}); ok++; }
+          catch (er) { errs.push(`${name}：${er.message}`); }
+        }
+        toast(`已添加 ${ok} 个任务${errs.length ? '，失败：' + errs.join('；') : ''}`, errs.length ? 'err' : 'ok');
+        if (ok) { m.remove(); refreshStatus(); }
+      });
+    } finally { e.target.disabled = false; e.target.textContent = '识别并检测'; }
+  });
+}
+$('#s-batch').onclick = batchDialog;
 loaders.subs = () => { loadSubs().catch(e => toast(e.message, 'err')); timers.push(setInterval(() => loadSubs().catch(() => {}), 45000)); };
 
 
@@ -1633,9 +1774,10 @@ const FORMS = {
   smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp'},
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
   pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
+  auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour'},
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
 };
-const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], pansou: ['password']};
+const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], pansou: ['password'], auto: []};
 function fill(name, d) {
   for (const [k, sel] of Object.entries(FORMS[name])) {
     const el = $(sel); if (!el) continue;
@@ -1651,7 +1793,7 @@ function fill(name, d) {
 }
 const collect = name => Object.fromEntries(Object.entries(FORMS[name]).map(([k, sel]) => { const el = $(sel); return [k, el.type === 'checkbox' ? el.checked : el.value]; }));
 const loadSettings = guard(async name => fill(name, await api('/settings/' + name)));
-['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby'].forEach(n => loaders[n] = () => loadSettings(n));
+['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'auto'].forEach(n => loaders[n] = () => loadSettings(n));
 $$('[data-save]').forEach(b => b.onclick = guard(async () => {
   const n = b.dataset.save; fill(n, await api('/settings/' + n, 'PUT', collect(n))); toast('已保存', 'ok'); refreshStatus();
 }));
@@ -1661,6 +1803,20 @@ $$('[data-test]').forEach(b => b.onclick = async () => {
   catch (e) { msg.className = 'hint err'; msg.textContent = '✗ ' + e.message; }
   finally { b.disabled = false; }
 });
+
+$('#au-digest-now').onclick = guard(async () => { await api('/maintenance/digest', 'POST'); toast('日报已发送到钉钉', 'ok'); });
+$('#au-purge-now').onclick = guard(async () => { const r = await api('/maintenance/purge-dead', 'POST'); toast(`已清理 ${r.removed} 个失效链接`, 'ok'); });
+$('#bk-restore').onclick = () => $('#bk-file').click();
+$('#bk-file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const msg = $('#bk-msg'); msg.className = 'hint';
+  if (!confirm(`用「${f.name}」整体替换当前配置？当前配置会先留一份 config.json.bak。`)) return;
+  try {
+    const r = await fetch('/api/restore', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: await f.text()});
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || '恢复失败');
+    msg.className = 'hint ok'; msg.textContent = `✓ 已恢复，共 ${d.tasks} 个任务`; refreshStatus();
+  } catch (er) { msg.className = 'hint err'; msg.textContent = '✗ ' + er.message; }
+};
 
 /* ======================================================================
    账号
@@ -1694,6 +1850,23 @@ async function loadLogs(reset) {
   box.insertAdjacentHTML('beforeend', items.map(i => `<div class="${i.level}"><span class="ts">${esc(i.ts)}</span> ${esc(i.msg)}</div>`).join(''));
   lastLog = items.at(-1).id; if (atBottom || reset) box.scrollTop = box.scrollHeight;
 }
+let logTab = 'run';
+async function loadXfer() {
+  const {items} = await api('/transfers'), box = $('#l-xfer');
+  if (!items.length) { box.innerHTML = '<div class="empty">还没有转存记录</div>'; return; }
+  let day = '';
+  box.innerHTML = items.map(r => {
+    const d = new Date(r.ts * 1000), ds = ymd(d), head = ds !== day ? (day = ds, `<div class="sub" style="margin:12px 0 4px"><b>${ds}</b></div>`) : '';
+    return head + `<div class="hrow"><span class="sub">${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>
+      <b>《${esc(r.name)}》</b>${r.kind === 'subscription' ? ` 第 ${r.season} 季` : ''} ${esc(r.eps || '')} <span class="tag ok">${r.count} 个文件</span>
+      ${r.files && r.files.length ? `<details><summary>文件列表</summary><div class="files">${r.files.map(esc).join('<br>')}</div></details>` : ''}</div>`;
+  }).join('');
+}
+$$('[data-lt]').forEach(c => c.onclick = () => {
+  logTab = c.dataset.lt; $$('[data-lt]').forEach(x => x.classList.toggle('on', x === c));
+  $('#l-run').style.display = logTab === 'run' ? '' : 'none'; $('#l-xfer').style.display = logTab === 'xfer' ? '' : 'none';
+  if (logTab === 'xfer') loadXfer().catch(e => toast(e.message, 'err'));
+});
 loaders.logs = () => { loadLogs(true).catch(() => {}); timers.push(setInterval(() => loadLogs().catch(() => {}), 4000)); };
 $('#l-refresh').onclick = () => loadLogs(true);
 $('#l-warn').onchange = () => loadLogs(true);
@@ -1722,9 +1895,16 @@ async function loadRail() {
   $$('.ri', list).forEach(el => el.onclick = async () => {
     if (el.dataset.k === 'subscription') { go('subs'); await loadSubs(); openSub(el.dataset.t); } else go('monitor');
   });
-  const row = (label, n, cls, view) => `<div class="sumrow" data-v="${view}"><span>${label}</span><b class="${n && cls ? cls : ''}">${n}</b></div>`;
-  $('#rc-sum').innerHTML = row('📺 订阅追更', s.subs, '', 'subs') + row('🎬 电影订阅', s.movies, '', 'subs') + row('📡 分享监控', s.monitors, '', 'monitor')
-    + row('⚠ 失效的分享链接', s.dead_links, 'warn', 'subs') + row('❌ 上次出错的任务', s.errors, 'err', 'logs');
+  const ico = d => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const IC = {
+    tv: ico('<rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/>'),
+    movie: ico('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 12h4M3 16h4M17 8h4M17 12h4M17 16h4"/>'),
+    mon: ico('<path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="1.4"/>'),
+    link: ico('<path d="m2 2 20 20"/><path d="M9 17H7a5 5 0 0 1 0-10M15 7h2a5 5 0 0 1 3.5 8.6M8 12h4"/>'),
+    err: ico('<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>')};
+  const row = (ic, label, n, cls, view) => `<div class="sumrow" data-v="${view}"><span class="sl">${IC[ic]}${label}</span><b class="${n && cls ? cls : ''}">${n}</b></div>`;
+  $('#rc-sum').innerHTML = row('tv', '订阅追更', s.subs, '', 'subs') + row('movie', '电影订阅', s.movies, '', 'subs') + row('mon', '分享监控', s.monitors, '', 'monitor')
+    + row('link', '失效的分享链接', s.dead_links, 'warn', 'subs') + row('err', '上次出错的任务', s.errors, 'err', 'logs');
   $$('.sumrow', $('#rc-sum')).forEach(el => el.onclick = () => go(el.dataset.v));
 }
 

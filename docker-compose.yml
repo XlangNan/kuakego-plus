@@ -1,6 +1,7 @@
 # 从源码构建运行。直接使用 Docker Hub 镜像的写法见 README.md
 services:
   kuakego-plus:
+    image: xlangnan/kuakego-plus:latest
     build: .
     container_name: kuakego-plus
     restart: unless-stopped

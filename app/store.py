@@ -35,6 +35,14 @@ DEFAULTS = {
         "src": "all", "channels": "", "plugins": "", "timeout": 30,
         "auto_interval": 6,   # 自动找资源：每隔几小时再搜一次（小时）
     },
+    "auto": {
+        "purge_dead_days": 3,      # 失效链接保留几天后自动清理，0=不清理
+        "auto_finish": True,       # 本季集数收齐且已完结，自动停止追更
+        "missing_retry": True,     # 已播出的集还缺着，缩短自动找资源的间隔
+        "account_alert": True,     # Cookie 失效 / 网盘空间不足时通知
+        "digest": False, "digest_hour": 20,   # 每日日报
+    },
+    "maint_state": {},     # 维护任务的限频时间戳（内部使用）
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,
         "send_savepath": True,

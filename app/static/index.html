@@ -411,6 +411,29 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
   .cal-title{font-size:16px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* 订阅墙：海报大小可选、列表模式 */
+.wall{grid-template-columns:repeat(auto-fill,minmax(var(--wmin,112px),1fr));gap:18px 12px}
+.wall.sz-s{--wmin:86px;gap:14px 9px}.wall.sz-m{--wmin:112px}.wall.sz-l{--wmin:148px;gap:22px 16px}
+.wall.sz-s .wn{font-size:12px;margin-top:6px}.wall.sz-s .wsub{font-size:11px}.wall.sz-s .wov{font-size:10px;padding:18px 6px 5px}.wall.sz-s .wb,.wall.sz-s .wm{font-size:10px;padding:0 5px}
+.wall .wimg{border-radius:10px}
+.llist{display:flex;flex-direction:column;gap:8px}
+.lr{display:flex;align-items:center;gap:12px;padding:8px 12px 8px 8px;border:1px solid var(--line);border-radius:12px;background:var(--card);cursor:pointer;position:relative;transition:border-color .15s,background .15s}
+.lr:hover{border-color:var(--acc);background:var(--bg)}
+.lr .lth{width:42px;aspect-ratio:2/3;flex:none;border-radius:6px;background:linear-gradient(135deg,#6a82fb,#8b5cf6) center/cover no-repeat}
+.lr .lm{flex:1;min-width:0}.lr .ln{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lr .ls{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.lr .lp{width:170px;flex:none;font-size:12px;color:var(--dim)}.lr .lbar{height:5px;border-radius:9px;background:var(--line);overflow:hidden;margin-bottom:4px}
+.lr .lbar i{display:block;height:100%;background:var(--acc);border-radius:9px}
+.lr .lb{width:74px;flex:none;text-align:right}
+.lr .lck{display:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:none;place-items:center;color:transparent;font-size:12px}
+.selmode.llist .lck{display:grid}.lr.sel{border-color:var(--acc);background:var(--bg)}.lr.sel .lck{background:var(--acc);border-color:var(--acc);color:#fff}
+@media(max-width:860px){.wall.sz-s{--wmin:72px}.wall.sz-m{--wmin:90px}.wall.sz-l{--wmin:118px}.lr .lp{width:96px}.lr .lb{display:none}}
+.sub-opts{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sub-opts select{width:auto;padding:5px 8px}
+.chip.vw{padding:4px 10px}
+#sd-meta{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+/* 人物头像：正圆（海报是 2:3，不能套用） */
+.sd-head .pic.round{width:84px;height:84px;aspect-ratio:1/1;border-radius:50%;background-position:center 20%;background-size:cover}
 /* 右侧概况：线条图标，和侧栏一致 */
 .sumrow .sl{display:flex;align-items:center;gap:9px;color:var(--dim)}
 .sumrow .ic{width:17px;height:17px;flex:none}
@@ -1466,15 +1489,31 @@ function tileHTML(t) {
       return d && d < t.links.length ? `<div class="wsub" style="color:var(--warn)">第 ${t.season} 季 · ⚠ ${d} 个链接失效</div>`
         : `<div class="wsub">第 ${t.season} 季 · ${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
 }
-let subsFilter = 'all', subsStatus = 'all', subsSort = 'default';
+function listRowHTML(t) {
+  const s = t.snap, mv = t.media === 'movie', b = badgeOf(t), base = s ? (s.aired ?? s.total ?? 0) : 0, pct = Math.round(pctOf(t) * 100);
+  const d = t.links.filter(l => l.ban).length;
+  const prog = mv ? (pct ? '已入库' : '未入库') : (s ? `${s.have}${base ? ' / ' + base : ''} 集${s.missing_n ? '，缺 ' + s.missing_n : ''}` : '未扫描');
+  const added = t.created ? new Date(t.created * 1000).toISOString().slice(0, 10) : '';
+  return `<div class="wt lr" data-id="${t.id}"><span class="lck">✓</span><div class="lth" style="${posterBg(t.poster)}"></div>
+    <div class="lm"><div class="ln" title="${esc(t.name)}">${esc(t.name)}</div>
+      <div class="ls">${mv ? '电影' + (t.year ? ' ' + t.year : '') : '第 ' + t.season + ' 季'} · ${d ? `<span style="color:var(--warn)">⚠ ${d} 个链接失效</span>` : esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}${added ? ' · 添加于 ' + added : ''}</div></div>
+    <div class="lp"><div class="lbar"><i style="width:${pct}%"></i></div><span>${esc(prog)}</span></div>
+    <div class="lb">${b ? `<span class="tag ${b[1]}">${b[0]}</span>` : ''}</div></div>`;
+}
+let subsFilter = 'all', subsStatus = 'all', subsSort = 'new', subsView = 'grid', subsSize = 'm';
+try { subsView = localStorage.getItem('qp-subs-view') || 'grid'; subsSize = localStorage.getItem('qp-subs-size') || 'm'; subsSort = localStorage.getItem('qp-subs-sort') || 'new'; if (!['new','old','updated','recent','progress','missing','name'].includes(subsSort)) subsSort = 'new'; } catch (_) {}
+const saveSubsPref = () => { try { localStorage.setItem('qp-subs-view', subsView); localStorage.setItem('qp-subs-size', subsSize); localStorage.setItem('qp-subs-sort', subsSort); } catch (_) {} };
 const SUB_STATUS = [['all', '全部状态'], ['missing', '缺集'], ['dead', '链接失效'], ['done', '已完结'], ['paused', '已暂停']];
-const SUB_SORT = [['default', '默认顺序'], ['recent', '最近扫描'], ['name', '名称'], ['missing', '缺集最多']];
+const SUB_SORT = [['new', '最新添加'], ['old', '最早添加'], ['updated', '最近有更新'], ['recent', '最近扫描'], ['progress', '完成度最低'], ['missing', '缺集最多'], ['name', '名称']];
+const pctOf = t => { const s = t.snap; if (t.media === 'movie') return (t.done || (s && s.have)) ? 1 : 0; const b = s ? (s.aired ?? s.total ?? 0) : 0; return s && b ? s.have / b : 0; };
+const tsOf = x => Date.parse((x || '').replace(' ', 'T')) || 0;
 function visibleSubs() {
   const st = {missing: t => t.snap && t.snap.missing_n > 0 && !t.done, dead: t => t.links.some(l => l.ban),
               done: t => t.done, paused: t => !t.enabled || t.status === 'paused'}[subsStatus];
   const out = subsData.filter(t => (subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie')) && (!st || st(t)));
-  const key = {recent: t => -(Date.parse((t.last_run || '').replace(' ', 'T')) || 0), name: t => t.name,
-               missing: t => -((t.snap && t.snap.missing_n) || 0)}[subsSort];
+  const key = {new: t => -(t.created || 0), old: t => t.created || 0, recent: t => -tsOf(t.last_run), name: t => t.name,
+               updated: t => -tsOf(((t.history || []).find(h => h.status === 'saved') || {}).time),
+               progress: t => pctOf(t), missing: t => -((t.snap && t.snap.missing_n) || 0)}[subsSort] || (t => -(t.created || 0));
   return key ? out.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -1 : x > y ? 1 : 0; }) : out;
 }
 function renderWall() {
@@ -1484,13 +1523,18 @@ function renderWall() {
   $('#s-filter').innerHTML = tasks.length ? `<div class="chips" style="margin-bottom:12px;align-items:center">
     ${hasMv && hasTv ? [['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) => `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('') + '<span class="sub">｜</span>' : ''}
     ${SUB_STATUS.map(([k, n]) => `<span class="chip ${subsStatus === k ? 'on' : ''}" data-st="${k}">${n}</span>`).join('')}
-    <select id="s-sort" style="width:auto;margin-left:auto;padding:5px 8px">${SUB_SORT.map(([k, n]) => `<option value="${k}" ${subsSort === k ? 'selected' : ''}>排序：${n}</option>`).join('')}</select></div>` : '';
+    <span class="sub-opts"><span class="chip vw ${subsView === 'grid' ? 'on' : ''}" data-vw="grid" title="海报墙">▦ 海报</span><span class="chip vw ${subsView === 'list' ? 'on' : ''}" data-vw="list" title="列表">☰ 列表</span>
+      ${subsView === 'grid' ? `<select id="s-size" title="海报大小">${[['s', '小海报'], ['m', '中海报'], ['l', '大海报']].map(([k, n]) => `<option value="${k}" ${subsSize === k ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ''}
+      <select id="s-sort">${SUB_SORT.map(([k, n]) => `<option value="${k}" ${subsSort === k ? 'selected' : ''}>排序：${n}</option>`).join('')}</select></span></div>` : '';
   $$('#s-filter [data-f]').forEach(c => c.onclick = () => { subsFilter = c.dataset.f; renderWall(); });
   $$('#s-filter [data-st]').forEach(c => c.onclick = () => { subsStatus = c.dataset.st; renderWall(); });
-  $('#s-sort')?.addEventListener('change', e => { subsSort = e.target.value; renderWall(); });
+  $('#s-sort')?.addEventListener('change', e => { subsSort = e.target.value; saveSubsPref(); renderWall(); });
+  $('#s-size')?.addEventListener('change', e => { subsSize = e.target.value; saveSubsPref(); renderWall(); });
+  $$('#s-filter [data-vw]').forEach(c => c.onclick = () => { subsView = c.dataset.vw; saveSubsPref(); renderWall(); });
   const shown = visibleSubs();
   for (const id of [...selSet]) if (!tasks.some(t => t.id === id)) selSet.delete(id);   // 已经不存在的（比如被删了）不再保留选中
-  box.innerHTML = shown.length ? `<div class="wall ${selMode ? 'selmode' : ''}">${shown.map(tileHTML).join('')}</div>`
+  box.innerHTML = shown.length ? (subsView === 'list' ? `<div class="llist ${selMode ? 'selmode' : ''}">${shown.map(listRowHTML).join('')}</div>`
+      : `<div class="wall sz-${subsSize} ${selMode ? 'selmode' : ''}">${shown.map(tileHTML).join('')}</div>`)
     : (tasks.length ? '<div class="empty">没有符合筛选条件的订阅。</div>' : '<div class="empty">还没有订阅。去「🍿 影视推荐」搜索或点一部，进详情页就能订阅。</div>');
   $$('.wt', box).forEach(el => {
     el.classList.toggle('sel', selSet.has(el.dataset.id));
@@ -1538,6 +1582,24 @@ function openSub(id, tab = 'info') {
   const t = subsData.find(x => x.id === id); if (!t) return;
   if (!subModal || !subModal.isConnected) subModal = modal('', 'wide');
   renderSub(subModal, t, tab);
+}
+const subMeta = {};
+async function loadSubMeta(m, t) {
+  const box = $('#sd-meta', m); if (!box) return;
+  const mv = t.media === 'movie', key = (mv ? 'm' : 't') + t.tmdb_id;
+  try {
+    const d = subMeta[key] || (subMeta[key] = await api(`/tmdb/${mv ? 'movie' : 'tv'}/${t.tmdb_id}`));
+    if (!box.isConnected) return;
+    const date = mv ? d.release_date : d.first_air_date;
+    box.innerHTML = `<div class="sub" style="display:flex;gap:6px 14px;flex-wrap:wrap">
+        ${date ? `<span>${mv ? '上映' : '首播'}：${esc(date)}</span>` : ''}${d.vote_average ? `<span>★ ${d.vote_average}（${d.vote_count}）</span>` : ''}
+        ${d.runtime ? `<span>${d.runtime} 分钟</span>` : ''}${d.status && !mv ? `<span>${esc(d.status)}</span>` : ''}${(d.genres || []).length ? `<span>${esc(d.genres.join(' / '))}</span>` : ''}</div>
+      ${d.tagline ? `<div class="sub" style="font-style:italic;margin-top:4px">${esc(d.tagline)}</div>` : ''}
+      ${castHTML(d.cast || [])}
+      <div class="actions" style="margin-top:10px"><button class="btn xs" id="sd-more">查看完整影视详情（分季集数 / 相似作品）</button></div>`;
+    bindCast(box);
+    $('#sd-more', box).onclick = () => mv ? showMovieDetail(t.tmdb_id) : showDetail(t.tmdb_id);
+  } catch (e) { if (box.isConnected) box.innerHTML = `<div class="sub">影视资料暂时读取不到：${esc(e.message)}</div>`; }
 }
 function renderSub(m, t, tab) {
   const s = t.snap, live = liveProg[t.id], b = badgeOf(t), dead = t.links.filter(l => l.ban).length;
@@ -1594,6 +1656,7 @@ function renderSub(m, t, tab) {
         ${x.files && x.files.length ? `<details><summary>${x.files.length} 个文件</summary><div class="files">${x.files.map(esc).join('<br>')}</div></details>` : ''}</div>`).join('')
       : '<div class="empty">还没有转存记录（只记录有新转存或出错的那几次）</div>';
   }
+  if (tab === 'info' && t.tmdb_id) panel += '<div id="sd-meta"><div class="sub">正在读取影视资料…</div></div>';
   const tabs = [['info', '概览'], ['links', `分享链接（${t.links.length}）`], ['hist', `转存记录（${(t.history || []).length}）`]];
   $('.modal', m).innerHTML = `<button class="x">×</button>
     <div class="sd-head"><div class="pic" style="${posterBg(t.poster)}"></div>
@@ -1606,6 +1669,7 @@ function renderSub(m, t, tab) {
     <div class="tabs">${tabs.map(([k, n]) => `<span class="chip ${k === tab ? 'on' : ''}" data-tab="${k}">${n}</span>`).join('')}</div>
     <div class="panel">${panel}</div>`;
   const reload = tb => afterChange(t.id, tb || tab);
+  if (tab === 'info') loadSubMeta(m, t);
   $('.x', m).onclick = () => m.remove();
   $$('[data-tab]', m).forEach(c => c.onclick = () => renderSub(m, subsData.find(x => x.id === t.id) || t, c.dataset.tab));
   const setLinks = guard(async urls => { await api('/tasks/' + t.id, 'PUT', {links_text: urls.join('\n')}); await reload('links'); });
@@ -1668,7 +1732,7 @@ $('#s-refresh').onclick = guard(async () => {   // 依次实时查询所有订�
   } finally { btn.disabled = false; btn.textContent = '刷新全部进度'; }
 });
 $('#s-reset').onclick = guard(async () => {   // 筛选 / 排序 / 多选全部还原，再重新读一遍订阅
-  subsFilter = 'all'; subsStatus = 'all'; subsSort = 'default'; selMode = false; selSet.clear();
+  subsFilter = 'all'; subsStatus = 'all'; subsSort = 'new'; saveSubsPref(); selMode = false; selSet.clear();
   $('#s-list').innerHTML = '<div class="empty">加载中…</div>'; await loadSubs(); toast('已重置并刷新', 'ok');
 });
 $('#s-purge').onclick = guard(async () => {

@@ -19,7 +19,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, Store
 from .tmdb import Tmdb
 
-VERSION = "1.4.2"
+VERSION = "1.5.2"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou")
@@ -338,6 +338,54 @@ def create_app(store=None, engine=None):
 
     img_cache = {}
 
+    @app.get("/api/calendar")
+    def calendar():
+        """追剧日历：[start, end] 日期范围内，订阅里每一集的播出日 / 电影的上映日，以及它们的入库状态。"""
+        from concurrent.futures import ThreadPoolExecutor
+        from datetime import date as _date
+        start, end = request.args.get("start", ""), request.args.get("end", "")
+        if not (re.fullmatch(r"\d{4}-\d{2}-\d{2}", start) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end)) or end < start:
+            raise ValueError("请给出 start / end（YYYY-MM-DD）")
+        today = _date.today().isoformat()
+        tm = Tmdb(store.data["tmdb"])
+        tasks = [t for t in store.data["tasks"] if t.get("kind") == "subscription"]
+        events = []
+
+        def tv_status(t, ep, air):
+            if air > today:
+                return "unaired"
+            snap = t.get("snap")
+            if not snap:
+                return "unknown"
+            miss = snap.get("missing") or []
+            if ep in miss or (snap.get("missing_n", 0) > len(miss) and miss and ep > max(miss)):
+                return "missing"
+            return "have"
+
+        def one(t):
+            rows = []
+            base = {"task_id": t["id"], "name": t["name"], "poster": t.get("poster", ""), "media": t.get("media", "tv")}
+            if t.get("media") == "movie":
+                rd = t.get("release_date") or ""
+                if start <= rd <= end:
+                    st = "have" if t.get("done") else ("unaired" if rd > today else "missing")
+                    rows.append({**base, "date": rd, "season": 0, "ep": 0, "ep_name": "", "status": st})
+            elif t.get("tmdb_id") and tm.ready:
+                try:
+                    for e in tm.season_episodes(t["tmdb_id"], t["season"]):
+                        if start <= e["air_date"] <= end:
+                            rows.append({**base, "date": e["air_date"], "season": t["season"], "ep": e["ep"], "ep_name": e["name"],
+                                         "status": tv_status(t, e["ep"], e["air_date"])})
+                except Exception as ex:
+                    log.warning("追剧日历：《%s》第 %s 季读取失败：%s", t["name"], t.get("season"), ex)
+            return rows
+
+        with ThreadPoolExecutor(8) as pool:
+            for rows in pool.map(one, tasks):
+                events += rows
+        events.sort(key=lambda e: (e["date"], e["name"], e["ep"]))
+        return jsonify(events=events, today=today, tmdb=tm.ready)
+
     @app.get("/api/tmdb/img/<size>/<name>")
     def tmdb_img(size, name):
         # 严格白名单，避免被当成任意地址的代理（SSRF）
@@ -395,6 +443,11 @@ def create_app(store=None, engine=None):
     def tmdb_tv(tid):
         d = tmdb_call(tmdb_or_400().detail, tid)
         annotate([d])
+        # 每一季各自的订阅状态（同一部剧可以分季订阅，不能只看"有没有订阅"）
+        d["subscribed_seasons"] = {
+            str(x.get("season") or 1): x["id"] for x in store.data["tasks"]
+            if x.get("media", "tv") == "tv" and x.get("tmdb_id") == tid and x.get("kind") == "subscription"}
+        d["sub_id"] = d["sub_id"] if d["subscribed_seasons"] or d["sub_id"] else None
         cli = engine.emby()
         if cli and d["in_emby"]:
             try:

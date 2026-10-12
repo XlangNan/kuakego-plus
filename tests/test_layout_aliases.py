@@ -319,3 +319,20 @@ def test_tv_same_episode_in_several_versions_picks_the_best_and_respects_hdr_fol
     fq, t = mk(eng, {"a": {"files": files}}, ["a"], want_hdr="no")
     eng.run_task(t["id"], manual=True)
     assert sorted(n for _, n in fq.saves) == ["第01集.mp4", "第02集.mp4"] and sorted(fq.dir.values()) == ["S01E01.mp4", "S01E02.mp4"]
+
+
+def test_tv_detail_reports_subscribed_seasons():
+    import app.main as M
+    class FT:
+        ready = True
+        def __init__(self, cfg): pass
+        def detail(self, tid): return {"id": tid, "name": "庆余年", "seasons": [], "first_air_date": "2019-11-26"}
+    with mock.patch.object(M, "Tmdb", FT):
+        store, eng, c, h = make_client()
+        store.data["tmdb"] = {"api_key": "k"}
+        for sn in (1, 2):
+            eng.create_task({"name": f"庆余年 S{sn}", "savepath": f"/x/{sn}", "links_text": "", "kind": "subscription",
+                             "media": "tv", "tmdb_id": 77, "season": sn})
+        d = c.get("/api/tmdb/tv/77", headers=h).get_json()
+        assert set(d["subscribed_seasons"]) == {"1", "2"} and d["sub_id"]
+        assert c.get("/api/tmdb/tv/78", headers=h).get_json()["subscribed_seasons"] == {}

@@ -71,7 +71,7 @@ class Tmdb(BaseHTTPRequestHandler):
         elif p == "/discover/tv": d = {"results": filt(SHOWS + ANIME_TV), "total_pages": 3}
         elif p == "/search/tv": d = {"results": SHOWS + ANIME_TV, "total_pages": 1}
         elif p.startswith("/tv/") and "/season/" in p:
-            d = {"episodes": [{"episode_number": i, "air_date": "2024-05-%02d" % i if i <= 8 else "2099-01-01"} for i in range(1, 11)]}
+            d = {"episodes": [{"episode_number": i, "name": "第%d集" % i, "air_date": (__import__("datetime").date.today() + __import__("datetime").timedelta(days=(i - 6) * (1 + int(p.split("/")[2]) % 3))).isoformat()} for i in range(1, 11)]}
         elif p.startswith("/tv/"):
             s_ = ALL_TV[int(p.split("/")[2])]
             d = {**s_, "genres": [{"id": g, "name": "动画" if g == 16 else "剧情"} for g in s_["genre_ids"]], "status": "Returning Series", "vote_count": 420,

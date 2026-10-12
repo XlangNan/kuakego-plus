@@ -302,6 +302,12 @@ class Tmdb:
                 "runtime": d.get("runtime") or 0, "tagline": d.get("tagline") or "",
                 "vote_count": d.get("vote_count", 0), "cast": cast}
 
+    def season_episodes(self, tmdb_id, season):
+        """本季每一集：[{ep, name, air_date}]，没有播出日期的集不返回（日历排不上）。"""
+        d = self._get(f"/tv/{tmdb_id}/season/{season}", 3600)
+        return [{"ep": e["episode_number"], "name": e.get("name") or "", "air_date": e["air_date"]}
+                for e in d.get("episodes", []) if e.get("air_date")]
+
     def aired(self, tmdb_id, season):
         """(已播出集号集合, 本季总集数)；air_date 缺失的按未播出处理。"""
         d = self._get(f"/tv/{tmdb_id}/season/{season}", 3600)

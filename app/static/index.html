@@ -470,6 +470,10 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 }
 @media(max-width:860px){#sideBtn{display:none}}
 
+.prow{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin:6px 0}
+.prow .pl{min-width:44px;color:var(--dim);font-size:12px;padding-top:5px}
+.prow .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.pc .img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .lbrow{border-bottom:1px solid var(--line);padding:10px 0}
 .lbrow:last-child{border:0}
 .lbhead{display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -556,7 +560,7 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   <div class="card">
     <div class="rhead">
     <div class="board" id="r-board">
-      <button class="bt on" data-s="tv">📺 剧集</button><button class="bt" data-s="movie">🎬 电影</button><button class="bt" data-s="anime">🌸 动漫</button><button class="bt" data-s="variety">🎤 综艺</button>
+      <button class="bt on" data-s="tv">📺 剧集</button><button class="bt" data-s="movie">🎬 电影</button><button class="bt" data-s="anime">🌸 动漫</button><button class="bt" data-s="variety">🎤 综艺</button><button class="bt" data-s="platform">📡 平台</button>
     </div>
     <div class="toolbar" style="margin-bottom:10px">
       <input type="text" id="r-q" placeholder="搜索剧名…">
@@ -1232,6 +1236,7 @@ const R_BOARDS = {
   tv: {ph: '搜索剧名…', cats: [['home', '精选'], ['all', '全部'], ['cn', '国产剧'], ['kr_jp', '日韩剧'], ['us_eu', '欧美剧']]},
   movie: {ph: '搜索电影…', cats: [['home', '精选'], ['all', '全部'], ['cn', '华语'], ['kr_jp', '日韩'], ['us_eu', '欧美']]},
   variety: {ph: '搜索综艺 / 真人秀 / 脱口秀…', cats: [['home', '精选'], ['all', '全部'], ['cn', '国产综艺'], ['kr_jp', '日韩综艺'], ['us_eu', '欧美综艺']]},
+  platform: {ph: '', cats: []},
   anime: {ph: '搜索番剧 / 动画电影…', cats: [['home', '精选'], ['all', '全部'], ['jp', '日本'], ['cn', '国产'], ['us_eu', '欧美'], ['movie', '动画电影']]},
 };
 let rScope = 'tv', rCat = 'home', rPage = 1, rTotal = 1, rQuery = '', rReq = 0;
@@ -1243,10 +1248,11 @@ function posterCard(it, showType = false) {
     <div class="t" title="${esc(it.name)}">${esc(it.name)}</div><div class="y" title="${esc(it.character || '')}">${esc(it.year || (it.first_air_date || '').slice(0, 4) || '—')}${it.character ? ' · 饰 ' + esc(it.character) : ''}</div></div>`;
 }
 // 点海报：电影 → 电影详情；剧集 / 番剧 → 剧集详情（动漫板块里两种混排，靠 data-media 区分）
-const bindPosters = root => $$('.pc', root).forEach(p => p.onclick = () => (p.dataset.media === 'movie' ? showMovieDetail : showDetail)(+p.dataset.id));
+const bindPosters = root => $$('.pc[data-id]', root).forEach(p => p.onclick = () => (p.dataset.media === 'movie' ? showMovieDetail : showDetail)(+p.dataset.id));
 const actorRow = people => `<div class="actors"><label class="l">演员</label><div class="cast">${people.map(p =>
   `<div data-pid="${p.id}" title="${esc(p.known_for.join('、'))}"><i style="background-image:url('${esc(p.profile_url)}')"></i>${esc(p.name)}<span>${esc(p.known_for[0] || '')}</span></div>`).join('')}</div></div>`;
 async function loadRecommend(append = false) {
+  if (rScope === 'platform') return loadPlatform(append);
   const body = $('#r-body'), more = $('#r-more'), sc = rScope, my = ++rReq, typed = sc === 'anime';
   const stale = () => my !== rReq;   // 加载期间用户切了板块 / 分类：丢掉过期的结果，免得串台
   try {
@@ -1274,6 +1280,99 @@ async function loadRecommend(append = false) {
     }
   } catch (e) { if (!stale()) { body.innerHTML = `<div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; more.style.display = 'none'; } }
 }
+
+/* ---------- 平台板块：腾讯视频 / 芒果TV / 爱奇艺 / 哔哩哔哩 / Netflix … ---------- */
+let pfCat = null;                       // /api/platforms 的结果（平台目录）
+let pf = {id: 'tencent', ch: 'tv', flt: {}};
+try { const x = JSON.parse(localStorage.getItem('qp-plat') || '{}'); if (x.id) pf = {id: x.id, ch: x.ch || 'tv', flt: {}}; } catch (_) {}
+let pfGroups = [], pfOpen = false;
+try { pfOpen = localStorage.getItem('qp-pf-open') === '1'; } catch (_) {}
+const savePf = () => { try { localStorage.setItem('qp-plat', JSON.stringify({id: pf.id, ch: pf.ch})); } catch (_) {} };
+const platUI = on => { ['#r-q', '#r-search', '#r-sort'].forEach(q => $(q).style.display = on ? 'none' : ''); };
+async function renderPlatformBar(reload = true) {
+  const box = $('#r-cats');
+  try {
+    if (!pfCat) pfCat = (await api('/platforms')).platforms;
+    const cur = pfCat.find(p => p.id === pf.id) || pfCat[0]; pf.id = cur.id;
+    if (!cur.channels.find(c => c.key === pf.ch)) pf.ch = cur.channels[0].key;
+    const chip = (attr, val, text, on) => `<span class="chip ${on ? 'on' : ''}" ${attr}="${esc(val)}">${esc(text)}</span>`;
+    const row = (label, inner) => `<div class="prow"><span class="pl">${label}</span><div class="chips">${inner}</div></div>`;
+    box.innerHTML = '<div style="flex:0 0 100%;width:100%">' + row('平台', pfCat.map(p => chip('data-pid', p.id, p.name, p.id === pf.id)).join('') + '<span class="chip" data-pset="1" title="平台设置（爱奇艺 Cookie）">⚙</span>')
+      + row('分类', cur.channels.map(c => chip('data-pch', c.key, c.label, c.key === pf.ch)).join(''))
+      + row('筛选', '<span class="chip" id="pf-tg"></span><span class="sub" id="pf-sum" style="align-self:center"></span>')
+      + '<div id="pf-groups"></div></div>';
+    $('#pf-tg', box).onclick = () => { pfOpen = !pfOpen; try { localStorage.setItem('qp-pf-open', pfOpen ? '1' : '0'); } catch (_) {} pfShow(); };
+    $$('[data-pid]', box).forEach(c => c.onclick = () => { pf = {id: c.dataset.pid, ch: pf.ch, flt: {}}; savePf(); renderPlatformBar(); });
+    $$('[data-pch]', box).forEach(c => c.onclick = () => { pf.ch = c.dataset.pch; pf.flt = {}; savePf(); renderPlatformBar(); });
+    $('[data-pset]', box).onclick = platformSettings;
+    if (reload) loadPlatform();
+    drawPfGroups(await api(`/platforms/${pf.id}/filters?channel=${pf.ch}`).then(r => r.groups).catch(() => []));
+  } catch (e) { box.innerHTML = `<div class="sub" style="color:var(--err)">${esc(e.message)}</div>`; }
+}
+function pfShow() {
+  const g = $('#pf-groups'), tg = $('#pf-tg'); if (!g || !tg) return;
+  g.style.display = pfOpen ? '' : 'none';
+  tg.textContent = pfOpen ? '▾ 收起筛选' : '▸ 展开筛选';
+  const sel = pfGroups.filter(x => x.key !== 'sort' && pf.flt[x.key] != null).map(x => `${x.name}：${(x.options.find(o => o.value === pf.flt[x.key]) || {}).name || pf.flt[x.key]}`);
+  const sort = pfGroups.find(x => x.key === 'sort');
+  if (sort && pf.flt.sort != null) sel.push('排序：' + ((sort.options.find(o => o.value === pf.flt.sort) || {}).name || ''));
+  const sm = $('#pf-sum'); sm.innerHTML = sel.length ? `${esc(sel.join(' · '))} <a id="pf-clr" style="cursor:pointer">清除</a>` : (pfOpen ? '' : '未设置筛选');
+  const c = $('#pf-clr'); if (c) c.onclick = () => { pf.flt = {}; drawPfGroups(pfGroups); loadPlatform(); };
+}
+function drawPfGroups(groups) {
+  pfGroups = groups;
+  const box = $('#pf-groups'); if (!box) return;
+  box.innerHTML = groups.map(g => `<div class="prow"><span class="pl">${esc(g.name)}</span><div class="chips" data-gk="${esc(g.key)}">
+    ${g.key === 'sort' ? '' : `<span class="chip ${pf.flt[g.key] == null ? 'on' : ''}" data-v="">全部</span>`}
+    ${g.options.map((o, i) => `<span class="chip ${pf.flt[g.key] === o.value || (g.key === 'sort' && pf.flt.sort == null && i === 0) ? 'on' : ''}" data-v="${esc(o.value)}">${esc(o.name)}</span>`).join('')}</div></div>`).join('');
+  $$('#pf-groups .chips', box).forEach(row => $$('.chip', row).forEach(c => c.onclick = () => {
+    if (c.dataset.v === '') delete pf.flt[row.dataset.gk]; else pf.flt[row.dataset.gk] = c.dataset.v;
+    $$('.chip', row).forEach(x => x.classList.toggle('on', x === c)); pfShow(); loadPlatform();
+  }));
+  pfShow();
+}
+function nativeCard(it) {
+  return `<div class="pc" data-native="1" data-title="${esc(it.title)}" data-year="${esc(it.year)}" data-section="${esc(it.section || 'tv')}"><div class="img" style="background:linear-gradient(135deg,#6a82fb,#8b5cf6)">
+    <span class="wph" style="position:absolute;inset:0;display:grid;place-items:center;padding:8px;text-align:center;color:#fff;font-size:13px">${esc(it.title)}</span>
+    ${it.poster ? `<img src="${esc(it.poster)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">` : ''}</div>
+    <div class="t" title="${esc(it.title)}">${esc(it.title)}</div><div class="y">${esc(it.year || '—')}</div></div>`;
+}
+async function openNative(el) {
+  const title = el.dataset.title, section = el.dataset.section;
+  toast('正在 TMDB 里匹配「' + title + '」…', '', 1500);
+  try {
+    const {match} = await api(`/platforms/match?title=${encodeURIComponent(title)}&year=${encodeURIComponent(el.dataset.year)}&section=${section}`);
+    if (match) return (match.media === 'movie' ? showMovieDetail : showDetail)(match.id);
+  } catch (e) { return toast(e.message, 'err'); }
+  const m = modal(`<h3>没有在 TMDB 里匹配到</h3><p>「${esc(title)}」${el.dataset.year ? '（' + esc(el.dataset.year) + '）' : ''}没有找到年份对得上的条目，为避免订阅错片子，没有自动选择。</p>
+    <div class="actions"><button class="btn pri" id="nm-go">用片名去搜索</button><button class="btn" id="nm-no">关闭</button></div>`);
+  $('#nm-no', m).onclick = () => m.remove();
+  $('#nm-go', m).onclick = () => { m.remove(); setBoard(section, false); $('#r-q').value = clean(title); $('#r-search').click(); };
+}
+const clean = t => t.replace(/[（(【\[].*?[）)】\]]|第\s*[0-9一二三四五六七八九十]+\s*[季部]/g, ' ').replace(/\s+/g, ' ').trim() || t;
+async function loadPlatform(append = false) {
+  const body = $('#r-body'), more = $('#r-more'), my = ++rReq, stale = () => my !== rReq || rScope !== 'platform';
+  if (!append) { rPage = 1; body.innerHTML = '<div class="empty">加载中…</div>'; more.style.display = 'none'; }
+  try {
+    const q = new URLSearchParams({channel: pf.ch, page: rPage, filters: JSON.stringify(pf.flt)});
+    const d = await api(`/platforms/${pf.id}/items?${q}`);
+    if (stale()) return;
+    if (!append) body.innerHTML = '<div class="posters"></div>';
+    if (!d.items.length && !append) body.innerHTML = '<div class="empty">没有内容（换个筛选条件试试）</div>';
+    else $('.posters', body).insertAdjacentHTML('beforeend', d.items.map(x => d.native ? nativeCard(x) : posterCard(x, pf.ch === 'anime')).join(''));
+    bindPosters(body); $$('.pc[data-native]', body).forEach(p => p.onclick = () => openNative(p));
+    more.style.display = d.has_more ? '' : 'none';
+  } catch (e) { if (!stale()) { body.innerHTML = `<div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; more.style.display = 'none'; } }
+}
+async function platformSettings() {
+  const cur = await api('/settings/platforms').catch(() => ({}));
+  const m = modal(`<h3>平台设置</h3><p class="sub">爱奇艺的片库接口有风控，通常需要登录后的 Cookie 才能稳定使用：用浏览器打开 iqiyi.com 登录后，按 F12 → 网络 → 任意一个请求，复制请求头里的 Cookie。其他平台不需要设置。</p>
+    <label class="l">爱奇艺 Cookie ${cur.iqiyi_cookie_set ? '<span class="tag ok">已设置，留空保持不变</span>' : ''}</label><textarea id="ps-ck" rows="4" style="width:100%" placeholder="粘贴 Cookie"></textarea>
+    <div class="actions"><button class="btn pri" id="ps-ok">保存</button>${cur.iqiyi_cookie_set ? '<button class="btn" id="ps-clr">清除</button>' : ''}</div>`);
+  const save = async v => { await api('/settings/platforms', 'PUT', {iqiyi_cookie: v}); m.remove(); toast('已保存'); loadPlatform(); };
+  $('#ps-ok', m).onclick = () => { const v = $('#ps-ck', m).value.trim(); v ? save(v) : m.remove(); };
+  $('#ps-clr', m)?.addEventListener('click', () => save('__clear__'));
+}
 function setCat(c, sort) {
   rCat = c; rQuery = ''; $('#r-q').value = ''; if (sort) $('#r-sort').value = sort;
   $$('#r-cats .chip').forEach(x => x.classList.toggle('on', x.dataset.c === c)); loadRecommend();
@@ -1283,6 +1382,8 @@ function setBoard(sc, load = true) {
   const st = rState[sc] || {cat: 'home', sort: 'popularity'};
   rScope = sc; rCat = st.cat; rQuery = ''; $('#r-q').value = ''; $('#r-q').placeholder = R_BOARDS[sc].ph; $('#r-sort').value = st.sort;
   $$('#r-board .bt').forEach(b => b.classList.toggle('on', b.dataset.s === sc));
+  platUI(sc === 'platform');
+  if (sc === 'platform') { if (load) renderPlatformBar(true); else $('#r-cats').innerHTML = ''; return; }
   $('#r-cats').innerHTML = R_BOARDS[sc].cats.map(([k, n]) => `<span class="chip ${k === rCat ? 'on' : ''}" data-c="${k}">${n}</span>`).join('');
   $$('#r-cats .chip').forEach(c => c.onclick = () => setCat(c.dataset.c));
   if (load) loadRecommend();
@@ -1295,7 +1396,8 @@ if (!['s','m','l'].includes(rSize)) rSize = 'm';
 const applyRSize = () => { $('#r-body').classList.remove('rsz-s', 'rsz-m', 'rsz-l'); $('#r-body').classList.add('rsz-' + rSize); $('#r-size').value = rSize; };
 $('#r-size').onchange = e => { rSize = e.target.value; try { localStorage.setItem('qp-rec-size', rSize); } catch (_) {} applyRSize(); };
 applyRSize();
-$('#r-reset').onclick = () => { $('#r-sort').value = 'popularity'; window.scrollTo({top: 0}); setCat('home'); };   // 清空搜索词和搜索结果，回到默认首页并重新加载
+$('#r-reset').onclick = () => {
+  if (rScope === 'platform') { pf.flt = {}; window.scrollTo({top: 0}); renderPlatformBar(true); return; } $('#r-sort').value = 'popularity'; window.scrollTo({top: 0}); setCat('home'); };   // 清空搜索词和搜索结果，回到默认首页并重新加载
 $('#r-q').onkeydown = e => { if (e.key === 'Enter') $('#r-search').click(); };
 $('#r-more').onclick = () => { rPage++; loadRecommend(true); };
 setBoard('tv', false);

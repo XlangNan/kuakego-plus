@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import hmac
+import json
 import os
 import re
 import secrets
@@ -9,7 +10,7 @@ import time
 import requests
 from flask import Flask, abort, jsonify, request, send_from_directory, Response
 
-from . import hosts, notify
+from . import hosts, notify, platforms
 from .emby import Emby
 from .engine import Engine, Scheduler
 from .logbuf import log, ring, setup as setup_log
@@ -19,10 +20,10 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.9.6"
+VERSION = "1.10.2"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou", "auto")
+SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou", "auto", "platforms")
 
 
 def create_app(store=None, engine=None):
@@ -85,7 +86,9 @@ def create_app(store=None, engine=None):
 
     @app.get("/")
     def index():
-        return send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "index.html")
+        r = send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "index.html", max_age=0)
+        r.headers["Cache-Control"] = "no-cache"      # 升级后浏览器必须重新校验首页，不然普通刷新还是旧界面
+        return r
 
     # ------------------------------------------------------------ 账号
     def account_state(force=False):
@@ -405,6 +408,43 @@ def create_app(store=None, engine=None):
             img_cache[key] = (r.content, r.headers.get("Content-Type", "image/jpeg"))
         data, ctype = img_cache[key]
         return Response(data, mimetype=ctype, headers={"Cache-Control": "public, max-age=604800"})
+
+    # ------------------------------------------------------------ 平台板块：腾讯 / 芒果 / 爱奇艺 / 哔哩哔哩 / Netflix …
+    @app.get("/api/platforms")
+    def platforms_list():
+        return jsonify(platforms=platforms.catalog(), iqiyi_cookie_set=bool(store.data["platforms"].get("iqiyi_cookie")))
+
+    def plat_call(fn, name, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except KeyError:
+            raise
+        except Exception as e:
+            raise QuarkError(f"{name} 请求失败：{e}")
+
+    @app.get("/api/platforms/<pid>/filters")
+    def platforms_filters(pid):
+        ch = request.args.get("channel", "tv")
+        return jsonify(groups=plat_call(platforms.filters, pid, pid, ch))
+
+    @app.get("/api/platforms/<pid>/items")
+    def platforms_items(pid):
+        ch, page = request.args.get("channel", "tv"), int(request.args.get("page", 1))
+        try:
+            flt = json.loads(request.args.get("filters") or "{}")
+        except ValueError:
+            flt = {}
+        d = plat_call(platforms.items, pid, pid, ch, flt if isinstance(flt, dict) else {}, page,
+                      tmdb=Tmdb(store.data["tmdb"]), cfg=store.data["platforms"])
+        if not d["native"]:
+            annotate_mixed(d["items"])
+        return jsonify(d)
+
+    @app.get("/api/platforms/match")
+    def platforms_match():
+        tm = tmdb_or_400()
+        r = platforms.match(tm, request.args.get("title", ""), request.args.get("year", ""), request.args.get("section", "tv"))
+        return jsonify(match=r)
 
     # 影视推荐页的四个板块：scope = tv 剧集 / movie 电影 / anime 动漫（番剧 + 动画电影）/ variety 综艺（真人秀 + 脱口秀）
     @app.get("/api/tmdb/home")

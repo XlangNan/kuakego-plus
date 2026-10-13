@@ -129,6 +129,30 @@ class Tmdb:
         return {"items": [self.card(x) for x in d.get("results", []) if x.get("poster_path")],
                 "total_pages": min(d.get("total_pages", 1), 20)}
 
+    def provider_discover(self, provider, region, section, sort="popularity", page=1):
+        """某个流媒体平台（TMDB 的「可观看平台」，如 Netflix = 8）上的内容，按 剧集 / 电影 / 动漫 / 综艺 分开。"""
+        base = {"page": page, "with_watch_providers": str(provider), "watch_region": region,
+                "with_watch_monetization_types": "flatrate|free|ads"}
+        if section == "movie":
+            p = {**base, "include_adult": "false", "without_genres": str(ANIMATION)}
+            p.update({"popularity": {"sort_by": "popularity.desc"}, "rating": {"sort_by": "vote_average.desc", "vote_count.gte": 300},
+                      "latest": {"sort_by": "primary_release_date.desc", "primary_release_date.lte": date.today().isoformat(), "vote_count.gte": 3}}.get(sort, {"sort_by": "popularity.desc"}))
+            d = self._get("/discover/movie", **p)
+            return {"items": [self.movie_card(x) for x in d.get("results", []) if x.get("poster_path")],
+                    "total_pages": min(d.get("total_pages", 1), 20)}
+        p = {**base, **SORTS.get(sort, SORTS["popularity"])}
+        if section == "anime":
+            p["with_genres"] = str(ANIMATION)
+        elif section == "variety":
+            p["with_genres"], p["without_genres"] = VARIETY_OR, str(ANIMATION)
+        else:
+            p["without_genres"] = "|".join([str(ANIMATION), *map(str, VARIETY)])
+        if sort == "latest":
+            p["first_air_date.lte"] = date.today().isoformat()
+        d = self._get("/discover/tv", **p)
+        return {"items": [self.card(x) for x in d.get("results", []) if x.get("poster_path")],
+                "total_pages": min(d.get("total_pages", 1), 20)}
+
     def variety_search(self, q, page=1):
         d = self._get("/search/tv", 600, query=q, page=page)
         return {"items": [c for c in (self.card(x) for x in d.get("results", [])) if c["section"] == "variety"],

@@ -21,7 +21,21 @@ ANIME_COUNTRIES = {"jp": {"with_origin_country": "JP"}, "cn": {"with_origin_coun
 # 别名：优先取这些地区的译名（华语地区、日韩、英美），其次是各语言的翻译
 ALT_REGIONS = ("CN", "TW", "HK", "SG", "MO", "JP", "KR", "US", "GB")
 ALT_LANGS = ("zh", "en", "ja", "ko")
-TALK_NEWS = {10767, 10763}   # 访谈 / 新闻：演员「参演作品」里这类多是本人出镜，没有订阅价值
+NEWS = 10763
+VARIETY = (10764, 10767)   # 真人秀 / 脱口秀（访谈）：归「综艺」板块，不和剧集混在一起
+VARIETY_OR = "|".join(str(g) for g in VARIETY)
+SECTIONS = ("tv", "movie", "anime", "variety")
+
+
+def section_of(media, genre_ids):
+    """一部作品属于哪个板块：动画 → anime；剧集里的真人秀 / 脱口秀 → variety；其余按 tv / movie。"""
+    g = set(genre_ids or [])
+    if ANIMATION in g:
+        return "anime"
+    if media == "tv" and g & set(VARIETY):
+        return "variety"
+    return "movie" if media == "movie" else "tv"
+
 SORTS = {
     "popularity": {"sort_by": "popularity.desc"},
     "rating": {"sort_by": "vote_average.desc", "vote_count.gte": 200},
@@ -75,12 +89,13 @@ class Tmdb:
             "overview": it.get("overview") or "",
             "poster_url": self._url(it.get("poster_path")),
             "media": "tv", "genre_ids": it.get("genre_ids") or [],
+            "section": section_of("tv", it.get("genre_ids") or [g.get("id") for g in it.get("genres", [])]),
         }
 
     def trending(self, page=1):
-        """本周热门剧集。趋势接口没法按类型过滤，所以在这里把动画去掉（动画归「动漫」板块）。"""
+        """本周热门剧集。趋势接口没法按类型过滤，所以在这里把动画、综艺去掉（各归各的板块）。"""
         d = self._get("/trending/tv/week", page=page)
-        return {"items": [self.card(x) for x in d.get("results", []) if ANIMATION not in (x.get("genre_ids") or [])],
+        return {"items": [self.card(x) for x in d.get("results", []) if section_of("tv", x.get("genre_ids")) == "tv"],
                 "total_pages": min(d.get("total_pages", 1), 20)}
 
     def discover(self, category="all", sort="popularity", page=1, anime=False):
@@ -90,7 +105,7 @@ class Tmdb:
             p["with_genres"] = str(ANIMATION)
             p.update(ANIME_COUNTRIES.get(category, {}))
         else:
-            p["without_genres"] = str(ANIMATION)
+            p["without_genres"] = "|".join([str(ANIMATION), *map(str, VARIETY)])   # 动画归动漫、真人秀 / 脱口秀归综艺
             p.update(CATEGORIES.get(category, {}))
         if sort == "latest":
             p["first_air_date.lte"] = date.today().isoformat()
@@ -99,9 +114,32 @@ class Tmdb:
                 "total_pages": min(d.get("total_pages", 1), 20)}
 
     def search(self, q, page=1):
+        """剧集板块的搜索：只留普通剧集（动画在动漫板块、真人秀 / 脱口秀在综艺板块搜）。"""
         d = self._get("/search/tv", 600, query=q, page=page)
-        return {"items": [self.card(x) for x in d.get("results", [])],
+        return {"items": [c for c in (self.card(x) for x in d.get("results", [])) if c["section"] == "tv"],
                 "total_pages": min(d.get("total_pages", 1), 10)}
+
+    def variety_discover(self, category="all", sort="popularity", page=1):
+        """综艺板块：真人秀 + 脱口秀（不含动画）。category 同剧集：cn / kr_jp / us_eu / all。"""
+        p = {"page": page, **SORTS.get(sort, SORTS["popularity"]), "with_genres": VARIETY_OR, "without_genres": str(ANIMATION)}
+        p.update(CATEGORIES.get(category, {}))
+        if sort == "latest":
+            p["first_air_date.lte"] = date.today().isoformat()
+        d = self._get("/discover/tv", **p)
+        return {"items": [self.card(x) for x in d.get("results", []) if x.get("poster_path")],
+                "total_pages": min(d.get("total_pages", 1), 20)}
+
+    def variety_search(self, q, page=1):
+        d = self._get("/search/tv", 600, query=q, page=page)
+        return {"items": [c for c in (self.card(x) for x in d.get("results", [])) if c["section"] == "variety"],
+                "total_pages": min(d.get("total_pages", 1), 10)}
+
+    def variety_home(self):
+        return self._rows([
+            {"label": "🔥 热门综艺", "category": "all", "fn": lambda: self.variety_discover("all")},
+            {"label": "🇨🇳 国产综艺", "category": "cn", "fn": lambda: self.variety_discover("cn")},
+            {"label": "🇰🇷 日韩综艺", "category": "kr_jp", "fn": lambda: self.variety_discover("kr_jp")},
+            {"label": "🇺🇸 欧美综艺", "category": "us_eu", "fn": lambda: self.variety_discover("us_eu")}])
 
     def anime_search(self, q, page=1):
         """动漫板块的搜索：剧集和电影里的动画一起搜（番剧 + 动画电影）。"""
@@ -176,7 +214,7 @@ class Tmdb:
         for c in sorted((d.get("combined_credits") or {}).get("cast") or [], key=lambda c: c.get("popularity") or 0, reverse=True):
             mt = c.get("media_type")
             key = (mt, c.get("id"))
-            if mt not in ("tv", "movie") or not c.get("poster_path") or key in seen or TALK_NEWS & set(c.get("genre_ids") or []):
+            if mt not in ("tv", "movie") or not c.get("poster_path") or key in seen or NEWS in (c.get("genre_ids") or []):   # 新闻节目里多是本人出镜，丢掉
                 continue
             seen.add(key)
             card = self.card(c) if mt == "tv" else self.movie_card(c)
@@ -213,6 +251,11 @@ class Tmdb:
     def similar(self, media, tmdb_id):
         """推荐相似的作品：先取 TMDB 的「推荐」，不够再补「相似」。"""
         media = "movie" if media == "movie" else "tv"
+        try:
+            src = self._get(f"/{media}/{tmdb_id}", 3600)
+            mine = section_of(media, [g["id"] for g in src.get("genres", [])])
+        except Exception:
+            mine = None
         rows, seen = [], set()
         for kind in ("recommendations", "similar"):
             try:
@@ -225,7 +268,10 @@ class Tmdb:
                     rows.append(x)
             if len(rows) >= 12:
                 break
-        return {"items": [self.card(x) if media == "tv" else self.movie_card(x) for x in rows[:18]]}
+        cards = [self.card(x) if media == "tv" else self.movie_card(x) for x in rows]
+        if mine:
+            cards = [c for c in cards if c["section"] == mine]   # 综艺只推荐综艺，剧集只推荐剧集，不混在一起
+        return {"items": cards[:18]}
 
     def detail(self, tmdb_id):
         d = self._get(f"/tv/{tmdb_id}", append_to_response="credits,alternative_titles,translations")
@@ -242,6 +288,7 @@ class Tmdb:
             "backdrop_url": self._url(d.get("backdrop_path"), "w780"),
             "genres": [g["name"] for g in d.get("genres", [])],
             "anime": any(g.get("id") == ANIMATION for g in d.get("genres", [])),
+            "variety": self.card(d)["section"] == "variety",
             "status": d.get("status", ""),
             "vote_count": d.get("vote_count", 0),
             "number_of_seasons": d.get("number_of_seasons", 0),
@@ -260,7 +307,8 @@ class Tmdb:
         return {"id": it["id"], "name": it.get("title") or it.get("original_title") or "", "year": rd[:4],
                 "release_date": rd, "vote_average": round(it.get("vote_average") or 0, 1),
                 "overview": it.get("overview") or "", "poster_url": self._url(it.get("poster_path")),
-                "media": "movie", "genre_ids": it.get("genre_ids") or []}
+                "media": "movie", "genre_ids": it.get("genre_ids") or [],
+                "section": section_of("movie", it.get("genre_ids") or [g.get("id") for g in it.get("genres", [])])}
 
     def movie_discover(self, category="trending", page=1, sort="popularity", anime=False):
         """
@@ -285,8 +333,9 @@ class Tmdb:
                 "total_pages": min(d.get("total_pages", 1), 20)}
 
     def movie_search(self, q, page=1):
+        """电影板块的搜索：不含动画电影（在动漫板块搜）。"""
         d = self._get("/search/movie", 600, query=q, page=page, include_adult="false")
-        return {"items": [self.movie_card(x) for x in d.get("results", [])],
+        return {"items": [c for c in (self.movie_card(x) for x in d.get("results", [])) if c["section"] == "movie"],
                 "total_pages": min(d.get("total_pages", 1), 10)}
 
     def movie_detail(self, tmdb_id):

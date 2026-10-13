@@ -42,6 +42,7 @@ DEFAULTS = {
         "account_alert": True,     # Cookie 失效 / 网盘空间不足时通知
         "digest": False, "digest_hour": 20,   # 每日日报
     },
+    "library": {"scopes": []},   # 媒体库管理的范围：[{id, name, kind, lib_id, lib_name, emby_path, quark_path}]
     "maint_state": {},     # 维护任务的限频时间戳（内部使用）
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,

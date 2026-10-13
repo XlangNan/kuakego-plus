@@ -229,7 +229,7 @@ def test_tmdb_movie_client():
     t._get = fake_get
     d = t.movie_discover("trending"); assert seen[-1][0] == "/trending/movie/week" and d["items"][0] == {
         "id": 1, "name": "某电影", "year": "2024", "release_date": "2024-05-01", "vote_average": 7.8, "overview": "", "poster_url": "/api/tmdb/img/w342/p.jpg",
-        "media": "movie", "genre_ids": []} and d["total_pages"] == 20
+        "media": "movie", "genre_ids": [], "section": "movie"} and d["total_pages"] == 20
     t.movie_discover("cn"); assert seen[-1][0] == "/discover/movie" and seen[-1][1]["with_origin_country"] == "CN|HK|TW"
     t.movie_discover("top"); assert seen[-1][1]["sort_by"] == "vote_average.desc" and seen[-1][1]["vote_count.gte"] == 500
     t.movie_search("某电影"); assert seen[-1][0] == "/search/movie" and seen[-1][1]["query"] == "某电影"

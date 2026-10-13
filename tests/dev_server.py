@@ -31,7 +31,9 @@ MOVIES = [{"id": 101 + i, "title": t, "release_date": d, "vote_average": v, "pos
                                           ("经典老片", "1999-03-31", 8.7), ("华语新片", "2025-02-10", 7.1), ("动作大片", "2024-07-19", 8.0)])]
 
 
-ALL_TV = {x["id"]: x for x in SHOWS + ANIME_TV}
+VARIETY_TV = [{"id": 300 + i, "name": n, "first_air_date": d, "vote_average": 7.5, "overview": "综艺简介。" * 4, "poster_path": "/v%d.jpg" % i,
+               "backdrop_path": None, "origin_country": ["CN"], "genre_ids": [10764]} for i, (n, d) in enumerate([("向往的生活", "2024-04-26"), ("乘风2024", "2024-05-10"), ("奔跑吧", "2024-06-01")])]
+ALL_TV = {x["id"]: x for x in SHOWS + ANIME_TV + VARIETY_TV}
 ALL_MOVIES = {x["id"]: x for x in MOVIES + ANIME_MOVIES}
 
 
@@ -42,9 +44,10 @@ class Tmdb(BaseHTTPRequestHandler):
         u = urlparse(self.path); p, q = u.path, parse_qs(u.query)
         with_g, without_g = q.get("with_genres", [""])[0], q.get("without_genres", [""])[0]
         def filt(items):   # 模拟 TMDB 的 with_genres / without_genres
-            if with_g == "16": return [x for x in items if 16 in x["genre_ids"]]
-            if without_g == "16": return [x for x in items if 16 not in x["genre_ids"]]
-            return items
+            out = items
+            if with_g: out = [x for x in out if set(map(int, with_g.split("|"))) & set(x["genre_ids"])]
+            if without_g: out = [x for x in out if not set(map(int, without_g.split("|"))) & set(x["genre_ids"])]
+            return out
         if p == "/search/person":
             hit = "张若昀" in q.get("query", [""])[0]
             d = {"results": [{"id": 501, "name": "张若昀", "profile_path": "/z.jpg", "known_for_department": "Acting", "popularity": 30,
@@ -53,7 +56,7 @@ class Tmdb(BaseHTTPRequestHandler):
             d = {"id": 501, "name": "张若昀", "profile_path": None, "known_for_department": "Acting", "birthday": "1988-08-13", "place_of_birth": "北京",
                  "biography": "中国内地男演员。" * 10,
                  "combined_credits": {"cast": [{"id": x["id"], "media_type": "tv", "name": x["name"], "first_air_date": x["first_air_date"], "vote_average": x["vote_average"],
-                                                "poster_path": x["poster_path"], "genre_ids": x["genre_ids"], "popularity": 50 - i, "character": "范闲"} for i, x in enumerate(SHOWS[:5])] +
+                                                "poster_path": x["poster_path"], "genre_ids": x["genre_ids"], "popularity": 50 - i, "character": "范闲"} for i, x in enumerate(SHOWS[:5] + VARIETY_TV[:2] + ANIME_TV[:1])] +
                                      [{"id": MOVIES[0]["id"], "media_type": "movie", "title": MOVIES[0]["title"], "release_date": "2024-06-01", "vote_average": 7.8,
                                        "poster_path": "/p0.jpg", "genre_ids": [18], "popularity": 60, "character": "男主"}]}}
         elif p.endswith(("/recommendations", "/similar")):
@@ -67,9 +70,9 @@ class Tmdb(BaseHTTPRequestHandler):
         elif p == "/trending/movie/week": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 3}          # 趋势接口混着动画，由服务端去掉
         elif p == "/discover/movie": d = {"results": filt(MOVIES + ANIME_MOVIES), "total_pages": 3}
         elif p == "/search/movie": d = {"results": MOVIES + ANIME_MOVIES, "total_pages": 1}
-        elif p == "/trending/tv/week": d = {"results": SHOWS + ANIME_TV, "total_pages": 3}
-        elif p == "/discover/tv": d = {"results": filt(SHOWS + ANIME_TV), "total_pages": 3}
-        elif p == "/search/tv": d = {"results": SHOWS + ANIME_TV, "total_pages": 1}
+        elif p == "/trending/tv/week": d = {"results": SHOWS + ANIME_TV + VARIETY_TV, "total_pages": 3}
+        elif p == "/discover/tv": d = {"results": filt(SHOWS + ANIME_TV + VARIETY_TV), "total_pages": 3}
+        elif p == "/search/tv": d = {"results": SHOWS + ANIME_TV + VARIETY_TV, "total_pages": 1}
         elif p.startswith("/tv/") and "/season/" in p:
             d = {"episodes": [{"episode_number": i, "name": "第%d集" % i, "air_date": (__import__("datetime").date.today() + __import__("datetime").timedelta(days=(i - 6) * (1 + int(p.split("/")[2]) % 3))).isoformat()} for i in range(1, 11)]}
         elif p.startswith("/tv/"):

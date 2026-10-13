@@ -13,6 +13,7 @@ from datetime import date, datetime
 from . import notify
 from .emby import Emby
 from .logbuf import log
+from .library import Library
 from .maintenance import Maintenance
 from .pansou import PanSouError
 from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
@@ -75,6 +76,7 @@ class Engine:
         self.running = None    # 正在运行的任务 id
         self._q, self._q_cookie = None, None
         self.maint = Maintenance(self)
+        self.library = Library(self)
         self._seed_recent()
         self._seed_recent_dirs()
 
@@ -164,7 +166,7 @@ class Engine:
         want_hdr = pick("want_hdr", "any") if pick("want_hdr", "any") in ("any", "yes", "no") else "any"
         fields = {
             "kind": kind, "want_res": want_res, "want_hdr": want_hdr,
-            "media": media, "anime": bool(pick("anime", False)), "year": year, "release_date": (pick("release_date", "") or "").strip(),
+            "media": media, "anime": bool(pick("anime", False)), "variety": bool(pick("variety", False)), "year": year, "release_date": (pick("release_date", "") or "").strip(),
             "no_cam": bool(pick("no_cam", media == "movie")), "done": bool(pick("done", False)),
             "auto_find": bool(pick("auto_find", False)), "upgrade_watch": bool(pick("upgrade_watch", False)),
             "strict_season": bool(pick("strict_season", kind == "subscription")),
@@ -200,8 +202,8 @@ class Engine:
 
     @staticmethod
     def _dir_kind(t):
-        """「最近使用的目录」按这个分开记：tv 剧集 / movie 电影 / anime 动漫（番剧和动画电影），推荐目录时互不干扰。"""
-        return "anime" if t.get("anime") else t.get("media", "tv")
+        """「最近使用的目录」按这个分开记：tv 剧集 / movie 电影 / anime 动漫（番剧和动画电影）/ variety 综艺，推荐目录时互不干扰。"""
+        return "anime" if t.get("anime") else "variety" if t.get("variety") else t.get("media", "tv")
 
     def _remember_dir(self, path, name, media="tv"):
         """记下最近使用的保存目录（去重、新的在前、最多 12 条；根目录不记）。调用方需持有 store.lock。"""
@@ -289,7 +291,7 @@ class Engine:
         d["strict_season"] = self._strict_season(t)
         d["auto_find"] = bool(t.get("auto_find"))
         d["media"], d["year"], d["done"] = t.get("media", "tv"), t.get("year", 0), bool(t.get("done"))
-        d["anime"] = bool(t.get("anime"))
+        d["anime"], d["variety"] = bool(t.get("anime")), bool(t.get("variety"))
         d["upgrade_watch"], d["upgrade"] = bool(t.get("upgrade_watch")), t.get("upgrade") or None
         d["release_date"], d["no_cam"] = t.get("release_date", ""), bool(t.get("no_cam"))
         d["want_res"], d["want_hdr"] = t.get("want_res", []), t.get("want_hdr", "any")

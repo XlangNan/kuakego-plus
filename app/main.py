@@ -19,7 +19,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.7.1"
+VERSION = "1.9.6"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou", "auto")
@@ -334,7 +334,7 @@ def create_app(store=None, engine=None):
 
     def scope_arg():
         s = request.args.get("scope", "tv")
-        return s if s in ("tv", "movie", "anime") else "tv"
+        return s if s in ("tv", "movie", "anime", "variety") else "tv"
 
     img_cache = {}
 
@@ -406,11 +406,11 @@ def create_app(store=None, engine=None):
         data, ctype = img_cache[key]
         return Response(data, mimetype=ctype, headers={"Cache-Control": "public, max-age=604800"})
 
-    # 影视推荐页的三个板块：scope = tv 剧集（不含动画）/ movie 电影（不含动画）/ anime 动漫（番剧 + 动画电影）
+    # 影视推荐页的四个板块：scope = tv 剧集 / movie 电影 / anime 动漫（番剧 + 动画电影）/ variety 综艺（真人秀 + 脱口秀）
     @app.get("/api/tmdb/home")
     def tmdb_home():
         tm = tmdb_or_400()
-        rows = {"tv": tm.home, "movie": tm.movie_home, "anime": tm.anime_home}[scope_arg()]()
+        rows = {"tv": tm.home, "movie": tm.movie_home, "anime": tm.anime_home, "variety": tm.variety_home}[scope_arg()]()
         for r in rows:
             annotate_mixed(r["items"])
         return jsonify(rows=rows)
@@ -424,6 +424,8 @@ def create_app(store=None, engine=None):
         elif scope == "anime":
             d = (tmdb_call(tm.movie_discover, "all", page, sort, True) if cat == "movie"
                  else tmdb_call(tm.discover, cat, sort, page, True))
+        elif scope == "variety":
+            d = tmdb_call(tm.variety_discover, cat, sort, page)
         else:
             d = tmdb_call(tm.discover, cat, sort, page)
         annotate_mixed(d["items"])
@@ -435,7 +437,7 @@ def create_app(store=None, engine=None):
         if not q:
             return jsonify(items=[], total_pages=1)
         page = int(request.args.get("page", 1))
-        d = tmdb_call({"tv": tm.search, "movie": tm.movie_search, "anime": tm.anime_search}[scope], q, page)
+        d = tmdb_call({"tv": tm.search, "movie": tm.movie_search, "anime": tm.anime_search, "variety": tm.variety_search}[scope], q, page)
         annotate_mixed(d["items"])
         return jsonify(d)
 
@@ -523,6 +525,7 @@ def create_app(store=None, engine=None):
             "name": data.get("name") or info["name"], "poster": info["poster_url"],
             "overview": info["overview"],
         }
+        payload["variety"] = bool(info.get("variety"))   # 综艺（真人秀 / 脱口秀）：目录和订阅分类里单独成类
         payload["anime"] = bool(info.get("anime"))   # 动画（番剧 / 动画电影）：目录推荐时和普通剧集、电影分开
         payload["aliases"] = info.get("aliases") or []   # 其他名称：主名搜不到资源时，自动找资源会换别名再搜
         payload["emby_layout"] = bool(data.get("emby_layout", False)) and media == "tv"
@@ -560,6 +563,54 @@ def create_app(store=None, engine=None):
         return jsonify(ok=True)
 
     # ------------------------------------------------------------ 维护 / 备份 / 批量
+    # ------------------------------------------------------------ 媒体库管理
+    @app.get("/api/library/scopes")
+    def lib_scopes():
+        return jsonify(scopes=engine.library.scopes())
+
+    @app.put("/api/library/scopes")
+    def lib_scopes_save():
+        return jsonify(scopes=engine.library.save_scopes(body().get("scopes") or []))
+
+    @app.get("/api/library/emby-libraries")
+    def lib_emby_libs():
+        return jsonify(libraries=engine.library.libraries())
+
+    @app.get("/api/library/items")
+    def lib_items():
+        return jsonify(engine.library.list_items(request.args.get("scope", "")))
+
+    @app.get("/api/library/img/<iid>")
+    def lib_img(iid):
+        if not re.fullmatch(r"[\w\-]+", iid):
+            abort(404)
+        cli = engine.emby()
+        if not cli:
+            abort(404)
+        key = ("lib", iid)
+        if key not in img_cache:
+            try:
+                got = cli.image(iid)
+            except Exception:
+                abort(502)
+            if not got:
+                abort(404)
+            if len(img_cache) >= 400:
+                img_cache.pop(next(iter(img_cache)))
+            img_cache[key] = got
+        data, ctype = img_cache[key]
+        return Response(data, mimetype=ctype, headers={"Cache-Control": "public, max-age=86400"})
+
+    @app.get("/api/library/detail")
+    def lib_detail():
+        return jsonify(engine.library.detail(request.args.get("scope", ""), request.args.get("id", "")))
+
+    @app.post("/api/library/delete")
+    def lib_delete():
+        d = body()
+        return jsonify(ok=True, **engine.library.delete(
+            d.get("scope", ""), d.get("id", ""), d.get("paths") or [], bool(d.get("stop_sub", True))))
+
     @app.get("/api/transfers")
     def transfers():
         """转存记录：每次有新文件入库的事件（最近 200 条），可按任务过滤。"""

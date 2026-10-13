@@ -191,11 +191,11 @@ def test_aliases_prefer_chinese_regions_and_drop_duplicates():
 def test_person_credits_sorted_deduped_and_filtered():
     cc = {"cast": [{"id": 1, "media_type": "tv", "name": "A", "popularity": 5, "poster_path": "/a", "genre_ids": [18], "character": "甲"},
                    {"id": 2, "media_type": "movie", "title": "B", "popularity": 9, "poster_path": "/b", "genre_ids": [28], "release_date": "2020-01-01"},
-                   {"id": 3, "media_type": "tv", "name": "访谈", "popularity": 99, "poster_path": "/c", "genre_ids": [10767]},       # 访谈：本人出镜，不要
+                   {"id": 3, "media_type": "tv", "name": "访谈", "popularity": 99, "poster_path": "/c", "genre_ids": [10767]},       # 访谈：现在归「综艺」板块
                    {"id": 4, "media_type": "tv", "name": "无海报", "popularity": 50, "poster_path": None, "genre_ids": []},
                    {"id": 1, "media_type": "tv", "name": "A", "popularity": 4, "poster_path": "/a", "genre_ids": [18]}]}
     d = fake_tmdb({"/person/7": {"id": 7, "name": "某演员", "profile_path": "/p", "biography": "x" * 900, "combined_credits": cc}}).person(7)
-    assert [(x["media"], x["id"]) for x in d["items"]] == [("movie", 2), ("tv", 1)] and d["items"][1]["character"] == "甲"
+    assert [(x["media"], x["id"], x["section"]) for x in d["items"]] == [("tv", 3, "variety"), ("movie", 2, "movie"), ("tv", 1, "tv")] and d["items"][2]["character"] == "甲"
     assert d["name"] == "某演员" and len(d["biography"]) == 500 and d["profile_url"].endswith("/w185/p")
 
 

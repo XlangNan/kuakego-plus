@@ -34,8 +34,8 @@ def test_tv_board_excludes_animation_everywhere():
     t, calls = client({"/trending/tv/week": [raw(1), raw(2, (16, 10759)), raw(3, (16,)), raw(4, (35,))], "/discover/tv": [raw(5)]})
     assert [x["id"] for x in t.trending()["items"]] == [1, 4]                              # 趋势接口不能过滤，手动把动画去掉
     t.discover("cn"); p = calls[-1][1]
-    assert p["without_genres"] == "16" and p["with_origin_country"] == "CN" and "with_genres" not in p
-    t.discover("kr_jp", "rating"); assert calls[-1][1]["without_genres"] == "16" and calls[-1][1]["sort_by"] == "vote_average.desc"
+    assert p["without_genres"] == "16|10764|10767" and p["with_origin_country"] == "CN" and "with_genres" not in p   # 动画归动漫、真人秀 / 脱口秀归综艺
+    t.discover("kr_jp", "rating"); assert calls[-1][1]["without_genres"] == "16|10764|10767" and calls[-1][1]["sort_by"] == "vote_average.desc"
 
 
 def test_anime_board_only_animation_with_its_own_regions():
@@ -62,7 +62,7 @@ def test_anime_search_merges_tv_and_movies_but_only_animation():
     items = t.anime_search("某某")["items"]
     assert [(x["media"], x["id"]) for x in items] == [("tv", 1), ("movie", 3)]                # 番剧在前，动画电影在后；真人的都不要
     assert {c[0] for c in calls} == {"/search/tv", "/search/movie"}
-    assert [x["id"] for x in t.search("某某")["items"]] == [1, 2]                              # 剧集板块的搜索不做类型过滤（用户知道自己要找什么）
+    assert [x["id"] for x in t.search("某某")["items"]] == [2]                                 # 剧集板块的搜索也只留普通剧集（动画去动漫搜、综艺去综艺搜）
 
 
 def test_home_rows_per_board_and_one_failure_does_not_break_the_rest():

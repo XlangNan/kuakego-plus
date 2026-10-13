@@ -245,3 +245,17 @@ class Quark:
             retry += 1
             time.sleep(0.5)
         raise QuarkError("等待转存任务超时")
+
+    def delete(self, fids):
+        """删除夸克网盘里的文件 / 文件夹（夸克会把它放进回收站）。"""
+        fids = [f for f in fids if f]
+        if not fids:
+            return
+        r = self._send(
+            "POST", f"{self.BASE_URL}/1/clouddrive/file/delete",
+            params={"pr": "ucpro", "fr": "pc", "uc_param_str": ""},
+            json={"action_type": 2, "filelist": fids, "exclude_fids": []},
+        )
+        if r.get("code") != 0:
+            raise QuarkError(f"删除失败: {r.get('message')}")
+        self.wait_task(r["data"]["task_id"])

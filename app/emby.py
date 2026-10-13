@@ -20,7 +20,10 @@ class Emby:
             headers={"X-Emby-Token": self.key}, timeout=self.timeout,
         )
         r.raise_for_status()
-        return r.json() if r.content else {}
+        try:
+            return r.json() if r.content else {}
+        except ValueError:
+            return {}
 
     def ping(self):
         info = self._req("GET", "/System/Info")
@@ -126,3 +129,46 @@ class Emby:
             )
         else:
             self._req("POST", "/Library/Refresh")
+
+    # ---------------- 媒体库管理 ----------------
+    def libraries(self):
+        """Emby 的媒体库列表：[{id, name, type, locations}]。"""
+        out = []
+        for v in self._req("GET", "/Library/VirtualFolders") or []:
+            out.append({"id": str(v.get("ItemId") or v.get("Id") or ""), "name": v.get("Name", ""),
+                        "type": v.get("CollectionType", ""), "locations": v.get("Locations") or []})
+        return out
+
+    def library_items(self, lib_id, kinds="Series,Movie"):
+        data = self._req(
+            "GET", "/Items", Recursive="true", ParentId=lib_id, IncludeItemTypes=kinds,
+            Fields="Path,ProviderIds,ProductionYear,DateCreated,Overview", Limit=10000,
+        )
+        return data.get("Items", [])
+
+    def item(self, item_id):
+        params = {"Ids": item_id, "Fields": "Path,ProviderIds,ProductionYear,DateCreated,Overview"}
+        if self.user_id:
+            params["UserId"] = self.user_id
+        items = self._req("GET", "/Items", Recursive="true", **params).get("Items", [])
+        return items[0] if items else None
+
+    def children(self, item_id, kinds):
+        """某个条目下面的 Season / Episode（带路径）。"""
+        data = self._req(
+            "GET", "/Items", Recursive="true", ParentId=item_id, IncludeItemTypes=kinds,
+            Fields="Path,ParentIndexNumber,IndexNumber", Limit=10000,
+        )
+        return [i for i in data.get("Items", []) if i.get("LocationType") != "Virtual" and not i.get("IsMissing")]
+
+    def delete_item(self, item_id):
+        """直接从 Emby 删除条目（Emby 会同时删掉它指向的 strm / 文件）。"""
+        self._req("DELETE", f"/Items/{item_id}")
+
+    def image(self, item_id, width=300):
+        """条目海报（Emby 的图片要带密钥，所以由后端转一手）。返回 (内容, 类型)；没有图返回 None。"""
+        r = requests.get(f"{self.base}/emby/Items/{item_id}/Images/Primary", params={"maxWidth": width, "quality": 85},
+                         headers={"X-Emby-Token": self.key}, timeout=self.timeout)
+        if r.status_code != 200:
+            return None
+        return r.content, r.headers.get("Content-Type", "image/jpeg")

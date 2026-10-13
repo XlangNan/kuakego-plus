@@ -413,6 +413,11 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 /* 订阅墙：海报大小可选、列表模式 */
 .wall{grid-template-columns:repeat(auto-fill,minmax(var(--wmin,112px),1fr));gap:18px 12px}
+.rsz-s{--pw:96px}.rsz-m{--pw:140px}.rsz-l{--pw:190px}
+#r-body[class*=rsz-] .posters{grid-template-columns:repeat(auto-fill,minmax(var(--pw),1fr))}
+#r-body[class*=rsz-] .rail .pc{width:var(--pw)}
+#r-body.rsz-s .pc .t,#r-body.rsz-s .pc .n{font-size:11px}
+@media(max-width:860px){.rsz-s{--pw:80px}.rsz-m{--pw:104px}.rsz-l{--pw:140px}}
 .wall.sz-s{--wmin:86px;gap:14px 9px}.wall.sz-m{--wmin:112px}.wall.sz-l{--wmin:148px;gap:22px 16px}
 .wall.sz-s .wn{font-size:12px;margin-top:6px}.wall.sz-s .wsub{font-size:11px}.wall.sz-s .wov{font-size:10px;padding:18px 6px 5px}.wall.sz-s .wb,.wall.sz-s .wm{font-size:10px;padding:0 5px}
 .wall .wimg{border-radius:10px}
@@ -432,6 +437,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--inp) 60%,transparent)}
 .sub-opts select{width:auto;padding:5px 8px}
 .chip.vw{padding:4px 10px}
 #sd-meta{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.pp-sec{margin:0 0 18px}.pp-sec h4{margin:0 0 10px;font-size:14px}
 /* 人物头像：正圆（海报是 2:3，不能套用） */
 .sd-head .pic.round{width:84px;height:84px;aspect-ratio:1/1;border-radius:50%;background-position:center 20%;background-size:cover}
 /* 右侧概况：线条图标，和侧栏一致 */
@@ -463,6 +469,22 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   body.side-min #sideBtn{transform:none}
 }
 @media(max-width:860px){#sideBtn{display:none}}
+
+.lbrow{border-bottom:1px solid var(--line);padding:10px 0}
+.lbrow:last-child{border:0}
+.lbhead{display:flex;align-items:center;gap:10px;cursor:pointer}
+.lbhead .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbhead .tg{font-size:11px;color:var(--dim)}
+.lbtree{margin:8px 0 0 18px;font-size:13px}
+.lbtree .tn{display:flex;align-items:center;gap:8px;padding:3px 0}
+.lbtree .tn input:disabled{opacity:.6}
+.lbtree .tn .sz{margin-left:auto;color:var(--dim);font-size:12px;white-space:nowrap}
+.lbtree .tn.d{font-weight:600}
+.lbtree .kids{margin-left:20px}
+.lbact{display:flex;gap:8px;margin:10px 0 2px;align-items:center;flex-wrap:wrap}
+.btn.danger{background:#e5484d;border-color:#e5484d;color:#fff}
+.lbscope{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.lbscope .row{margin-top:8px}
 </style>
 </head>
 <body>
@@ -473,6 +495,7 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   <nav id="nav">
     <button data-v="recommend"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 12h4M3 16h4M17 8h4M17 12h4M17 16h4"/></svg><span>影视推荐</span></button>
     <button data-v="subs"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/></svg><span>订阅追更</span></button>
+    <button data-v="library"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>媒体库</span></button>
     <button data-v="calendar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>追剧日历</span></button>
     <button data-v="monitor"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/><circle cx="12" cy="12" r="1.4"/></svg><span>手动链接</span></button>
     <button data-v="integrations"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span>通知联动</span></button>
@@ -533,12 +556,13 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   <div class="card">
     <div class="rhead">
     <div class="board" id="r-board">
-      <button class="bt on" data-s="tv">📺 剧集</button><button class="bt" data-s="movie">🎬 电影</button><button class="bt" data-s="anime">🌸 动漫</button>
+      <button class="bt on" data-s="tv">📺 剧集</button><button class="bt" data-s="movie">🎬 电影</button><button class="bt" data-s="anime">🌸 动漫</button><button class="bt" data-s="variety">🎤 综艺</button>
     </div>
     <div class="toolbar" style="margin-bottom:10px">
       <input type="text" id="r-q" placeholder="搜索剧名…">
       <button class="btn" id="r-search">搜索</button><button class="btn" id="r-reset" title="清空搜索结果，回到当前分类的默认列表并刷新">↺ 重置</button>
-      <select id="r-sort" style="margin-left:auto"><option value="popularity">按热度</option><option value="rating">按评分</option><option value="latest">按最新</option></select>
+      <select id="r-size" title="海报大小" style="margin-left:auto"><option value="s">小海报</option><option value="m">中海报</option><option value="l">大海报</option></select>
+      <select id="r-sort"><option value="popularity">按热度</option><option value="rating">按评分</option><option value="latest">按最新</option></select>
     </div>
     <div class="chips" id="r-cats"></div>
     </div>
@@ -548,6 +572,15 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 </section>
 
 <!-- ========== 追剧日历 ========== -->
+<section class="view" id="v-library">
+  <div class="card">
+    <h2>🗂 媒体库管理 <small>只显示你指定的 Emby 媒体库 / 文件夹；删除时夸克网盘和 Emby 里的文件一起立刻删掉</small></h2>
+    <div class="chips" id="lb-scopes" style="margin-bottom:10px"></div>
+    <div class="toolbar"><input type="text" id="lb-q" placeholder="搜索名称…"><button class="btn" id="lb-refresh">↺ 刷新</button><button class="btn" id="lb-cfg">⚙ 范围设置</button></div>
+  </div>
+  <div class="card" id="lb-body"><div class="empty">加载中…</div></div>
+</section>
+
 <section class="view" id="v-calendar">
   <div class="card cal">
     <div class="chips" id="c-filter"><span class="chip on" data-f="all">全部</span><span class="chip" data-f="movie">电影</span><span class="chip" data-f="tv">电视剧</span></div>
@@ -761,10 +794,10 @@ async function api(path, method = 'GET', body) {
   return d;
 }
 let toastT;
-function toast(msg, type = '') {
+function toast(msg, type = '', ms = 0) {
   $('.toast')?.remove();
   const el = document.createElement('div'); el.className = 'toast ' + type; el.textContent = msg; document.body.append(el);
-  clearTimeout(toastT); toastT = setTimeout(() => el.remove(), type === 'err' ? 5000 : 2500);
+  clearTimeout(toastT); toastT = setTimeout(() => el.remove(), ms || (type === 'err' ? 5000 : 2500));
 }
 const guard = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { toast(e.message, 'err'); } };
 
@@ -801,8 +834,9 @@ let cur = '', timers = [];
 /* 「通知联动」是一组设置页：左边只有一个入口，页面顶上用标签切换各个设置（钉钉 / SmartStrm / TMDB / PanSou / Emby） */
 const PAGE_HEAD = {
   monitor: ['手动链接', '给没有 TMDB 资料的内容用：粘贴夸克分享链接，有新文件时自动转存'],
-  recommend: ['影视推荐', '看看正在热播的剧集、电影和动漫，一键订阅'],
+  recommend: ['影视推荐', '看看正在热播的剧集、电影、动漫和综艺，一键订阅'],
   subs: ['订阅追更', '订阅的剧集和电影，缺的集数会自动补齐'],
+  library: ['媒体库', '管理 Emby 与夸克网盘里的内容'],
   integrations: ['通知联动', '钉钉、SmartStrm、TMDB、PanSou、Emby 的连接设置，以及自动化与备份'],
   account: ['账号登录', '登录夸克账号后才能转存文件'],
   logs: ['运行日志', '最近的运行记录，出错时先看这里'],
@@ -914,7 +948,7 @@ function joinShowFolder(picked, plain, folder, season, layout, tv) {
 }
 const browseHint = (m, r, what) => { $('#sd-bh', m).textContent = r.added ? `已在你选的目录下补上这${what}的文件夹，可以直接修改。` : `你选的目录本身就是这${what}的文件夹，已直接使用。`; };
 const lastOf = media => RECENT_DIRS.find(d => (d.media || 'tv') === media);   // 剧集和电影各用各的历史目录，不能把电影推荐到剧集文件夹里
-const FALLBACK_DIR = {tv: '/影视/剧集', movie: '/影视/电影', anime: '/影视/动漫'};
+const FALLBACK_DIR = {tv: '/影视/剧集', movie: '/影视/电影', anime: '/影视/动漫', variety: '/影视/综艺'};
 const defaultSavePath = (name, season, media = 'tv', layout = false) => { const last = lastOf(media); return last ? savePathFrom(last, name, season, layout)
   : `${FALLBACK_DIR[media] || FALLBACK_DIR.tv}/${name}${media !== 'movie' && !layout && season > 1 ? `/第 ${season} 季` : ''}`; };
 // 订阅弹窗里的「推荐目录」：每条历史目录套用到当前这部剧上的结果（去重），点一下填入
@@ -1192,11 +1226,12 @@ async function previewTask(t) {
 }
 
 /* ======================================================================
-   影视推荐（剧集 / 电影 / 动漫 三个板块）
+   影视推荐（剧集 / 电影 / 动漫 / 综艺 四个板块）
    ====================================================================== */
 const R_BOARDS = {
   tv: {ph: '搜索剧名…', cats: [['home', '精选'], ['all', '全部'], ['cn', '国产剧'], ['kr_jp', '日韩剧'], ['us_eu', '欧美剧']]},
   movie: {ph: '搜索电影…', cats: [['home', '精选'], ['all', '全部'], ['cn', '华语'], ['kr_jp', '日韩'], ['us_eu', '欧美']]},
+  variety: {ph: '搜索综艺 / 真人秀 / 脱口秀…', cats: [['home', '精选'], ['all', '全部'], ['cn', '国产综艺'], ['kr_jp', '日韩综艺'], ['us_eu', '欧美综艺']]},
   anime: {ph: '搜索番剧 / 动画电影…', cats: [['home', '精选'], ['all', '全部'], ['jp', '日本'], ['cn', '国产'], ['us_eu', '欧美'], ['movie', '动画电影']]},
 };
 let rScope = 'tv', rCat = 'home', rPage = 1, rTotal = 1, rQuery = '', rReq = 0;
@@ -1255,6 +1290,11 @@ function setBoard(sc, load = true) {
 $$('#r-board .bt').forEach(b => b.onclick = () => setBoard(b.dataset.s));
 $('#r-sort').onchange = () => loadRecommend();
 $('#r-search').onclick = () => { rQuery = $('#r-q').value.trim(); if (rQuery) $$('#r-cats .chip').forEach(x => x.classList.remove('on')); else setCat('home'); loadRecommend(); };
+let rSize = 'm'; try { rSize = localStorage.getItem('qp-rec-size') || 'm'; } catch (_) {}
+if (!['s','m','l'].includes(rSize)) rSize = 'm';
+const applyRSize = () => { $('#r-body').classList.remove('rsz-s', 'rsz-m', 'rsz-l'); $('#r-body').classList.add('rsz-' + rSize); $('#r-size').value = rSize; };
+$('#r-size').onchange = e => { rSize = e.target.value; try { localStorage.setItem('qp-rec-size', rSize); } catch (_) {} applyRSize(); };
+applyRSize();
 $('#r-reset').onclick = () => { $('#r-sort').value = 'popularity'; window.scrollTo({top: 0}); setCat('home'); };   // 清空搜索词和搜索结果，回到默认首页并重新加载
 $('#r-q').onkeydown = e => { if (e.key === 'Enter') $('#r-search').click(); };
 $('#r-more').onclick = () => { rPage++; loadRecommend(true); };
@@ -1281,8 +1321,11 @@ async function showPerson(id) {
     const d = await api('/tmdb/person/' + id);
     let f = 'all';
     const draw = () => {
-      const shown = d.items.filter(x => f === 'all' || x.media === f);
-      $('#pp-list', m).innerHTML = shown.length ? shown.map(x => posterCard(x, true)).join('') : '<div class="empty" style="grid-column:1/-1">没有作品</div>';
+      const SEC = [['tv', '📺 剧集'], ['movie', '🎬 电影'], ['anime', '🌸 动漫'], ['variety', '🎤 综艺']];
+      const secOf = x => x.section || (x.media === 'movie' ? 'movie' : 'tv');
+      const groups = SEC.filter(([k]) => f === 'all' || f === k).map(([k, n]) => [n, d.items.filter(x => secOf(x) === k)]).filter(([, a]) => a.length);
+      $('#pp-list', m).innerHTML = groups.length ? groups.map(([n, a]) => `<div class="pp-sec"><h4>${n}<span class="sub">（${a.length}）</span></h4><div class="posters">${a.map(x => posterCard(x, false)).join('')}</div></div>`).join('')
+        : '<div class="empty">没有作品</div>';
       bindPosters($('#pp-list', m));
       $$('#pp-f .chip', m).forEach(c => c.classList.toggle('on', c.dataset.f === f));
     };
@@ -1292,8 +1335,10 @@ async function showPerson(id) {
           <div class="sub">${[d.department, d.birthday, d.place_of_birth].filter(Boolean).map(esc).join(' · ')}</div>
           ${d.biography ? `<details><summary>简介</summary><p style="font-size:12.5px;margin:6px 0 0;color:var(--dim)">${esc(d.biography)}</p></details>` : ''}</div></div>
       <div class="toolbar" style="margin:16px 0 10px"><b style="font-size:14px">参演作品（${d.items.length}）</b>
-        <div class="chips" id="pp-f" style="margin-left:auto">${[['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) => `<span class="chip" data-f="${k}">${n}</span>`).join('')}</div></div>
-      <div class="posters" id="pp-list"></div>`;
+        <div class="chips" id="pp-f" style="margin-left:auto">${[['all', '全部', d.items.length], ['tv', '剧集'], ['movie', '电影'], ['anime', '动漫'], ['variety', '综艺']].map(([k, n, c]) => {
+          const cnt = c ?? d.items.filter(x => (x.section || (x.media === 'movie' ? 'movie' : 'tv')) === k).length;
+          return cnt ? `<span class="chip" data-f="${k}">${n} ${cnt}</span>` : ''; }).join('')}</div></div>
+      <div id="pp-list"></div>`;
     $('.x', m).onclick = () => m.remove();
     $$('#pp-f .chip', m).forEach(c => c.onclick = () => { f = c.dataset.f; draw(); });
     draw();
@@ -1398,7 +1443,7 @@ function subscribeMovieDialog(mv) {
    订阅追更
    ====================================================================== */
 function subscribeDialog(show, season = 1) {
-  const kind = show.anime ? 'anime' : 'tv', kindName = show.anime ? '动漫' : '剧集';   // 动漫和普通剧集各记各的目录
+  const kind = show.anime ? 'anime' : show.variety ? 'variety' : 'tv', kindName = {anime: '动漫', variety: '综艺', tv: '剧集'}[kind];   // 动漫、综艺、剧集各记各的目录
   const tmdbName = show.folder_name || show.name;                                       // Emby 规范：剧名 (年份) {tmdb-编号}
   const nameFor = () => $('#sd-layout', m).checked ? tmdbName : show.name;
   const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
@@ -1496,13 +1541,15 @@ function listRowHTML(t) {
   const added = t.created ? new Date(t.created * 1000).toISOString().slice(0, 10) : '';
   return `<div class="wt lr" data-id="${t.id}"><span class="lck">✓</span><div class="lth" style="${posterBg(t.poster)}"></div>
     <div class="lm"><div class="ln" title="${esc(t.name)}">${esc(t.name)}</div>
-      <div class="ls">${mv ? '电影' + (t.year ? ' ' + t.year : '') : '第 ' + t.season + ' 季'} · ${d ? `<span style="color:var(--warn)">⚠ ${d} 个链接失效</span>` : esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}${added ? ' · 添加于 ' + added : ''}</div></div>
+      <div class="ls">${mv ? '电影' + (t.year ? ' ' + t.year : '') : (t.anime ? '动漫 · ' : t.variety ? '综艺 · ' : '') + '第 ' + t.season + ' 季'} · ${d ? `<span style="color:var(--warn)">⚠ ${d} 个链接失效</span>` : esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}${added ? ' · 添加于 ' + added : ''}</div></div>
     <div class="lp"><div class="lbar"><i style="width:${pct}%"></i></div><span>${esc(prog)}</span></div>
     <div class="lb">${b ? `<span class="tag ${b[1]}">${b[0]}</span>` : ''}</div></div>`;
 }
 let subsFilter = 'all', subsStatus = 'all', subsSort = 'new', subsView = 'grid', subsSize = 'm';
 try { subsView = localStorage.getItem('qp-subs-view') || 'grid'; subsSize = localStorage.getItem('qp-subs-size') || 'm'; subsSort = localStorage.getItem('qp-subs-sort') || 'new'; if (!['new','old','updated','recent','progress','missing','name'].includes(subsSort)) subsSort = 'new'; } catch (_) {}
 const saveSubsPref = () => { try { localStorage.setItem('qp-subs-view', subsView); localStorage.setItem('qp-subs-size', subsSize); localStorage.setItem('qp-subs-sort', subsSort); } catch (_) {} };
+const SEC_NAME = {tv: '剧集', movie: '电影', anime: '动漫', variety: '综艺'};
+const secOfTask = t => t.anime ? 'anime' : t.variety ? 'variety' : t.media === 'movie' ? 'movie' : 'tv';
 const SUB_STATUS = [['all', '全部状态'], ['missing', '缺集'], ['dead', '链接失效'], ['done', '已完结'], ['paused', '已暂停']];
 const SUB_SORT = [['new', '最新添加'], ['old', '最早添加'], ['updated', '最近有更新'], ['recent', '最近扫描'], ['progress', '完成度最低'], ['missing', '缺集最多'], ['name', '名称']];
 const pctOf = t => { const s = t.snap; if (t.media === 'movie') return (t.done || (s && s.have)) ? 1 : 0; const b = s ? (s.aired ?? s.total ?? 0) : 0; return s && b ? s.have / b : 0; };
@@ -1510,7 +1557,7 @@ const tsOf = x => Date.parse((x || '').replace(' ', 'T')) || 0;
 function visibleSubs() {
   const st = {missing: t => t.snap && t.snap.missing_n > 0 && !t.done, dead: t => t.links.some(l => l.ban),
               done: t => t.done, paused: t => !t.enabled || t.status === 'paused'}[subsStatus];
-  const out = subsData.filter(t => (subsFilter === 'all' || (subsFilter === 'movie') === (t.media === 'movie')) && (!st || st(t)));
+  const out = subsData.filter(t => (subsFilter === 'all' || secOfTask(t) === subsFilter) && (!st || st(t)));
   const key = {new: t => -(t.created || 0), old: t => t.created || 0, recent: t => -tsOf(t.last_run), name: t => t.name,
                updated: t => -tsOf(((t.history || []).find(h => h.status === 'saved') || {}).time),
                progress: t => pctOf(t), missing: t => -((t.snap && t.snap.missing_n) || 0)}[subsSort] || (t => -(t.created || 0));
@@ -1518,10 +1565,10 @@ function visibleSubs() {
 }
 function renderWall() {
   const tasks = subsData, box = $('#s-list');
-  const hasMv = tasks.some(t => t.media === 'movie'), hasTv = tasks.some(t => t.media !== 'movie');
-  if (subsFilter !== 'all' && !(subsFilter === 'movie' ? hasMv : hasTv)) subsFilter = 'all';
+  const secs = Object.keys(SEC_NAME);
+  const secCnt = k => tasks.filter(t => secOfTask(t) === k).length;
   $('#s-filter').innerHTML = tasks.length ? `<div class="chips" style="margin-bottom:12px;align-items:center">
-    ${hasMv && hasTv ? [['all', '全部'], ['tv', '剧集'], ['movie', '电影']].map(([k, n]) => `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n}</span>`).join('') + '<span class="sub">｜</span>' : ''}
+    ${[['all', '全部', tasks.length], ...secs.map(k => [k, SEC_NAME[k], secCnt(k)])].map(([k, n, c]) => `<span class="chip ${subsFilter === k ? 'on' : ''}" data-f="${k}">${n} ${c}</span>`).join('') + '<span class="sub">｜</span>'}
     ${SUB_STATUS.map(([k, n]) => `<span class="chip ${subsStatus === k ? 'on' : ''}" data-st="${k}">${n}</span>`).join('')}
     <span class="sub-opts"><span class="chip vw ${subsView === 'grid' ? 'on' : ''}" data-vw="grid" title="海报墙">▦ 海报</span><span class="chip vw ${subsView === 'list' ? 'on' : ''}" data-vw="list" title="列表">☰ 列表</span>
       ${subsView === 'grid' ? `<select id="s-size" title="海报大小">${[['s', '小海报'], ['m', '中海报'], ['l', '大海报']].map(([k, n]) => `<option value="${k}" ${subsSize === k ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ''}
@@ -1743,11 +1790,10 @@ $('#s-purge').onclick = guard(async () => {
 });
 /* ---------- 批量粘贴链接 ---------- */
 function batchDialog() {
-  const m = modal(`<button class="x">×</button><h3 style="margin:0 0 6px">📋 批量粘贴链接</h3>
+  const m = modal(`<h3 style="margin:0 0 6px">📋 批量粘贴链接</h3>
     <div class="hint" style="margin:0 0 8px">一次粘贴多个夸克分享链接（最多 20 个）。链接前面的一行文字会当作名称，也可以在下一步里改。</div>
     <textarea id="bt-text" style="min-height:130px" placeholder="某某剧 https://pan.quark.cn/s/xxxx 提取码：abcd&#10;另一部 https://pan.quark.cn/s/yyyy"></textarea>
     <div class="actions"><button class="btn pri" id="bt-go">识别并检测</button></div><div id="bt-res"></div>`, 'wide');
-  $('.x', m).onclick = () => m.remove();
   $('#bt-go', m).onclick = guard(async e => {
     e.target.disabled = true; e.target.textContent = '检测中…（每个链接要读一次夸克）';
     try {
@@ -1937,6 +1983,124 @@ $$('[data-lt]').forEach(c => c.onclick = () => {
   $('#l-run').style.display = logTab === 'run' ? '' : 'none'; $('#l-xfer').style.display = logTab === 'xfer' ? '' : 'none';
   if (logTab === 'xfer') loadXfer().catch(e => toast(e.message, 'err'));
 });
+
+/* ---------- 媒体库管理 ---------- */
+const fmtB = n => n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n ? Math.ceil(n / 1024) + ' KB' : '';
+const LB_KIND = {tv: '📺 剧集', movie: '🎬 电影', anime: '🌸 动漫', variety: '🎤 综艺'};
+let lbScopes = [], lbCur = '', lbItems = [];
+async function loadLibrary() {
+  const {scopes} = await api('/library/scopes'); lbScopes = scopes;
+  if (!scopes.find(s => s.id === lbCur)) lbCur = scopes[0]?.id || '';
+  $('#lb-scopes').innerHTML = scopes.length ? scopes.map(s => `<span class="chip ${s.id === lbCur ? 'on' : ''}" data-id="${s.id}">${LB_KIND[s.kind] || ''} ${esc(s.name)}</span>`).join('') : '';
+  $$('#lb-scopes .chip').forEach(c => c.onclick = () => { lbCur = c.dataset.id; loadLibrary().catch(e => toast(e.message, 'err')); });
+  const box = $('#lb-body');
+  if (!lbCur) { box.innerHTML = '<div class="empty">还没有设置范围。点右上方「⚙ 范围设置」，选择要管理的 Emby 媒体库和文件夹，以及对应的夸克目录。<br>没设置的库（比如迅雷云盘的）不会显示，也不会被删除。</div>'; return; }
+  box.innerHTML = '<div class="empty">正在读取 Emby…</div>';
+  const d = await api('/library/items?scope=' + lbCur); lbItems = d.items; renderLibrary();
+}
+let lbSize = 'm', lbSort = 'new';
+try { lbSize = localStorage.getItem('qp-lb-size') || 'm'; lbSort = localStorage.getItem('qp-lb-sort') || 'new'; } catch (_) {}
+function renderLibrary() {
+  const q = $('#lb-q').value.trim().toLowerCase(), box = $('#lb-body');
+  let items = lbItems.filter(i => !q || (i.name + i.top).toLowerCase().includes(q));
+  items = [...items].sort(lbSort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'zh') : lbSort === 'old' ? (a, b) => (a.added < b.added ? -1 : 1) : (a, b) => (a.added < b.added ? 1 : -1));
+  const bar = `<div class="chips" style="margin-bottom:12px;align-items:center"><span class="sub">共 ${items.length} 个（点海报看详情、入库时间，可删除）</span>
+    <span class="sub-opts"><select id="lb-size">${[['s', '小海报'], ['m', '中海报'], ['l', '大海报']].map(([k, n]) => `<option value="${k}" ${lbSize === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    <select id="lb-sort">${[['new', '排序：最新入库'], ['old', '排序：最早入库'], ['name', '排序：名称']].map(([k, n]) => `<option value="${k}" ${lbSort === k ? 'selected' : ''}>${n}</option>`).join('')}</select></span></div>`;
+  box.innerHTML = bar + (items.length ? `<div class="wall sz-${lbSize}">${items.map(i => `<div class="wt" data-id="${i.emby_id}">
+    <div class="wimg"><span class="wph">${esc(i.name)}</span><img src="/api/library/img/${i.emby_id}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px" onerror="this.remove()">
+      <span class="wb">${i.type === 'Movie' ? '电影' : '剧集'}</span></div>
+    <div class="wn" title="${esc(i.name)}">${esc(i.name)}</div><div class="wsub">${i.year || ''}${i.year && i.added ? ' · ' : ''}${esc(i.added)}</div></div>`).join('')}</div>` : '<div class="empty">这个范围里没有内容</div>');
+  $('#lb-size').onchange = e => { lbSize = e.target.value; try { localStorage.setItem('qp-lb-size', lbSize); } catch (_) {} renderLibrary(); };
+  $('#lb-sort').onchange = e => { lbSort = e.target.value; try { localStorage.setItem('qp-lb-sort', lbSort); } catch (_) {} renderLibrary(); };
+  $$('#lb-body .wt').forEach(t => t.onclick = () => openLbItem(t.dataset.id));
+}
+function lbTreeHTML(nodes, pre = '') {
+  return nodes.map(n => { const rel = pre ? pre + '/' + n.name : n.name; return `<div class="tn ${n.dir ? 'd' : ''}"><input type="checkbox" data-rel="${esc(rel)}"><span>${n.dir ? '📁' : '📄'} ${esc(n.name)}</span><span class="sz">${fmtB(n.size)}</span></div>
+    ${n.children ? `<div class="kids">${lbTreeHTML(n.children, rel)}</div>` : ''}`; }).join('');
+}
+async function openLbItem(id) {
+  const it = lbItems.find(i => i.emby_id === id);
+  const m = modal(`<h3>${esc(it.name)}${it.year ? ' (' + it.year + ')' : ''}</h3><div id="lbm" class="sub">读取中…</div>`, 'wide');
+  try {
+    const d = await api(`/library/detail?scope=${lbCur}&id=${id}`);
+    $('#lbm', m).outerHTML = `<div style="display:flex;gap:14px;margin-bottom:10px"><img src="/api/library/img/${id}" style="width:110px;height:165px;object-fit:cover;border-radius:8px;background:var(--line)" onerror="this.style.visibility='hidden'">
+      <div style="min-width:0"><div>${d.type === 'Movie' ? '🎬 电影' : '📺 剧集'}</div>
+      <div style="margin-top:6px"><b>入库时间：</b>${esc(d.added_at || '未知')}</div>
+      <div class="sub" style="margin-top:6px">夸克：${esc(d.quark_path)}${d.in_quark ? '' : '（夸克里没找到这个文件夹）'}</div>
+      ${d.overview ? `<div class="sub" style="margin-top:6px;max-height:84px;overflow:auto">${esc(d.overview)}</div>` : ''}</div></div>
+      <div class="lbtree">${lbTreeHTML(d.tree)}</div>
+      <div class="lbact"><button class="btn danger" data-a="sel">删除选中的</button><button class="btn danger" data-a="all">删除整部</button><span class="hint">夸克和 Emby 同时删除</span></div>`;
+    $$('.lbtree .tn.d input[data-rel]', m).forEach(cb => cb.onchange = () => {   // 勾选文件夹 = 里面的全部一起删：子项自动勾上并置灰
+      const kids = cb.closest('.tn').nextElementSibling;
+      if (kids && kids.classList.contains('kids')) $$('input[data-rel]', kids).forEach(k => { k.checked = cb.checked; k.disabled = cb.checked; });
+    });
+    $('[data-a=sel]', m).onclick = () => {
+      const rels = $$('input[data-rel]:checked', m).map(c => c.dataset.rel);
+      if (!rels.length) return toast('先勾选要删除的季或集', 'err');
+      confirmLbDelete(it, rels.filter(r => !rels.some(o => o !== r && r.startsWith(o + '/'))), m);   // 选中了文件夹就不再单独列它下面的文件
+    };
+    $('[data-a=all]', m).onclick = () => confirmLbDelete(it, [], m);
+  } catch (e) { $('#lbm', m).textContent = e.message; }
+}
+function confirmLbDelete(it, rels, parent) {
+  const whole = !rels.length;
+  const m = modal(`<h3>确认删除</h3>
+    <p>${whole ? `将删除整部「<b>${esc(it.name)}</b>」` : `将删除「<b>${esc(it.name)}</b>」里的 ${rels.length} 项：`}</p>
+    ${whole ? '' : `<div class="lbtree" style="margin:0 0 8px">${rels.map(r => `<div>• ${esc(r)}</div>`).join('')}</div>`}
+    <p class="sub">夸克网盘里的文件会被删除，Emby 里对应的内容也会立刻被删除，<b>此操作无法在本工具内撤销</b>。若选中的已包含全部内容，会按整部删除（文件夹和 Emby 里的剧集一起删）。</p>
+    <label class="chk"><input type="checkbox" id="lbd-sub" checked> 同时${whole ? '删除' : '暂停'}对应的订阅（不勾的话，自动追更可能又把删掉的集转存回来）</label>
+    <div class="actions"><button class="btn danger" id="lbd-ok">确认删除</button><button class="btn" id="lbd-no">取消</button></div>`);
+  $('#lbd-no', m).onclick = () => m.remove();
+  $('#lbd-ok', m).onclick = async () => {
+    const b = $('#lbd-ok', m); b.disabled = true; b.textContent = '删除中…';
+    try {
+      const r = await api('/library/delete', 'POST', {scope: lbCur, id: it.emby_id, paths: rels, stop_sub: $('#lbd-sub', m).checked});
+      m.remove(); parent?.remove();          // 关掉确认框和详情窗口，回到媒体库海报墙
+      toast(`${r.whole && !whole ? '已按整部删除｜' : ''}夸克：${r.quark.join('；')}｜Emby：${r.emby}${r.local ? '｜' + r.local : ''}${r.subs ? `｜订阅 ${r.subs} 个已处理` : ''}`, '', 7000);
+      if (r.whole) lbItems = lbItems.filter(x => x.emby_id !== it.emby_id);
+      renderLibrary();
+      loadLibrary().catch(() => {});         // 再从 Emby 重新读一遍，保证列表是最新的
+    } catch (e) { m.remove(); modal(`<h3>删除失败</h3><p style="color:#e5484d">${esc(e.message)}</p>`); }
+  };
+}
+async function lbConfig() {
+  let libs = [], err = '';
+  try { libs = (await api('/library/emby-libraries')).libraries; } catch (e) { err = e.message; }
+  let rows = JSON.parse(JSON.stringify(lbScopes));
+  const m = modal(`<h3>范围设置</h3><div class="sub" style="margin-bottom:8px">每一条 = 一个 Emby 文件夹 ↔ 一个夸克目录。只有这里设置的内容才会显示、才能删除。${err ? `<br><span style="color:#e5484d">读取 Emby 媒体库失败：${esc(err)}</span>` : ''}</div>
+    <div id="lbc-rows"></div><div class="actions"><button class="btn" id="lbc-add">＋ 添加一条</button><button class="btn pri" id="lbc-save">保存</button></div>`, 'wide');
+  const draw = () => {
+    $('#lbc-rows', m).innerHTML = rows.map((r, i) => `<div class="lbscope" data-i="${i}">
+      <div class="row"><div class="grow"><label class="l">名称</label><input type="text" data-k="name" value="${esc(r.name || '')}" placeholder="如：夸克剧集"></div>
+        <div style="width:120px"><label class="l">类型</label><select data-k="kind">${Object.entries(LB_KIND).map(([k, n]) => `<option value="${k}" ${r.kind === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
+      <div class="row"><div class="grow"><label class="l">Emby 媒体库</label><select data-k="lib_id"><option value="">请选择…</option>${libs.map(l => `<option value="${esc(l.id)}" ${r.lib_id === l.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></div></div>
+      <div class="row"><div class="grow"><label class="l">Emby 文件夹路径（只显示这个文件夹下面的内容）</label><input type="text" data-k="emby_path" list="lbc-loc-${i}" value="${esc(r.emby_path || '')}" placeholder="如：/mnt/quark/剧集">
+        <datalist id="lbc-loc-${i}">${(libs.find(l => l.id === r.lib_id)?.locations || []).map(p => `<option value="${esc(p)}">`).join('')}</datalist></div></div>
+      <div class="row"><div class="grow"><label class="l">strm 文件夹在本工具里的路径（可选。填了，删除时本工具会直接删掉 strm 文件；需要先把 Emby 的 strm 目录挂载进本容器）</label><input type="text" data-k="strm_path" value="${esc(r.strm_path || '')}" placeholder="如：/strm/剧集"></div></div>
+      <div class="row"><div class="grow"><label class="l">对应的夸克目录</label><input type="text" data-k="quark_path" value="${esc(r.quark_path || '')}" placeholder="如：/影视/剧集"></div><button class="btn" data-a="pick">浏览</button><button class="btn" data-a="del">删除此条</button></div></div>`).join('') || '<div class="empty">还没有范围，点下面「添加一条」</div>';
+    $$('.lbscope', m).forEach(box => {
+      const i = +box.dataset.i;
+      $$('[data-k]', box).forEach(el => el.onchange = el.oninput = () => {
+        rows[i][el.dataset.k] = el.value;
+        if (el.dataset.k === 'lib_id') { rows[i].lib_name = libs.find(l => l.id === el.value)?.name || ''; draw(); }
+      });
+      $('[data-a=pick]', box).onclick = () => browse(rows[i].quark_path, p => { rows[i].quark_path = p; draw(); });
+      $('[data-a=del]', box).onclick = () => { rows.splice(i, 1); draw(); };
+    });
+  };
+  draw();
+  $('#lbc-add', m).onclick = () => { rows.push({kind: 'tv', name: '', lib_id: '', emby_path: '', quark_path: ''}); draw(); };
+  $('#lbc-save', m).onclick = async () => {
+    try { await api('/library/scopes', 'PUT', {scopes: rows}); m.remove(); toast('已保存'); loadLibrary().catch(e => toast(e.message, 'err')); }
+    catch (e) { toast(e.message, 'err'); }
+  };
+}
+$('#lb-cfg').onclick = lbConfig;
+$('#lb-refresh').onclick = () => loadLibrary().catch(e => { $('#lb-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`; });
+$('#lb-q').oninput = () => renderLibrary();
+loaders.library = () => loadLibrary().catch(e => { $('#lb-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`; });
+
 loaders.logs = () => { loadLogs(true).catch(() => {}); timers.push(setInterval(() => loadLogs().catch(() => {}), 4000)); };
 $('#l-refresh').onclick = () => loadLogs(true);
 $('#l-warn').onchange = () => loadLogs(true);

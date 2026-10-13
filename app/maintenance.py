@@ -51,13 +51,38 @@ class Maintenance:
                 log.warning("钉钉：%s", msg)
 
     def tick(self):
-        for name, fn in (("清理失效链接", self.purge_dead_links), ("完结检查", self.auto_finish),
+        for name, fn in (("补全板块分类", self.backfill_sections), ("清理失效链接", self.purge_dead_links), ("完结检查", self.auto_finish),
                          ("账号检查", self.check_account), ("洗版检查", self.check_upgrades),
                          ("每日日报", self.daily_digest)):
             try:
                 fn()
             except Exception:
                 log.exception("维护任务「%s」出错", name)
+
+    # ------------------------------------------------------------ 升级前的订阅：补上「综艺」分类
+    def backfill_sections(self, limit=5):
+        """旧版订阅没有 variety 字段：向 TMDB 查一次，是真人秀 / 脱口秀的归到综艺（每轮最多查几个，查过就不再查）。"""
+        todo = [t for t in self.store.data["tasks"]
+                if t.get("media", "tv") == "tv" and t.get("tmdb_id") and "variety" not in t][:limit]
+        if not todo:
+            return 0
+        tm = self.e.tmdb()
+        if not tm.ready:
+            return 0
+        n = 0
+        for t in todo:
+            try:
+                d = tm.detail(t["tmdb_id"])
+            except Exception as ex:
+                log.warning("《%s》补全分类失败（下次再试）：%s", t["name"], ex)
+                continue
+            with self.store.lock:
+                t["variety"] = bool(d.get("variety"))
+                if d.get("anime"):
+                    t["anime"] = True
+                self.store.save()
+            n += 1
+        return n
 
     # ------------------------------------------------------------ 3 失效链接自动清理
     def purge_dead_links(self, force=False):

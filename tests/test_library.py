@@ -174,3 +174,14 @@ def test_partial_selection_stays_partial():
     store, eng, c, h, q, e, sid = setup()
     r = c.post("/api/library/delete", json={"scope": sid, "id": "s1", "paths": ["第1季/E01.mkv"]}, headers=h).get_json()
     assert not r["whole"] and "s1" not in e.deleted
+
+
+def test_emby_series_under_category_folder_targets_show_not_category():
+    store, eng, c, h, q, e, sid = setup()
+    e.items["s1"]["Path"] = "/mnt/quark/剧集/国产剧/庆余年"
+    q.tree["/影视/剧集/国产剧"] = ("dir", ["庆余年"])
+    q.tree["/影视/剧集/国产剧/庆余年"] = ("dir", [])
+    items = c.get(f"/api/library/items?scope={sid}", headers=h).get_json()["items"]
+    assert [i["top"] for i in items if i["name"] == "庆余年"] == ["国产剧/庆余年"]
+    r = c.post("/api/library/delete", json={"scope": sid, "id": "s1", "paths": []}, headers=h).get_json()
+    assert q.deleted == ["/影视/剧集/国产剧/庆余年"] and e.deleted == ["s1"]

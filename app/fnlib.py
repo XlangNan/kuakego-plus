@@ -26,6 +26,10 @@ def _ts(v):
         return str(v).replace("T", " ")[:19]
 
 
+def _VEXT_OK(name):
+    return name.lower().endswith(_VEXT)
+
+
 def _clean(name):
     n = _base(name)
     n = re.sub(r"[\(\[（【]\s*(?:19|20)\d{2}\s*[\)\]）】]|[\[\{]\s*tmdb(?:id)?[=-]\s*\d+\s*[\]\}]", " ", n, flags=re.I)
@@ -48,33 +52,55 @@ class FnLib:
         return c
 
     # ---------------- 条目 ↔ 夸克文件夹 ----------------
+    _SEASON_DIR = re.compile(r"(?i)^(season\s*\d+|s\d{1,2}|第\s*[0-9一二三四五六七八九十]{1,3}\s*季|specials?)$")
+
     def _quark_tops(self, scope):
+        """夸克目录下所有「一部片」的文件夹 / 文件：{相对路径: 条目}。
+        目录里常有一层分类（国产剧 / 日剧 / 综艺…）：名字里没有年份的文件夹当作分类，往里再看一层。"""
         q = self.e.quark()
         got = q.get_fids([scope["quark_path"]])
         if not got:
             raise ValueError(f"夸克里找不到目录 {scope['quark_path']}")
-        return {f.get("file_name", ""): f for f in q.ls_dir(got[0]["fid"])}
+        tops = {}
+        for f in q.ls_dir(got[0]["fid"]):
+            name = f.get("file_name", "")
+            if f.get("dir") and not re.search(r"(?:19|20)\d{2}", name) and not self._SEASON_DIR.match(name):
+                kids = q.ls_dir(f["fid"])
+                # 里面直接是视频 / Season 文件夹 → 这就是一部剧；里面全是别的文件夹 → 这是分类
+                is_show = not kids or any((not k.get("dir") and _VEXT_OK(k.get("file_name", ""))) or
+                                          (k.get("dir") and self._SEASON_DIR.match(k.get("file_name", ""))) for k in kids)
+                if not is_show:
+                    for c in kids:
+                        tops[f"{name}/{c.get('file_name', '')}"] = c
+                    continue
+            tops[name] = f
+        return tops
 
-    def _sub_tops(self, scope):
+    def _sub_tops(self, scope, tops):
+        """订阅任务里记的保存路径 → 这部片的夸克文件夹（去掉末尾的 Season N）。"""
         root, out = scope["quark_path"], {}
         for t in self.store.data["tasks"]:
             sp = _p(t.get("savepath"))
-            if t.get("tmdb_id") and sp.startswith(root + "/"):
-                out[(t.get("media", "tv") == "movie" and "movie" or "tv", int(t["tmdb_id"]))] = sp[len(root) + 1:].split("/")[0]
+            if not (t.get("tmdb_id") and sp.startswith(root + "/")):
+                continue
+            parts = sp[len(root) + 1:].split("/")
+            while len(parts) > 1 and self._SEASON_DIR.match(parts[-1]):
+                parts.pop()
+            rel = "/".join(parts)
+            if rel in tops:
+                out[(t.get("media", "tv") == "movie" and "movie" or "tv", int(t["tmdb_id"]))] = rel
         return out
 
     def _map(self, scope, items):
-        """{飞牛 guid: 夸克里的第一级名称}；对不上的不在结果里。"""
+        """{飞牛 guid: 夸克里这部片的相对路径}；对不上的不在结果里。"""
         tops = self._quark_tops(scope)
-        subs = self._sub_tops(scope)
-        names = [(n, _clean(n), _year_of(n)) for n in tops]
+        subs = self._sub_tops(scope, tops)
+        names = [(rel, _clean(rel.rsplit("/", 1)[-1]), _year_of(rel.rsplit("/", 1)[-1])) for rel in tops]
         res = {}
         for it in items:
             media = "movie" if it.get("type") == "Movie" else "tv"
             tm = FnMedia.tmdb_of(it)
             top = subs.get((media, tm)) if tm else None
-            if top not in tops:
-                top = None
             if not top:
                 t = norm_title(it.get("title") or it.get("tv_title") or "")
                 y = _year_of(str(it.get("release_date") or ""))

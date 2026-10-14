@@ -183,3 +183,37 @@ def test_fn_image_route_uses_fn_server():
     eng.fn = lambda: f
     r = c.get("/api/library/img/g1?s=fn", headers=h)
     assert r.status_code == 200 and r.data == b"IMG"
+
+
+def test_fn_category_layer_maps_to_show_folder_not_category():
+    """夸克里是 /影视/剧集/国产剧/庆余年 (2019)：删除只能动这部剧的文件夹，绝不能动「国产剧」整个目录。"""
+    store, eng, c, h = make_client()
+    q, f = QFake(), FnFake()
+    q.tree = {"/影视/剧集": ("dir", ["国产剧"]), "/影视/剧集/国产剧": ("dir", ["庆余年 (2019)", "别的剧 (2020)"]),
+              "/影视/剧集/国产剧/庆余年 (2019)": ("dir", ["Season 1"]), "/影视/剧集/国产剧/别的剧 (2020)": ("dir", []),
+              "/影视/剧集/国产剧/庆余年 (2019)/Season 1": ("dir", ["E01.mkv"]),
+              "/影视/剧集/国产剧/庆余年 (2019)/Season 1/E01.mkv": ("file", 5)}
+    eng.quark = lambda: q; eng.fn = lambda: f
+    sc = c.put("/api/library/scopes", json={"scopes": [{"name": "F", "kind": "tv", "server": "fn", "lib_id": "L9",
+               "quark_path": "/影视/剧集"}]}, headers=h).get_json()["scopes"][0]["id"]
+    items = c.get(f"/api/library/items?scope={sc}", headers=h).get_json()["items"]
+    top = {i["name"]: i["top"] for i in items}
+    assert top["庆余年"] == "国产剧/庆余年 (2019)"
+    d = c.get(f"/api/library/detail?scope={sc}&id=g1", headers=h).get_json()
+    assert [n["name"] for n in d["tree"]] == ["Season 1"]          # 只有这部剧自己的内容
+    r = c.post("/api/library/delete", json={"scope": sc, "id": "g1", "paths": []}, headers=h).get_json()
+    assert q.deleted == ["/影视/剧集/国产剧/庆余年 (2019)"] and r["whole"]
+
+
+def test_fn_subscription_savepath_with_season_suffix():
+    store, eng, c, h = make_client()
+    q, f = QFake(), FnFake()
+    q.tree = {"/影视/剧集": ("dir", ["国产剧"]), "/影视/剧集/国产剧": ("dir", ["不同的名字 (2019)"]),
+              "/影视/剧集/国产剧/不同的名字 (2019)": ("dir", [])}
+    eng.quark = lambda: q; eng.fn = lambda: f
+    store.data["tasks"].append({"id": "t1", "name": "庆余年", "tmdb_id": 1, "media": "tv", "kind": "subscription",
+                                "savepath": "/影视/剧集/国产剧/不同的名字 (2019)/Season 1"})
+    sc = c.put("/api/library/scopes", json={"scopes": [{"name": "F", "kind": "tv", "server": "fn", "lib_id": "L9",
+               "quark_path": "/影视/剧集"}]}, headers=h).get_json()["scopes"][0]["id"]
+    items = c.get(f"/api/library/items?scope={sc}", headers=h).get_json()["items"]
+    assert items[0]["top"] == "国产剧/不同的名字 (2019)"

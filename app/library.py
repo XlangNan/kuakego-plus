@@ -108,12 +108,15 @@ class Library:
         return self._emby().libraries()
 
     # ---------------- 列表 ----------------
-    def _locate(self, scope, path):
-        """Emby 条目路径 → (相对 emby_path 的第一级名称)；不在范围内返回 None。"""
+    def _locate(self, scope, path, series=False):
+        """Emby 条目路径 → 相对 emby_path 的路径；不在范围内返回 None。
+        剧集：整个相对路径（emby_path 填得比较高、中间隔着「国产剧」这类分类文件夹时，也只会指到这一部剧自己的文件夹）；
+        电影：第一级（电影文件夹或单个文件）。"""
         base, pth = scope["emby_path"], _p(path)
         if not pth.startswith(base + "/"):
             return None
-        return pth[len(base) + 1:].split("/")[0]
+        rel = pth[len(base) + 1:]
+        return rel if series else rel.split("/")[0]
 
     def list_items(self, sid):
         scope = self.scope(sid)
@@ -122,7 +125,7 @@ class Library:
         cli = self._emby()
         out = []
         for it in cli.library_items(scope["lib_id"]):
-            top = self._locate(scope, it.get("Path"))
+            top = self._locate(scope, it.get("Path"), it.get("Type") == "Series")
             if not top:
                 continue   # 不在你指定的文件夹里（比如迅雷云盘的）→ 完全不显示
             v = it.get("ProviderIds") or {}
@@ -138,7 +141,7 @@ class Library:
         it = self._emby().item(emby_id)
         if not it:
             raise KeyError("Emby 里找不到这个条目，可能已被删除，请刷新列表")
-        top = self._locate(scope, it.get("Path"))
+        top = self._locate(scope, it.get("Path"), it.get("Type") == "Series")
         if not top:
             raise ValueError("这个条目不在你指定的范围内，已拒绝操作")
         return it, top
@@ -251,7 +254,7 @@ class Library:
         cli = self._emby()
         found = []
         for it in cli.library_items(p["lib_id"]):
-            top = self._locate(p, it.get("Path"))
+            top = self._locate(p, it.get("Path"), it.get("Type") == "Series")
             if not top:
                 continue
             v = it.get("ProviderIds") or {}

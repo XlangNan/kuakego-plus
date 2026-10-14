@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import hashlib
 import hmac
 import json
 import os
@@ -6,13 +7,14 @@ import re
 import secrets
 import threading
 import time
+from urllib.parse import quote
 
 import requests
-from flask import Flask, abort, jsonify, request, send_from_directory, Response
+from flask import Flask, abort, jsonify, redirect, request, send_from_directory, Response
 
-from . import hosts, notify, platforms
+from . import hosts, netproxy, notify, platforms
 from .emby import Emby
-from .fnmedia import FnMedia
+from .fnmedia import FnError, FnMedia
 from .engine import Engine, Scheduler
 from .logbuf import log, ring, setup as setup_log
 from .quark import Quark, QuarkError
@@ -21,10 +23,10 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.11.1"
+VERSION = "1.13.1"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "smartstrm", "pansou", "auto", "platforms")
+SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")
 
 
 def create_app(store=None, engine=None):
@@ -33,6 +35,7 @@ def create_app(store=None, engine=None):
     engine = engine or Engine(store)
     app = Flask(__name__, static_folder=None)
     app.config["JSON_AS_ASCII"] = False
+    netproxy.configure(store.data.get("proxy"))
 
     user = os.environ.get("WEBUI_USERNAME", "admin")
     password = os.environ.get("WEBUI_PASSWORD") or ""
@@ -43,15 +46,82 @@ def create_app(store=None, engine=None):
     acct = {"ts": 0, "data": {"logged_in": False, "nickname": ""}}
 
     # ------------------------------------------------------------ 鉴权
+    # 浏览器：登录页 + 签名 Cookie；脚本 / 反向代理：仍然支持 Basic 认证
+    sess_key = hashlib.sha256(("kq|" + user + "|" + password).encode()).digest()   # 改了密码，旧的登录态自动失效
+    COOKIE = "kq_session"
+    fails = {}   # ip -> [次数, 解锁时间]
+
+    def _sign(exp):
+        return hmac.new(sess_key, f"{user}|{exp}".encode(), hashlib.sha256).hexdigest()[:40]
+
+    def _cookie_ok():
+        v = request.cookies.get(COOKIE, "")
+        exp, _, sig = v.partition(".")
+        return exp.isdigit() and int(exp) > time.time() and hmac.compare_digest(sig, _sign(exp))
+
+    def _basic_ok():
+        # 浏览器会把用过的 Basic 凭证缓存起来、自动带上；点了「退出登录」后要忽略它，否则刷新又登录回去了
+        if request.cookies.get("kq_out") and "Mozilla" in request.headers.get("User-Agent", ""):
+            return False
+        a = request.authorization
+        return bool(a) and hmac.compare_digest(a.username or "", user) and hmac.compare_digest(a.password or "", password)
+
+    def _authed():
+        return _cookie_ok() or _basic_ok()
+
     @app.before_request
     def _auth():
-        if request.path == "/healthz" or request.path in PUBLIC_ASSETS:
+        if request.path in ("/healthz", "/login", "/api/login", "/api/logout") or request.path in PUBLIC_ASSETS:
             return None
-        a = request.authorization
-        ok = bool(a) and hmac.compare_digest(a.username or "", user) and \
-            hmac.compare_digest(a.password or "", password)
-        if not ok:
-            return Response("需要登录", 401, {"WWW-Authenticate": 'Basic realm="kuakego-plus"'})
+        if _authed():
+            return None
+        browser = "Mozilla" in request.headers.get("User-Agent", "")
+        if request.path.startswith("/api/"):
+            h = {} if browser else {"WWW-Authenticate": 'Basic realm="kuakego-plus"'}   # 浏览器里不再弹系统登录框
+            return Response(json.dumps({"error": "需要登录"}, ensure_ascii=False), 401, h, mimetype="application/json")
+        if browser:
+            return redirect("/login" + ("" if request.path == "/" else "?next=" + quote(request.full_path.rstrip("?"))))
+        return Response("需要登录", 401, {"WWW-Authenticate": 'Basic realm="kuakego-plus"'})
+
+    @app.get("/login")
+    def login_page():
+        if _authed():
+            return redirect("/")
+        r = send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "login.html", max_age=0)
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+    @app.get("/api/login")
+    def login_info():
+        return jsonify(version=VERSION)
+
+    @app.post("/api/login")
+    def login_do():
+        ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr or "?")
+        n, until = fails.get(ip, [0, 0])
+        if until > time.time():
+            return jsonify(error=f"尝试次数过多，请 {int(until - time.time()) + 1} 秒后再试"), 429
+        d = request.get_json(silent=True) or {}
+        if hmac.compare_digest(str(d.get("username", "")), user) and hmac.compare_digest(str(d.get("password", "")), password):
+            fails.pop(ip, None)
+            days = 30 if d.get("remember") else 0
+            exp = int(time.time() + (days or 1) * 86400)
+            resp = jsonify(ok=True)
+            resp.delete_cookie("kq_out")
+            resp.set_cookie(COOKIE, f"{exp}.{_sign(exp)}", max_age=days * 86400 or None, httponly=True, samesite="Lax",
+                            secure=request.is_secure or request.headers.get("X-Forwarded-Proto") == "https")
+            return resp
+        n += 1
+        fails[ip] = [n, time.time() + min(300, 5 * 2 ** (n - 5)) if n >= 5 else 0]
+        log.warning("登录失败（%s），第 %s 次", ip, n)
+        return jsonify(error="用户名或密码不对"), 401
+
+    @app.post("/api/logout")
+    def logout_do():
+        resp = jsonify(ok=True)
+        resp.delete_cookie(COOKIE)
+        resp.set_cookie("kq_out", "1", max_age=30 * 86400, httponly=True, samesite="Lax")
+        return resp
 
     def body():
         data = request.get_json(silent=True)  # 严格要求 application/json，天然防跨站表单伪造
@@ -71,6 +141,18 @@ def create_app(store=None, engine=None):
     def _nf(e):
         return jsonify(error=str(e).strip("'\"")), 404
 
+    @app.errorhandler(FnError)
+    def _fn(e):
+        return jsonify(error=f"飞牛影视：{e}"), 502
+
+    @app.errorhandler(Exception)
+    def _any(e):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+        log.exception("请求出错 %s", request.path)
+        return jsonify(error=f"{type(e).__name__}: {e}"), 500
+
     @app.get("/healthz")
     def healthz():
         return "ok"
@@ -88,7 +170,7 @@ def create_app(store=None, engine=None):
     @app.get("/")
     def index():
         r = send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "index.html", max_age=0)
-        r.headers["Cache-Control"] = "no-cache"      # 升级后浏览器必须重新校验首页，不然普通刷新还是旧界面
+        r.headers["Cache-Control"] = "no-store"      # 不缓存、不进「后退/前进缓存」：退出登录后刷新或后退都会重新校验。升级后浏览器必须重新校验首页，不然普通刷新还是旧界面
         return r
 
     # ------------------------------------------------------------ 账号
@@ -399,7 +481,7 @@ def create_app(store=None, engine=None):
         key = (size, name)
         if key not in img_cache:
             try:
-                r = requests.get(f"{Tmdb(store.data['tmdb']).img_root}/{size}/{name}", timeout=15)
+                r = netproxy.get(f"{Tmdb(store.data['tmdb']).img_root}/{size}/{name}", "tmdb", timeout=15)
             except Exception:
                 abort(502)
             if r.status_code != 200:
@@ -790,6 +872,8 @@ def create_app(store=None, engine=None):
         if name not in SECTIONS:
             raise KeyError("未知设置")
         store.update_section(name, body())
+        if name == "proxy":
+            netproxy.configure(store.data["proxy"])
         return jsonify(store.public_section(name))
 
     @app.post("/api/settings/<name>/test")
@@ -815,6 +899,13 @@ def create_app(store=None, engine=None):
                 ok, msg = True, "连接成功：" + Emby(cur["url"], cur["api_key"], cur.get("user_id", "")).ping()
             except Exception as e:
                 ok, msg = False, f"连接失败：{e}"
+        elif name == "proxy":
+            if not cur.get("url"):
+                ok, msg = False, "请先填写代理地址"
+            else:
+                tm = Tmdb(store.data["tmdb"])
+                msg = netproxy.probe(cur, f"{tm.base}/configuration" + (f"?api_key={tm.key}" if tm.key and len(tm.key) <= 40 else ""))
+                ok = "失败" not in msg.split("；")[0]
         elif name == "fnmedia":
             try:
                 if not (cur["url"] and cur["username"]):
@@ -824,7 +915,7 @@ def create_app(store=None, engine=None):
                 ok, msg = True, f"连接成功：{d['version']}｜媒体库：{libs}"
                 if d.get("sample_item"):
                     sm = d["sample_item"]
-                    msg += f"｜示例：{sm.get('title')} type={sm.get('type')} trim_id={sm.get('trim_id')}"
+                    msg += f"｜示例：{sm.get('title')} type={sm.get('type')} trim_id={sm.get('trim_id')} poster={sm.get('poster')} posters={sm.get('posters')}"
                 if d.get("list_error"):
                     msg += f"｜列表失败：{d['list_error']}"
             except Exception as e:

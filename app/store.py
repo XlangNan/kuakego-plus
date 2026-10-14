@@ -34,6 +34,10 @@ DEFAULTS = {
         "enabled": False, "url": "", "username": "", "password": "", "access_code": "",
         "only_missing": True, "refresh_after_save": True, "refresh_delay": 10,
     },
+    "proxy": {   # 网络代理：默认只给 TMDB 用；代理连不上自动改直连
+        "enabled": False, "url": "", "username": "", "password": "",
+        "use_tmdb": True, "use_platforms": False, "fallback": True,
+    },
     "pansou": {
         "enabled": False, "url": "", "username": "", "password": "",
         "src": "all", "channels": "", "plugins": "", "timeout": 30,
@@ -61,6 +65,7 @@ SECRET_FIELDS = {
     "tmdb": ["api_key"],
     "emby": ["api_key"],
     "fnmedia": ["password", "access_code"],
+    "proxy": ["password"],
     "smartstrm": ["webhook"],
     "pansou": ["password"],
     "platforms": ["iqiyi_cookie"],

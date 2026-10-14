@@ -7,7 +7,9 @@ import shutil
 import time
 
 from . import emby as emby_mod
+from .fnmedia import FnMedia
 from .logbuf import log
+from .parser import norm_title
 from .quark import QuarkError
 
 KINDS = ("tv", "movie", "anime", "variety")
@@ -201,7 +203,82 @@ class Library:
         report["local"] = self._clean_local(scope, top, rels)
         report["subs"] = self._handle_subs(qitem, whole, stop_sub)
         emby_mod._ids_cache.clear()
+        pv = it.get("ProviderIds") or {}
+        info = {"tmdb": pv.get("Tmdb") or pv.get("tmdb"), "name": it.get("Name"), "year": it.get("ProductionYear"),
+                "movie": it.get("Type") == "Movie"}
+        report["peers"] = self._peers(scope, info, whole, rels)
         return report
+
+    # ---------------- 联动另一个媒体服务器 ----------------
+    @staticmethod
+    def _match(info, tmdb, name, year, movie):
+        """另一个服务器里的条目是不是同一部：优先 TMDB ID，其次片名 + 年份（相差不超过 1 年）。"""
+        if bool(movie) != bool(info["movie"]):
+            return False
+        if info.get("tmdb") and tmdb and str(tmdb).isdigit():
+            return int(tmdb) == int(info["tmdb"])
+        if not norm_title(name) or norm_title(name) != norm_title(info.get("name")):
+            return False
+        try:
+            return abs(int(year) - int(info["year"])) <= 1 if year and info.get("year") else True
+        except (TypeError, ValueError):
+            return True
+
+    def _peers(self, scope, info, whole, rels):
+        """夸克目录相同（或包含）的、另一个服务器的范围：一起删。返回要显示的提示列表。"""
+        out = []
+        mine, sv = _p(scope["quark_path"]), scope.get("server", "emby")
+        for p in self.scopes():
+            if p["id"] == scope["id"] or p.get("server", "emby") == sv:
+                continue
+            other = _p(p["quark_path"])
+            nested = other != mine and (other.startswith(mine + "/") or mine.startswith(other + "/"))
+            if other != mine and not nested:
+                continue
+            label = ("飞牛" if p.get("server") == "fn" else "Emby") + f"（{p['name']}）"
+            if nested and not whole:
+                out.append(f"{label}：夸克目录层级不同，单集 / 整季删除不联动，请到它那边处理")
+                continue
+            try:
+                msg = self._peer_fn(p, info, whole, rels) if p.get("server") == "fn" else self._peer_emby(p, info, whole, rels)
+            except Exception as e:
+                log.warning("联动 %s 失败：%s", label, e)
+                msg = f"同步失败：{e}"
+            out.append(f"{label}：{msg}")
+        return out
+
+    def _peer_emby(self, p, info, whole, rels):
+        cli = self._emby()
+        found = []
+        for it in cli.library_items(p["lib_id"]):
+            top = self._locate(p, it.get("Path"))
+            if not top:
+                continue
+            v = it.get("ProviderIds") or {}
+            if self._match(info, v.get("Tmdb") or v.get("tmdb"), it.get("Name"), it.get("ProductionYear"), it.get("Type") == "Movie"):
+                found.append((it, top))
+        if len(found) != 1:
+            return "没匹配到同一部（或匹配到多个，已跳过）"
+        it, top = found[0]
+        eitem = f"{p['emby_path']}/{top}"
+        msg = self._sync_emby(it, whole, [f"{eitem}/{r}" for r in rels])
+        loc = self._clean_local(p, top, rels)
+        emby_mod._ids_cache.clear()
+        return msg + (f"；{loc}" if loc else "")
+
+    def _peer_fn(self, p, info, whole, rels):
+        cli = self.fnl.cli()
+        items = cli.library_items(p["lib_id"])
+        mp = self.fnl._map(p, items)
+        found = [it for it in items if it["guid"] in mp and self._match(
+            info, FnMedia.tmdb_of(it), it.get("title"), str(it.get("release_date") or "")[:4], it.get("type") == "Movie")]
+        if len(found) != 1:
+            return "没匹配到同一部（或匹配到多个，已跳过）"
+        it = found[0]
+        msg = self.fnl._sync(cli, p, it, it["guid"], whole, rels)
+        from . import fnmedia
+        fnmedia._ids_cache.clear()
+        return msg
 
     def _clean_local(self, scope, top, rels):
         """strm 文件直接在磁盘上删（需要把 strm 目录挂载进本容器，并在范围设置里填挂载后的路径）。"""

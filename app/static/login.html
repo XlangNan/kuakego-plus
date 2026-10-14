@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>登录 · kuakego-plus</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b0b0f">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{display:grid;place-items:center;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0b0b0f;color:#fff;overflow:hidden;padding:16px}
+.wall{position:fixed;inset:-60px;display:grid;grid-template-columns:repeat(9,1fr);gap:14px;transform:rotate(-6deg) scale(1.15);opacity:.55;filter:blur(1.5px);animation:drift 60s linear infinite alternate}
+.wall i{aspect-ratio:2/3;border-radius:10px}
+@keyframes drift{to{transform:rotate(-6deg) scale(1.15) translateY(-40px)}}
+.vig{position:fixed;inset:0;background:radial-gradient(70% 70% at 50% 50%,#0b0b0f99,#0b0b0ff2)}
+.card{position:relative;width:100%;max-width:380px;padding:40px 36px;border-radius:18px;background:#0e0e14e6;border:1px solid #ffffff1a;box-shadow:0 40px 100px #000;animation:in .5s ease both}
+@keyframes in{from{opacity:0;transform:translateY(14px)}}
+.card.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.brand{text-align:center;font-size:30px;font-weight:900;letter-spacing:2px;color:#e50914;margin-bottom:4px;text-shadow:0 0 30px #e5091466}
+.sub{text-align:center;color:#8b8b97;font-size:13px;margin-bottom:28px}
+.in{position:relative;margin-bottom:14px}
+.in input{width:100%;height:48px;border-radius:8px;background:#1c1c25;border:1px solid #2a2a36;color:#e6e6ee;font-size:15px;padding:0 44px 0 42px;outline:none;transition:border-color .15s,box-shadow .15s}
+.in input:focus{border-color:#e50914;box-shadow:0 0 0 3px #e5091433}
+.in .ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.8;pointer-events:none}
+.in .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;background:none;color:#8b8b97;cursor:pointer;font-size:16px;border-radius:6px}
+.in .eye:hover{color:#fff}
+.row{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#9a9aa7;margin:2px 0 16px}
+.row label{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.row input{accent-color:#e50914;width:15px;height:15px}
+.err{min-height:18px;color:#ff6b6b;font-size:13px;margin:-4px 0 8px;text-align:center}
+button.go{width:100%;height:48px;border:0;border-radius:8px;background:#e50914;color:#fff;font-size:16px;font-weight:700;letter-spacing:4px;cursor:pointer;box-shadow:0 10px 30px #e5091455;transition:transform .1s,filter .15s}
+button.go:hover{filter:brightness(1.1)}button.go:active{transform:scale(.99)}button.go:disabled{opacity:.6;cursor:default}
+.ft{text-align:center;color:#6c6c78;font-size:12px;margin-top:20px}
+@media (max-width:480px){.card{padding:32px 22px}.wall{grid-template-columns:repeat(5,1fr)}}
+</style>
+</head>
+<body>
+<div class="wall" id="wall"></div><div class="vig"></div>
+<form class="card" id="f" autocomplete="on">
+  <div class="brand">KUAKEGO</div>
+  <div class="sub">追更 · 转存 · 入库，一站搞定</div>
+  <div class="in"><span class="ic">👤</span><input id="u" name="username" type="text" placeholder="用户名" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
+  <div class="in"><span class="ic">🔒</span><input id="p" name="password" type="password" placeholder="密码" autocomplete="current-password" required><button type="button" class="eye" id="eye" tabindex="-1" aria-label="显示密码">👁</button></div>
+  <div class="row"><label><input type="checkbox" id="r" checked> 30 天内免登录</label></div>
+  <div class="err" id="e"></div>
+  <button class="go" id="b" type="submit">登录</button>
+  <div class="ft" id="v">kuakego-plus</div>
+</form>
+<script>
+const $ = s => document.querySelector(s);
+const c = ['#e50914,#6b0f1a', '#2563eb,#0b1b4a', '#f59e0b,#7c2d12', '#10b981,#064e3b', '#a855f7,#3b0764', '#ec4899,#500724', '#06b6d4,#083344', '#84cc16,#1a2e05', '#f43f5e,#4c0519'];
+$('#wall').innerHTML = Array.from({length: 45}, (_, i) => `<i style="background:linear-gradient(${150 + i * 17}deg,${c[(i * 7 + 3) % 9]})"></i>`).join('');
+try { $('#u').value = localStorage.getItem('qp-last-user') || ''; } catch (_) {}
+($('#u').value ? $('#p') : $('#u')).focus();
+$('#eye').onclick = () => { const p = $('#p'); const show = p.type === 'password'; p.type = show ? 'text' : 'password'; $('#eye').textContent = show ? '🙈' : '👁'; };
+const next = new URLSearchParams(location.search).get('next');
+$('#f').onsubmit = async ev => {
+  ev.preventDefault(); $('#e').textContent = ''; $('#b').disabled = true; $('#b').textContent = '登录中…';
+  try {
+    const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: $('#u').value.trim(), password: $('#p').value, remember: $('#r').checked})});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || '登录失败 ' + r.status);
+    try { localStorage.setItem('qp-last-user', $('#u').value.trim()); } catch (_) {}
+    location.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
+  } catch (e) {
+    $('#e').textContent = e.message; $('#p').select();
+    const card = $('#f'); card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+    $('#b').disabled = false; $('#b').textContent = '登录';
+  }
+};
+fetch('/api/login').then(r => r.json()).then(d => { if (d.version) $('#v').textContent = 'v' + d.version; }).catch(() => {});
+</script>
+</body>
+</html>

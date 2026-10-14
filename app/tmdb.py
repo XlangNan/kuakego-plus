@@ -2,8 +2,7 @@
 import time
 from datetime import date
 
-import requests
-
+from . import netproxy
 from .parser import emby_folder_name, norm_title
 
 _cache = {}
@@ -66,7 +65,7 @@ class Tmdb:
         hit = _cache.get(ck)
         if hit and time.time() - hit[0] < ttl:
             return hit[1]
-        r = requests.get(f"{self.base}{path}", params=params, headers=headers, timeout=15)
+        r = netproxy.get(f"{self.base}{path}", "tmdb", params=params, headers=headers, timeout=15)
         if r.status_code == 401:
             raise RuntimeError("TMDB 密钥无效")
         r.raise_for_status()

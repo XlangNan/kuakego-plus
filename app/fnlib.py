@@ -169,6 +169,9 @@ class FnLib:
         report["subs"] = lib._handle_subs(qitem, whole, stop_sub)
         from . import fnmedia
         fnmedia._ids_cache.clear()
+        info = {"tmdb": FnMedia.tmdb_of(it), "name": it.get("title"), "year": str(it.get("release_date") or "")[:4],
+                "movie": it.get("type") == "Movie"}
+        report["peers"] = lib._peers(scope, info, whole, rels)
         return report
 
     @staticmethod

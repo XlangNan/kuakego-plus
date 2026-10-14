@@ -506,7 +506,7 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
     <button data-v="account"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>账号登录</span></button>
     <button data-v="logs"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>运行日志</span></button>
   </nav>
-  <div class="side-foot"><span id="ver"></span><br>本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
+  <div class="side-foot"><span id="ver"></span> · <a href="#" id="logout" style="color:inherit">退出登录</a><br>本产品使用 TMDB API，但未经 TMDB 认可或认证。</div>
 </aside>
 
 <main><div class="layout"><div class="wrap">
@@ -621,6 +621,7 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   <button class="bt" data-v="pansou">🔎 PanSou 资源搜索</button>
   <button class="bt" data-v="emby">📹 Emby 联动</button>
   <button class="bt" data-v="fnmedia">🐧 飞牛影视</button>
+  <button class="bt" data-v="proxy">🌐 网络代理</button>
   <button class="bt" data-v="auto">⚙️ 自动化与备份</button>
 </div>
 <section class="view" id="v-dingtalk">
@@ -741,6 +742,22 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
   </div>
 </section>
 
+<section class="view" id="v-proxy">
+  <div class="card">
+    <h2>🌐 网络代理</h2>
+    <div class="hint" style="margin:0 0 10px">TMDB 在晚上经常很慢时，可以让它走你自己的 HTTP 代理。和 hosts 模式<b>可以同时开着</b>：走代理的请求如果连不上代理，会自动改用直连（hosts 照常生效）。</div>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="px-enabled"> 启用代理</label>
+    <label class="l">代理地址（HTTP 代理，如 http://192.168.1.10:7890）</label><input type="text" id="px-url" placeholder="http://192.168.1.10:7890">
+    <div class="row"><div class="grow"><label class="l">用户名（代理需要认证才填）</label><input type="text" id="px-user"></div>
+      <div class="grow"><label class="l">密码</label><input type="password" id="px-pass"><div class="hint" id="px-pass-h"></div></div></div>
+    <label class="chk"><input type="checkbox" id="px-tmdb"> TMDB（接口和海报图，以及 Netflix / Disney+ 等海外平台榜单）走代理</label>
+    <label class="chk"><input type="checkbox" id="px-pf"> 国内平台榜单（腾讯 / 芒果 / 爱奇艺 / B 站）也走代理（一般不需要，直连更快）</label>
+    <label class="chk"><input type="checkbox" id="px-fb"> 代理连不上时自动改直连</label>
+    <div class="hint">夸克、Emby、飞牛、钉钉、PanSou 不会走代理。</div>
+    <div class="actions"><button class="btn pri" data-save="proxy">保存</button><button class="btn" data-test="proxy">测试代理</button></div>
+    <div class="hint" id="proxy-msg"></div>
+  </div>
+</section>
 <section class="view" id="v-fnmedia">
   <div class="card">
     <h2>🐧 飞牛影视（fnOS）联动</h2>
@@ -813,6 +830,7 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 async function api(path, method = 'GET', body) {
   const r = await fetch('/api' + path, {method, headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
   let d = {}; try { d = await r.json(); } catch (_) {}
+  if (r.status === 401) { location.href = '/login'; throw new Error('登录已失效'); }
   if (!r.ok) throw new Error(d.error || d.msg || ('请求失败 ' + r.status));
   return d;
 }
@@ -864,7 +882,7 @@ const PAGE_HEAD = {
   account: ['账号登录', '登录夸克账号后才能转存文件'],
   logs: ['运行日志', '最近的运行记录，出错时先看这里'],
 };
-const INT_VIEWS = ['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'auto'];
+const INT_VIEWS = ['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'proxy', 'auto'];
 let lastInt = 'dingtalk';
 function go(v) {
   if (v === 'integrations') v = lastInt;
@@ -2012,10 +2030,11 @@ const FORMS = {
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
   pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
   auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour'},
+  proxy: {enabled: '#px-enabled', url: '#px-url', username: '#px-user', password: '#px-pass', use_tmdb: '#px-tmdb', use_platforms: '#px-pf', fallback: '#px-fb'},
   fnmedia: {enabled: '#f-enabled', url: '#f-url', username: '#f-user', password: '#f-pass', access_code: '#f-code', only_missing: '#f-only', refresh_after_save: '#f-refresh', refresh_delay: '#f-delay'},
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
 };
-const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], fnmedia: ['password', 'access_code'], pansou: ['password'], auto: []};
+const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], fnmedia: ['password', 'access_code'], proxy: ['password'], pansou: ['password'], auto: []};
 function fill(name, d) {
   for (const [k, sel] of Object.entries(FORMS[name])) {
     const el = $(sel); if (!el) continue;
@@ -2031,7 +2050,7 @@ function fill(name, d) {
 }
 const collect = name => Object.fromEntries(Object.entries(FORMS[name]).map(([k, sel]) => { const el = $(sel); return [k, el.type === 'checkbox' ? el.checked : el.value]; }));
 const loadSettings = guard(async name => fill(name, await api('/settings/' + name)));
-['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'auto'].forEach(n => loaders[n] = () => loadSettings(n));
+['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'proxy', 'auto'].forEach(n => loaders[n] = () => loadSettings(n));
 $$('[data-save]').forEach(b => b.onclick = guard(async () => {
   const n = b.dataset.save; fill(n, await api('/settings/' + n, 'PUT', collect(n))); toast('已保存', 'ok'); refreshStatus();
 }));
@@ -2071,6 +2090,7 @@ $('#a-save').onclick = guard(async () => {
   catch (e) { msg.className = 'hint err'; msg.textContent = '✗ ' + e.message; }
 });
 $('#a-sign').onclick = guard(async () => { const r = await api('/account/sign', 'POST'); toast(r.msg, 'ok'); });
+$('#logout').onclick = async e => { e.preventDefault(); try { await fetch('/api/logout', {method: 'POST'}); } catch (_) {} location.href = '/login'; };
 $('#a-out').onclick = guard(async () => { if (confirm('退出登录？监控会暂停转存。')) { await api('/account', 'DELETE'); refreshStatus(); loaders.account(); } });
 $('#a-auto').onchange = guard(() => api('/account', 'PUT', {auto_sign: $('#a-auto').checked}));
 $('#a-import').onclick = guard(async () => { const r = await api('/import-legacy', 'POST', {}); toast(`已导入 ${r.imported} 个任务`, 'ok'); refreshStatus(); });
@@ -2149,7 +2169,7 @@ async function openLbItem(id) {
   const m = modal(`<h3>${esc(it.name)}${it.year ? ' (' + it.year + ')' : ''}</h3><div id="lbm" class="sub">读取中…</div>`, 'wide');
   try {
     const d = await api(`/library/detail?scope=${lbCur}&id=${id}`);
-    $('#lbm', m).outerHTML = `<div style="display:flex;gap:14px;margin-bottom:10px"><img src="/api/library/img/${id}" style="width:110px;height:165px;object-fit:cover;border-radius:8px;background:var(--line)" onerror="this.style.visibility='hidden'">
+    $('#lbm', m).outerHTML = `<div style="display:flex;gap:14px;margin-bottom:10px"><img src="/api/library/img/${id}${it.server === 'fn' ? '?s=fn' : ''}" style="width:110px;height:165px;object-fit:cover;border-radius:8px;background:var(--line)" onerror="this.style.visibility='hidden'">
       <div style="min-width:0"><div>${d.type === 'Movie' ? '🎬 电影' : '📺 剧集'}</div>
       <div style="margin-top:6px"><b>入库时间：</b>${esc(d.added_at || '未知')}</div>
       <div class="sub" style="margin-top:6px">夸克：${esc(d.quark_path)}${d.in_quark ? '' : '（夸克里没找到这个文件夹）'}</div>
@@ -2182,7 +2202,7 @@ function confirmLbDelete(it, rels, parent) {
     try {
       const r = await api('/library/delete', 'POST', {scope: lbCur, id: it.emby_id, paths: rels, stop_sub: $('#lbd-sub', m).checked});
       m.remove(); parent?.remove();          // 关掉确认框和详情窗口，回到媒体库海报墙
-      toast(`${r.whole && !whole ? '已按整部删除｜' : ''}夸克：${r.quark.join('；')}｜${lbSrvName()}：${r.emby}${r.local ? '｜' + r.local : ''}${r.subs ? `｜订阅 ${r.subs} 个已处理` : ''}`, '', 7000);
+      toast(`${r.whole && !whole ? '已按整部删除｜' : ''}夸克：${r.quark.join('；')}｜${lbSrvName()}：${r.emby}${r.local ? '｜' + r.local : ''}${(r.peers || []).map(x => '｜' + x).join('')}${r.subs ? `｜订阅 ${r.subs} 个已处理` : ''}`, '', 7000);
       if (r.whole) lbItems = lbItems.filter(x => x.emby_id !== it.emby_id);
       renderLibrary();
       loadLibrary().catch(() => {});         // 再从 Emby 重新读一遍，保证列表是最新的

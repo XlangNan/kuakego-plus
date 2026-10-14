@@ -141,3 +141,45 @@ def test_fn_refuses_unmapped():
     f.tv.append({"guid": "g3", "type": "TV", "title": "完全不同的名字", "release_date": "2020"})
     r = c.post("/api/library/delete", json={"scope": sid, "id": "g3", "paths": []}, headers=h)
     assert r.status_code == 400 and "g3" not in f.deleted
+
+
+def test_peer_sync_emby_to_fn_and_back():
+    from tests.test_library import EFake
+    store, eng, c, h = make_client()
+    q, f, e = QFake(), FnFake(), EFake()
+    q.tree["/影视/剧集"] = ("dir", ["庆余年", "别的"])
+    eng.quark = lambda: q; eng.fn = lambda: f; eng.emby = eng.emby_only = lambda: e
+    r = c.put("/api/library/scopes", json={"scopes": [
+        {"name": "E", "kind": "tv", "server": "emby", "lib_id": "L1", "emby_path": "/mnt/quark/剧集", "quark_path": "/影视/剧集"},
+        {"name": "F", "kind": "tv", "server": "fn", "lib_id": "L9", "quark_path": "/影视/剧集"}]}, headers=h)
+    sc = {s["server"]: s["id"] for s in r.get_json()["scopes"]}
+    # Emby 里整部删 → 飞牛同步
+    r = c.post("/api/library/delete", json={"scope": sc["emby"], "id": "s1", "paths": []}, headers=h).get_json()
+    assert e.deleted == ["s1"] and f.deleted == ["g1"] and "飞牛" in r["peers"][0]
+    # 飞牛里整部删 → Emby 同步
+    e.deleted.clear(); f.deleted.clear(); q.deleted.clear()
+    r = c.post("/api/library/delete", json={"scope": sc["fn"], "id": "g1", "paths": []}, headers=h).get_json()
+    assert f.deleted == ["g1"] and e.deleted == ["s1"] and "Emby" in r["peers"][0]
+
+
+def test_peer_skipped_when_quark_dirs_differ():
+    from tests.test_library import EFake
+    store, eng, c, h = make_client()
+    q, f, e = QFake(), FnFake(), EFake()
+    q.tree["/影视/剧集"] = ("dir", ["庆余年"])
+    eng.quark = lambda: q; eng.fn = lambda: f; eng.emby = eng.emby_only = lambda: e
+    r = c.put("/api/library/scopes", json={"scopes": [
+        {"name": "E", "kind": "tv", "server": "emby", "lib_id": "L1", "emby_path": "/mnt/quark/剧集", "quark_path": "/影视/剧集"},
+        {"name": "F", "kind": "tv", "server": "fn", "lib_id": "L9", "quark_path": "/别处/剧集"}]}, headers=h)
+    sc = {s["server"]: s["id"] for s in r.get_json()["scopes"]}
+    r = c.post("/api/library/delete", json={"scope": sc["emby"], "id": "s1", "paths": []}, headers=h).get_json()
+    assert r["peers"] == [] and f.deleted == []
+
+
+def test_fn_image_route_uses_fn_server():
+    store, eng, c, h = make_client()
+    f = FnFake()
+    f.image = lambda guid, width=300: (b"IMG", "image/jpeg")
+    eng.fn = lambda: f
+    r = c.get("/api/library/img/g1?s=fn", headers=h)
+    assert r.status_code == 200 and r.data == b"IMG"

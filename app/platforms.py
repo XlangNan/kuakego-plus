@@ -12,6 +12,8 @@ from datetime import date
 
 import requests
 
+from . import netproxy
+
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/131.0.0.0 Safari/537.36")
 SECS = ("tv", "movie", "anime", "variety")
@@ -79,7 +81,7 @@ T_CH = {"tv": "100113", "movie": "100173", "variety": "100109", "anime": "100119
 
 
 def _t_post(body):
-    r = requests.post(T_URL, params=T_PARAMS, json=body, headers=T_HEAD, timeout=15)
+    r = netproxy.post(T_URL, "platforms", params=T_PARAMS, json=body, headers=T_HEAD, timeout=15)
     r.raise_for_status()
     return r.json().get("data") or {}
 
@@ -140,7 +142,7 @@ M_CH = {"tv": "2", "movie": "3", "anime": "50", "variety": "1"}
 
 
 def mango_filters(ch):
-    r = requests.get("https://pianku.api.mgtv.com/rider/config/channel/v1", headers=M_HEAD, timeout=15,
+    r = netproxy.get("https://pianku.api.mgtv.com/rider/config/channel/v1", "platforms", headers=M_HEAD, timeout=15,
                      params={"platform": "pcweb", "allowedRC": "1", "channelId": M_CH[ch], "_support": "10000000"})
     r.raise_for_status()
     out = []
@@ -154,7 +156,7 @@ def mango_filters(ch):
 def mango_items(ch, filters, page, size=30):
     params = {"allowedRC": "1", "platform": "pcweb", "channelId": M_CH[ch], "pn": str(page), "pc": str(size),
               "hudong": "1", "_support": "10000000", **filters}
-    r = requests.get("https://pianku.api.mgtv.com/rider/list/pcweb/v3", headers=M_HEAD, params=params, timeout=15)
+    r = netproxy.get("https://pianku.api.mgtv.com/rider/list/pcweb/v3", "platforms", headers=M_HEAD, params=params, timeout=15)
     r.raise_for_status()
     docs = (r.json().get("data") or {}).get("hitDocs") or []
     return [_item(d.get("title"), d.get("year"), d.get("img"), d.get("clipId")) for d in docs], len(docs) >= size
@@ -175,7 +177,7 @@ Q_FIELD = {"mode": "mode", "type": "three_category_id_v2", "area": "three_catego
 
 
 def iqiyi_filters(ch):
-    r = requests.get("https://mesh.if.iqiyi.com/portal/lw/videolib/tag", headers=Q_HEAD, timeout=15,
+    r = netproxy.get("https://mesh.if.iqiyi.com/portal/lw/videolib/tag", "platforms", headers=Q_HEAD, timeout=15,
                      params={"channel_id": Q_CH[ch], "tagAdd": "", "selected_tag_name": "免费",
                              "version": Q_BASE["version"], "device": Q_BASE["device_id"], "uid": ""})
     r.raise_for_status()
@@ -201,7 +203,7 @@ def iqiyi_items(ch, filters, page, cookie=""):
         m = re.search(r"(?:^|;\s*)QC005=([^;]+)", cookie)
         if m:
             params["device_id"] = m.group(1).strip()
-    r = requests.get("https://mesh.if.iqiyi.com/portal/lw/videolib/data", headers=head, params=params, timeout=15)
+    r = netproxy.get("https://mesh.if.iqiyi.com/portal/lw/videolib/data", "platforms", headers=head, params=params, timeout=15)
     r.raise_for_status()
     data = r.json()
     rows = data.get("data") or []
@@ -241,7 +243,7 @@ def bilibili_filters(ch):
 
 def bilibili_items(ch, filters, page, size=20):
     params = {"type": "1", "st": B_CH[ch], "season_type": B_CH[ch], "page": page, "pagesize": size, **filters}
-    r = requests.get("https://api.bilibili.com/pgc/season/index/result", headers=B_HEAD, params=params, timeout=15)
+    r = netproxy.get("https://api.bilibili.com/pgc/season/index/result", "platforms", headers=B_HEAD, params=params, timeout=15)
     r.raise_for_status()
     rows = (r.json().get("data") or {}).get("list") or []
     return [_item(x.get("title"), "", x.get("cover"), x.get("media_id")) for x in rows], len(rows) >= size

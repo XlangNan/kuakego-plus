@@ -124,4 +124,4 @@ def test_endpoints():
 def test_index_is_not_cached():
     store, eng, c, h = make_client()
     r = c.get("/", headers=h)
-    assert r.status_code == 200 and "no-cache" in r.headers.get("Cache-Control", "")
+    assert r.status_code == 200 and any(k in r.headers.get("Cache-Control", "") for k in ("no-cache", "no-store"))

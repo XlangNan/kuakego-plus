@@ -14,6 +14,8 @@ from urllib.parse import quote
 
 import requests
 
+from .logbuf import log
+
 _APIKEY = "16CCEB3D-AB42-077D-36A1-F355324E4237"
 _SALT = "NDzZTVxnRKP8Z0jXg1VAMonaG8akvh"
 _ids_cache = {}
@@ -43,6 +45,7 @@ class FnMedia:
         self.token = None
         self.s = requests.Session()
         self.api_path = "/api/v1"
+        self.posters = {}   # guid -> 海报路径（列表接口里就带着，省得每张图再查一次详情）
 
     # ---------------- 底层 ----------------
     def _authx(self, api_path, body):
@@ -160,6 +163,9 @@ class FnMedia:
                 post["ancestor_guid"] = guid
             d = self.call("/item/list", data=post) or {}
             got = d.get("list") or []
+            for it in got:
+                if it.get("guid") and (it.get("poster") or it.get("posters")):
+                    self.posters[it["guid"]] = it.get("poster") or it.get("posters")
             items += got
             total = d.get("total") if d.get("total") is not None else d.get("total_count")
             if not got or len(got) < page_size or (total is not None and len(items) >= int(total)):
@@ -267,20 +273,32 @@ class FnMedia:
         self.call(f"/item/{guid}", method="delete", data={"delete_file": 1 if delete_file else 0, "media_guids": []})
 
     def image(self, path_or_guid, width=300):
-        """海报：传条目 guid（先查详情取海报路径）或已知的海报路径。返回 (内容, 类型)；没有图返回 None。"""
+        """海报：传条目 guid（优先用列表里带的海报路径，没有再查详情）。返回 (内容, 类型)；没有图返回 None。"""
         self._ensure()
-        p = path_or_guid
-        if not str(p).startswith("/"):
-            it = self.item(p) or {}
-            p = it.get("poster") or it.get("posters") or ""
+        p = str(path_or_guid)
+        if not p.startswith("/"):
+            guid = p
+            p = self.posters.get(guid) or ""
+            if not p:
+                it = self.item(guid) or {}
+                p = it.get("poster") or it.get("posters") or ""
+                if p:
+                    self.posters[guid] = p
         if not p:
+            log.warning("飞牛海报：条目 %s 没有海报路径", path_or_guid)
             return None
         if not p.startswith("/"):
             p = "/" + p
-        r = self._raw("/sys/img" + p, params=None)
-        if r.status_code != 200 or "image" not in r.headers.get("Content-Type", "image"):
-            return None
-        return r.content, r.headers.get("Content-Type", "image/jpeg")
+        last = ""
+        for cand in dict.fromkeys([p, quote(p, safe="/%")]):
+            for extra in ({"w": width}, None):   # 有的版本支持 w 缩放参数，不支持就取原图
+                r = self._raw("/sys/img" + cand, params=extra)
+                ct = r.headers.get("Content-Type", "")
+                if r.status_code == 200 and r.content and not ct.startswith(("application/json", "text/")):
+                    return r.content, ct if ct.startswith("image/") else "image/jpeg"
+                last = f"HTTP {r.status_code} {ct} {r.content[:60]!r}"
+        log.warning("飞牛海报取不到：%s -> %s", p, last)
+        return None
 
     def diagnose(self):
         """给设置页「测试连接」用：每一步都列出来，方便对不上时把结果发给开发者。"""

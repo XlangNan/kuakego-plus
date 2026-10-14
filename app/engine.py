@@ -12,6 +12,7 @@ from datetime import date, datetime
 
 from . import notify
 from .emby import Emby
+from .fnmedia import FnMedia, Multi
 from .logbuf import log
 from .library import Library
 from .maintenance import Maintenance
@@ -93,11 +94,32 @@ class Engine:
     def tmdb(self):
         return Tmdb(self.store.data["tmdb"])
 
-    def emby(self):
+    def emby_only(self):
         c = self.store.data["emby"]
         if c["enabled"] and c["url"] and c["api_key"]:
             return Emby(c["url"], c["api_key"], c.get("user_id", ""))
         return None
+
+    def fn(self):
+        c = self.store.data["fnmedia"]
+        if c["enabled"] and c["url"] and c["username"]:
+            key = (c["url"], c["username"], c["password"], c.get("access_code", ""))
+            if getattr(self, "_fn_key", None) != key:  # 配置没变就复用登录态
+                self._fn_cli, self._fn_key = FnMedia(*key), key
+            return self._fn_cli
+        return None
+
+    def emby(self):
+        """入库判断 / 缺集 / 刷新用的「媒体服务器」：Emby、飞牛、或两者合并。"""
+        e, f = self.emby_only(), self.fn()
+        if e and f:
+            return Multi(e, f)
+        return e or f
+
+    def media_cfg(self):
+        """「只转存缺少的集数 / 转存后刷新」这几个开关：Emby 开着用 Emby 的，否则用飞牛的。"""
+        st = self.store.data
+        return st["emby"] if self.emby_only() or not self.fn() else st["fnmedia"]
 
     # ------------------------------------------------------------ 任务 CRUD
     def find(self, tid):
@@ -383,7 +405,7 @@ class Engine:
             if not it["dir"] and is_video(it["file_name"]):
                 dir_have.update(parse_episodes(it["file_name"], task["season"]))
         emby_msg = "Emby 联动未启用（只按夸克目录里的文件判断）"
-        cfg = self.store.data["emby"]
+        cfg = self.media_cfg()
         cli = self.emby()
         if cli and not cfg["only_missing"]:
             emby_msg = "「只转存 Emby 里缺少的集数」未勾选（只按夸克目录里的文件判断）"
@@ -1117,7 +1139,7 @@ class Engine:
         if any(not i["dir"] and is_video(i["file_name"]) for i in dir_items):
             return True, "夸克目录里已有视频"
         cli = self.emby()
-        if not cli or not self.store.data["emby"]["only_missing"]:
+        if not cli or not self.media_cfg()["only_missing"]:
             return False, "Emby 联动未启用（只按夸克目录判断）"
         try:
             mid, matched = cli.find_movie(task.get("emby_name") or task["name"], task.get("tmdb_id") or None, task.get("year") or None)
@@ -1393,7 +1415,7 @@ class Engine:
             time.sleep(min(ss.get("delay", 3), 60))
             ok, msg = notify.trigger_smartstrm(ss, self._dest(task))
             log.info("SmartStrm：%s", msg) if ok else log.warning("SmartStrm：%s", msg)
-        em = cfg["emby"]
+        em = self.media_cfg()
         cli = self.emby()
         if cli and em["refresh_after_save"]:
             time.sleep(min(em.get("refresh_delay", 10), 120))

@@ -55,6 +55,8 @@ class Library:
     def __init__(self, engine):
         self.e = engine
         self.store = engine.store
+        from .fnlib import FnLib
+        self.fnl = FnLib(self)
 
     # ---------------- 范围配置 ----------------
     def scopes(self):
@@ -66,15 +68,16 @@ class Library:
         for it in items or []:
             lib_id = str(it.get("lib_id") or "").strip()
             emby_path, quark_path = _p(it.get("emby_path")), _p(it.get("quark_path"))
+            server = "fn" if it.get("server") == "fn" else "emby"
             if not lib_id:
-                raise ValueError("请选择 Emby 媒体库")
-            if len(emby_path) < 2 or not emby_path.startswith("/"):
+                raise ValueError("请选择飞牛媒体库" if server == "fn" else "请选择 Emby 媒体库")
+            if server == "emby" and (len(emby_path) < 2 or not emby_path.startswith("/")):
                 raise ValueError("请填写 Emby 里的文件夹路径（不能是根目录）")
             if len(quark_path) < 2 or not quark_path.startswith("/"):
                 raise ValueError("请选择对应的夸克目录（不能是网盘根目录）")
             kind = it.get("kind") if it.get("kind") in KINDS else "tv"
             out.append({
-                "id": it.get("id") or secrets.token_hex(4), "kind": kind,
+                "id": it.get("id") or secrets.token_hex(4), "kind": kind, "server": server,
                 "name": (it.get("name") or "").strip() or quark_path,
                 "lib_id": lib_id, "lib_name": (it.get("lib_name") or "").strip(),
                 "emby_path": emby_path, "quark_path": quark_path,
@@ -92,12 +95,14 @@ class Library:
         return s
 
     def _emby(self):
-        cli = self.e.emby()
+        cli = self.e.emby_only()
         if not cli:
             raise ValueError("还没有启用 Emby，请先到「通知联动 → Emby」填写并开启")
         return cli
 
-    def libraries(self):
+    def libraries(self, server="emby"):
+        if server == "fn":
+            return self.fnl.cli().libraries()
         return self._emby().libraries()
 
     # ---------------- 列表 ----------------
@@ -110,6 +115,8 @@ class Library:
 
     def list_items(self, sid):
         scope = self.scope(sid)
+        if scope.get("server") == "fn":
+            return self.fnl.list_items(scope)
         cli = self._emby()
         out = []
         for it in cli.library_items(scope["lib_id"]):
@@ -148,6 +155,8 @@ class Library:
 
     def detail(self, sid, emby_id):
         scope = self.scope(sid)
+        if scope.get("server") == "fn":
+            return self.fnl.detail(scope, emby_id)
         it, top = self._item_in_scope(scope, emby_id)
         qpath = f"{scope['quark_path']}/{top}"
         q = self.e.quark()
@@ -166,6 +175,8 @@ class Library:
     # ---------------- 删除 ----------------
     def delete(self, sid, emby_id, rels=None, stop_sub=True):
         scope = self.scope(sid)
+        if scope.get("server") == "fn":
+            return self.fnl.delete(scope, emby_id, rels, stop_sub)
         it, top = self._item_in_scope(scope, emby_id)
         qroot, eroot = scope["quark_path"], scope["emby_path"]
         qitem, eitem = f"{qroot}/{top}", f"{eroot}/{top}"

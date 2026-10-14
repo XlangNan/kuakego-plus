@@ -46,7 +46,7 @@ class EFake:
 def setup(fail=False):
     store, eng, c, h = make_client()
     q, e = QFake(), EFake(fail)
-    eng.quark = lambda: q; eng.emby = lambda: e
+    eng.quark = lambda: q; eng.emby = eng.emby_only = lambda: e
     r = c.put("/api/library/scopes", json={"scopes": [{"name": "夸克剧集", "kind": "tv", "lib_id": "L1",
               "emby_path": "/mnt/quark/剧集", "quark_path": "/影视/剧集"}]}, headers=h)
     return store, eng, c, h, q, e, r.get_json()["scopes"][0]["id"]

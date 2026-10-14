@@ -12,6 +12,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory, Response
 
 from . import hosts, notify, platforms
 from .emby import Emby
+from .fnmedia import FnMedia
 from .engine import Engine, Scheduler
 from .logbuf import log, ring, setup as setup_log
 from .quark import Quark, QuarkError
@@ -20,10 +21,10 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.10.2"
+VERSION = "1.11.1"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "smartstrm", "pansou", "auto", "platforms")
+SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "smartstrm", "pansou", "auto", "platforms")
 
 
 def create_app(store=None, engine=None):
@@ -614,7 +615,7 @@ def create_app(store=None, engine=None):
 
     @app.get("/api/library/emby-libraries")
     def lib_emby_libs():
-        return jsonify(libraries=engine.library.libraries())
+        return jsonify(libraries=engine.library.libraries(request.args.get("server", "emby")))
 
     @app.get("/api/library/items")
     def lib_items():
@@ -624,10 +625,11 @@ def create_app(store=None, engine=None):
     def lib_img(iid):
         if not re.fullmatch(r"[\w\-]+", iid):
             abort(404)
-        cli = engine.emby()
+        fn = request.args.get("s") == "fn"
+        cli = engine.fn() if fn else engine.emby_only()
         if not cli:
             abort(404)
-        key = ("lib", iid)
+        key = ("lib", "fn" if fn else "emby", iid)
         if key not in img_cache:
             try:
                 got = cli.image(iid)
@@ -811,6 +813,20 @@ def create_app(store=None, engine=None):
                 if not (cur["url"] and cur["api_key"]):
                     raise ValueError("请填写地址和 API Key")
                 ok, msg = True, "连接成功：" + Emby(cur["url"], cur["api_key"], cur.get("user_id", "")).ping()
+            except Exception as e:
+                ok, msg = False, f"连接失败：{e}"
+        elif name == "fnmedia":
+            try:
+                if not (cur["url"] and cur["username"]):
+                    raise ValueError("请填写地址和用户名")
+                d = FnMedia(cur["url"], cur["username"], cur["password"], cur.get("access_code", "")).diagnose()
+                libs = "、".join(x["name"] for x in d["libraries"]) or "（无）"
+                ok, msg = True, f"连接成功：{d['version']}｜媒体库：{libs}"
+                if d.get("sample_item"):
+                    sm = d["sample_item"]
+                    msg += f"｜示例：{sm.get('title')} type={sm.get('type')} trim_id={sm.get('trim_id')}"
+                if d.get("list_error"):
+                    msg += f"｜列表失败：{d['list_error']}"
             except Exception as e:
                 ok, msg = False, f"连接失败：{e}"
         else:

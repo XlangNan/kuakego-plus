@@ -30,6 +30,10 @@ DEFAULTS = {
         "enabled": False, "url": "", "api_key": "", "user_id": "",
         "only_missing": True, "refresh_after_save": True, "refresh_delay": 10,
     },
+    "fnmedia": {
+        "enabled": False, "url": "", "username": "", "password": "", "access_code": "",
+        "only_missing": True, "refresh_after_save": True, "refresh_delay": 10,
+    },
     "pansou": {
         "enabled": False, "url": "", "username": "", "password": "",
         "src": "all", "channels": "", "plugins": "", "timeout": 30,
@@ -56,6 +60,7 @@ SECRET_FIELDS = {
     "dingtalk": ["webhook", "secret"],
     "tmdb": ["api_key"],
     "emby": ["api_key"],
+    "fnmedia": ["password", "access_code"],
     "smartstrm": ["webhook"],
     "pansou": ["password"],
     "platforms": ["iqiyi_cookie"],

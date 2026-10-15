@@ -217,3 +217,20 @@ def test_fn_subscription_savepath_with_season_suffix():
                "quark_path": "/影视/剧集"}]}, headers=h).get_json()["scopes"][0]["id"]
     items = c.get(f"/api/library/items?scope={sc}", headers=h).get_json()["items"]
     assert items[0]["top"] == "国产剧/不同的名字 (2019)"
+
+
+def test_fn_flat_show_folder_without_season_dir():
+    """剧名文件夹下直接是视频文件（没有 Season 层），不带年份也能认作一部剧；单集删除按文件名里的季集号对应。"""
+    store, eng, c, h = make_client()
+    q, f = QFake(), FnFake()
+    q.tree = {"/影视/剧集": ("dir", ["国产剧"]), "/影视/剧集/国产剧": ("dir", ["庆余年"]),
+              "/影视/剧集/国产剧/庆余年": ("dir", ["庆余年.S01E01.mkv", "庆余年.S01E02.mkv"]),
+              "/影视/剧集/国产剧/庆余年/庆余年.S01E01.mkv": ("file", 5), "/影视/剧集/国产剧/庆余年/庆余年.S01E02.mkv": ("file", 5)}
+    eng.quark = lambda: q; eng.fn = lambda: f
+    sc = c.put("/api/library/scopes", json={"scopes": [{"name": "F", "kind": "tv", "server": "fn", "lib_id": "L9",
+               "quark_path": "/影视/剧集"}]}, headers=h).get_json()["scopes"][0]["id"]
+    items = c.get(f"/api/library/items?scope={sc}", headers=h).get_json()["items"]
+    assert items[0]["top"] == "国产剧/庆余年"
+    r = c.post("/api/library/delete", json={"scope": sc, "id": "g1", "paths": ["庆余年.S01E02.mkv"]}, headers=h).get_json()
+    assert not r["whole"] and f.deleted == ["e2"]
+    assert q.deleted == ["/影视/剧集/国产剧/庆余年/庆余年.S01E02.mkv"]

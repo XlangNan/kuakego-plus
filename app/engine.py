@@ -1410,21 +1410,36 @@ class Engine:
     # ------------------------------------------------------------ 转存后联动
     def _after_save(self, task, saved):
         cfg = self.store.data
-        ss = cfg["smartstrm"]
-        if ss["enabled"]:
-            time.sleep(min(ss.get("delay", 3), 60))
-            ok, msg = notify.trigger_smartstrm(ss, self._dest(task))
-            log.info("SmartStrm：%s", msg) if ok else log.warning("SmartStrm：%s", msg)
+        dest = self._dest(task)
+        insts = [i for i in [cfg["smartstrm"], *cfg.get("smartstrm_more", {}).get("items", [])]
+                 if i.get("enabled") and i.get("webhook")]
+        matched = [i for i in insts if notify.ss_matches(i, dest)]
+        bound = any(i.get("target") for i in insts)        # 有没有指定「给谁生成」
         em = self.media_cfg()
-        cli = self.emby()
-        if cli and em["refresh_after_save"]:
-            time.sleep(min(em.get("refresh_delay", 10), 120))
-            try:
-                sid = self._emby_target(cli, task)
-                cli.refresh(sid)
-                log.info("已通知 Emby 刷新%s", "《%s》" % task["name"] if sid else "媒体库")
-            except Exception as e:
-                log.warning("Emby 刷新失败：%s", e)
+        cli = self.emby_only(), self.fn()
+        by_target = {"emby": cli[0], "fn": cli[1]}
+        errs = []
+
+        def one(inst):
+            nm = inst.get("name") or inst.get("target") or "SmartStrm"
+            time.sleep(min(inst.get("delay", 3), 60))
+            ok, msg = notify.trigger_smartstrm(inst, dest)
+            log.info("SmartStrm「%s」：%s", nm, msg) if ok else log.warning("SmartStrm「%s」：%s", nm, msg)
+            tgt = by_target.get(inst.get("target"))
+            if tgt and em["refresh_after_save"]:      # 这套 SmartStrm 生成完，就通知它对应的那个服务器
+                time.sleep(min(em.get("refresh_delay", 10), 120))
+                self._refresh_one(tgt, inst["target"], task)
+
+        ths = [threading.Thread(target=one, args=(i,), daemon=True) for i in matched]
+        for t in ths:
+            t.start()
+        for t in ths:
+            t.join()
+        if not bound:                                   # 没指定对应关系：沿用旧行为，所有已启用的服务器一起刷新
+            cli = self.emby()
+            if cli and em["refresh_after_save"]:
+                time.sleep(min(em.get("refresh_delay", 10), 120))
+                self._refresh_one(cli, "", task)
         dt = cfg["dingtalk"]
         if dt["enabled"] and dt["on_save"]:
             lines = "\n".join(f"- {s['name']}" for s in saved[:30])
@@ -1434,6 +1449,15 @@ class Engine:
                 f"### ✅《{task['name']}》追更\n转存到 `{self._dest(task)}`\n\n{lines}{more}")
             if not ok:
                 log.warning("钉钉：%s", msg)
+
+    def _refresh_one(self, cli, label, task):
+        name = {"emby": "Emby", "fn": "飞牛"}.get(label, "媒体服务器")
+        try:
+            sid = self._emby_target(cli, task)
+            cli.refresh(sid)
+            log.info("已通知 %s 刷新%s", name, "《%s》" % task["name"] if sid else "媒体库")
+        except Exception as e:
+            log.warning("%s 刷新失败：%s", name, e)
 
     def _notify_error(self, task, title, body):
         dt = self.store.data["dingtalk"]

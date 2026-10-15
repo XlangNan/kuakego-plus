@@ -48,7 +48,7 @@ class FnLib:
     def cli(self):
         c = self.e.fn()
         if not c:
-            raise ValueError("还没有启用飞牛影视，请先到「通知联动 → 飞牛影视」填写并开启")
+            raise ValueError("还没有启用飞牛影视，请先到「通知联动 → 媒体库联动」填写并开启")
         return c
 
     # ---------------- 条目 ↔ 夸克文件夹 ----------------

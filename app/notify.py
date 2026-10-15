@@ -53,3 +53,26 @@ def trigger_smartstrm(cfg, savepath, force=False):
     except Exception as e:
         log.warning("SmartStrm 触发失败: %s", e)
         return False, f"触发失败：{e}"
+
+
+def clean_ss(it, old=None):
+    """整理一套 SmartStrm 的配置（webhook 留空 = 沿用已保存的）。"""
+    import secrets
+    old = old or {}
+    pf = ",".join(x.strip().rstrip("/") for x in str(it.get("path_prefix") or "").replace("，", ",").split(",") if x.strip())
+    try:
+        delay = max(0, min(60, int(it.get("delay", 3))))
+    except (TypeError, ValueError):
+        delay = 3
+    return {"id": it.get("id") or secrets.token_hex(4), "name": str(it.get("name") or "").strip(),
+            "enabled": bool(it.get("enabled")), "webhook": (it.get("webhook") or "").strip() or old.get("webhook", ""),
+            "strmtask": str(it.get("strmtask") or "").strip(), "event": str(it.get("event") or "").strip() or "qas_strm",
+            "delay": delay, "send_savepath": bool(it.get("send_savepath", True)),
+            "target": it.get("target") if it.get("target") in ("emby", "fn") else "", "path_prefix": pf}
+
+
+def ss_matches(inst, dest):
+    """这套 SmartStrm 要不要处理转存到 dest 的这次更新（path_prefix 为空 = 都处理）。"""
+    pf = [x.strip().rstrip("/") for x in (inst.get("path_prefix") or "").replace("，", ",").split(",") if x.strip()]
+    d = (dest or "").rstrip("/")
+    return not pf or any(d == x or d.startswith(x + "/") for x in pf)

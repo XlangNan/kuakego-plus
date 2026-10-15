@@ -5,41 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>登录 · kuakego-plus</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#0b0b0f">
+<meta name="theme-color" content="#0c0f15">
+<script>
+/* 和主界面共用同一个主题设置（qp-theme）：先于渲染设置，避免闪一下 */
+try { document.documentElement.dataset.theme = localStorage.getItem('qp-theme') || 'light'; } catch (_) { document.documentElement.dataset.theme = 'light'; }
+</script>
 <style>
+/* —— 配色与主界面（「放映室」）完全一致：浅色 / 深色两套，琥珀主色 —— */
+:root{
+  --out:#e4e6ec;--bg:#f0f1f5;--card:#fff;--line:#e2e5ec;--fg:#141722;--dim:#586074;--faint:#8a92a4;
+  --acc:#a35c00;--acc2:#161924;--on-acc:#fff;--inp:#f1f2f6;--glow:rgba(163,92,0,.18);--err:#cf3b36;
+  --shadow:0 1px 2px rgba(16,20,34,.05),0 18px 50px -16px rgba(16,20,34,.22);--wall:.5;
+  --font:"HarmonyOS Sans SC","MiSans","PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+[data-theme=dark]{
+  --out:#07090d;--bg:#0c0f15;--card:#141824;--line:#222839;--fg:#e9ebf2;--dim:#98a0b4;--faint:#646c82;
+  --acc:#f2b13c;--acc2:#f2b13c;--on-acc:#1a1204;--inp:#1a1f2f;--glow:rgba(242,177,60,.22);--err:#f0726c;
+  --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 30px 80px -20px rgba(0,0,0,.8);--wall:.6;
+}
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body{display:grid;place-items:center;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0b0b0f;color:#fff;overflow:hidden;padding:16px}
-.wall{position:fixed;inset:-60px;display:grid;grid-template-columns:repeat(9,1fr);gap:14px;transform:rotate(-6deg) scale(1.15);opacity:.55;filter:blur(1.5px);animation:drift 60s linear infinite alternate}
-.wall i{aspect-ratio:2/3;border-radius:10px}
+body{display:grid;place-items:center;font:14px/1.55 var(--font);background:var(--out);color:var(--fg);overflow:hidden;padding:16px;-webkit-font-smoothing:antialiased}
+/* 背景：海报墙，色调取自主界面的中性色 + 琥珀点缀 */
+.wall{position:fixed;inset:-60px;display:grid;grid-template-columns:repeat(9,1fr);gap:14px;transform:rotate(-6deg) scale(1.15);opacity:var(--wall);filter:blur(1.5px);animation:drift 60s linear infinite alternate}
+.wall i{aspect-ratio:2/3;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.wall i.a{background:linear-gradient(160deg,var(--acc),transparent 120%);opacity:.55}
+.wall i.b{background:linear-gradient(200deg,var(--dim),transparent 110%);opacity:.28}
 @keyframes drift{to{transform:rotate(-6deg) scale(1.15) translateY(-40px)}}
-.vig{position:fixed;inset:0;background:radial-gradient(70% 70% at 50% 50%,#0b0b0f99,#0b0b0ff2)}
-.card{position:relative;width:100%;max-width:380px;padding:40px 36px;border-radius:18px;background:#0e0e14e6;border:1px solid #ffffff1a;box-shadow:0 40px 100px #000;animation:in .5s ease both}
+.vig{position:fixed;inset:0;background:radial-gradient(65% 65% at 50% 50%,color-mix(in srgb,var(--out) 55%,transparent),var(--out))}
+.theme{position:fixed;top:16px;right:16px;width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:9px;cursor:pointer;font-size:15px;z-index:2}
+.card{position:relative;width:100%;max-width:380px;padding:36px 34px 28px;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);animation:in .5s ease both}
 @keyframes in{from{opacity:0;transform:translateY(14px)}}
 .card.shake{animation:shake .4s}
 @keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
-.brand{text-align:center;font-size:30px;font-weight:900;letter-spacing:2px;color:#e50914;margin-bottom:4px;text-shadow:0 0 30px #e5091466}
-.sub{text-align:center;color:#8b8b97;font-size:13px;margin-bottom:28px}
-.in{position:relative;margin-bottom:14px}
-.in input{width:100%;height:48px;border-radius:8px;background:#1c1c25;border:1px solid #2a2a36;color:#e6e6ee;font-size:15px;padding:0 44px 0 42px;outline:none;transition:border-color .15s,box-shadow .15s}
-.in input:focus{border-color:#e50914;box-shadow:0 0 0 3px #e5091433}
-.in .ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.8;pointer-events:none}
-.in .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;background:none;color:#8b8b97;cursor:pointer;font-size:16px;border-radius:6px}
-.in .eye:hover{color:#fff}
-.row{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#9a9aa7;margin:2px 0 16px}
+.brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+.brand img{width:40px;height:40px;border-radius:11px;display:block}
+.brand b{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.sub{text-align:center;color:var(--dim);font-size:13px;margin-bottom:26px}
+.in{position:relative;margin-bottom:12px}
+.in input{width:100%;height:46px;border-radius:10px;background:var(--inp);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:15px;padding:0 44px 0 42px;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
+.in input::placeholder{color:var(--faint)}
+.in input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--glow);background:var(--card)}
+.in .ic{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.75;pointer-events:none}
+.in .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;background:none;color:var(--faint);cursor:pointer;font-size:16px;border-radius:8px}
+.in .eye:hover{color:var(--fg)}
+.row{display:flex;align-items:center;font-size:13px;color:var(--dim);margin:4px 0 14px}
 .row label{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
-.row input{accent-color:#e50914;width:15px;height:15px}
-.err{min-height:18px;color:#ff6b6b;font-size:13px;margin:-4px 0 8px;text-align:center}
-button.go{width:100%;height:48px;border:0;border-radius:8px;background:#e50914;color:#fff;font-size:16px;font-weight:700;letter-spacing:4px;cursor:pointer;box-shadow:0 10px 30px #e5091455;transition:transform .1s,filter .15s}
-button.go:hover{filter:brightness(1.1)}button.go:active{transform:scale(.99)}button.go:disabled{opacity:.6;cursor:default}
-.ft{text-align:center;color:#6c6c78;font-size:12px;margin-top:20px}
-@media (max-width:480px){.card{padding:32px 22px}.wall{grid-template-columns:repeat(5,1fr)}}
+.row input{accent-color:var(--acc);width:15px;height:15px}
+.err{min-height:18px;color:var(--err);font-size:13px;margin:-2px 0 8px;text-align:center}
+button.go{width:100%;height:46px;border:1px solid var(--acc2);border-radius:10px;background:var(--acc2);color:var(--on-acc);font:inherit;font-size:15px;font-weight:600;letter-spacing:.3em;text-indent:.3em;cursor:pointer;transition:transform .1s,background .15s,border-color .15s}
+[data-theme=dark] button.go:hover{background:#ffc462;border-color:#ffc462}
+:root:not([data-theme=dark]) button.go:hover{background:var(--acc);border-color:var(--acc);color:#fff}
+button.go:active{transform:translateY(1px)}button.go:disabled{opacity:.6;cursor:default}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.ft{text-align:center;color:var(--faint);font-size:12px;margin-top:20px}
+@media (max-width:480px){.card{padding:30px 22px 24px}.wall{grid-template-columns:repeat(5,1fr)}}
 </style>
 </head>
 <body>
 <div class="wall" id="wall"></div><div class="vig"></div>
+<button class="theme" id="themeBtn" type="button" title="切换主题">🌙</button>
 <form class="card" id="f" autocomplete="on">
-  <div class="brand">KUAKEGO</div>
+  <div class="brand"><img src="/favicon.svg" alt=""><b>kuakego-plus</b></div>
   <div class="sub">追更 · 转存 · 入库，一站搞定</div>
   <div class="in"><span class="ic">👤</span><input id="u" name="username" type="text" placeholder="用户名" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
   <div class="in"><span class="ic">🔒</span><input id="p" name="password" type="password" placeholder="密码" autocomplete="current-password" required><button type="button" class="eye" id="eye" tabindex="-1" aria-label="显示密码">👁</button></div>
@@ -50,8 +77,14 @@ button.go:hover{filter:brightness(1.1)}button.go:active{transform:scale(.99)}but
 </form>
 <script>
 const $ = s => document.querySelector(s);
-const c = ['#e50914,#6b0f1a', '#2563eb,#0b1b4a', '#f59e0b,#7c2d12', '#10b981,#064e3b', '#a855f7,#3b0764', '#ec4899,#500724', '#06b6d4,#083344', '#84cc16,#1a2e05', '#f43f5e,#4c0519'];
-$('#wall').innerHTML = Array.from({length: 45}, (_, i) => `<i style="background:linear-gradient(${150 + i * 17}deg,${c[(i * 7 + 3) % 9]})"></i>`).join('');
+$('#wall').innerHTML = Array.from({length: 45}, (_, i) => `<i class="${i % 7 === 2 ? 'a' : i % 5 === 0 ? 'b' : ''}"></i>`).join('');
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+  document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#0c0f15' : '#f0f1f5';
+  try { localStorage.setItem('qp-theme', t); } catch (_) {}
+}
+setTheme(document.documentElement.dataset.theme);
+$('#themeBtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 try { $('#u').value = localStorage.getItem('qp-last-user') || ''; } catch (_) {}
 ($('#u').value ? $('#p') : $('#u')).focus();
 $('#eye').onclick = () => { const p = $('#p'); const show = p.type === 'password'; p.type = show ? 'text' : 'password'; $('#eye').textContent = show ? '🙈' : '👁'; };

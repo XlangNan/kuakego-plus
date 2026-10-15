@@ -56,7 +56,9 @@ DEFAULTS = {
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,
         "send_savepath": True,
+        "name": "", "target": "", "path_prefix": "",   # target：这套 SmartStrm 给谁生成 strm（emby / fn / 空=不指定）；path_prefix：只处理这些夸克目录下的转存（逗号分隔，空=全部）
     },
+    "smartstrm_more": {"items": []},   # 第 2、3… 套 SmartStrm（装在别的机器上），字段同上，另有 id
 }
 
 # 这些字段不会通过 GET 返回明文

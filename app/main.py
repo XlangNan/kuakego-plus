@@ -23,7 +23,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.13.2"
+VERSION = "1.15.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")
@@ -875,6 +875,30 @@ def create_app(store=None, engine=None):
         if name == "proxy":
             netproxy.configure(store.data["proxy"])
         return jsonify(store.public_section(name))
+
+    # 第 2、3… 套 SmartStrm（装在别的机器上，给另一个媒体服务器用）
+    @app.get("/api/smartstrm/extra")
+    def ss_extra_get():
+        with store.lock:
+            items = [dict(i, webhook="", webhook_set=bool(i.get("webhook"))) for i in store.data["smartstrm_more"]["items"]]
+        return jsonify(items=items)
+
+    @app.put("/api/smartstrm/extra")
+    def ss_extra_put():
+        with store.lock:
+            old = {i["id"]: i for i in store.data["smartstrm_more"]["items"]}
+            out = [notify.clean_ss(i, old.get(i.get("id"))) for i in (body().get("items") or [])[:8]]
+            store.data["smartstrm_more"]["items"] = out
+            store.save()
+        return ss_extra_get()
+
+    @app.post("/api/smartstrm/extra/test")
+    def ss_extra_test():
+        d = body()
+        with store.lock:
+            old = next((i for i in store.data["smartstrm_more"]["items"] if i["id"] == d.get("id")), None)
+        ok, msg = notify.trigger_smartstrm(notify.clean_ss(d, old), None, force=True)
+        return jsonify(ok=ok, msg=msg), (200 if ok else 400)
 
     @app.post("/api/settings/<name>/test")
     def settings_test(name):

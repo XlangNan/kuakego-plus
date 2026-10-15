@@ -489,6 +489,15 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 .btn.danger{background:#e5484d;border-color:#e5484d;color:#fff}
 .lbscope{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
 .lbscope .row{margin-top:8px}
+details.lbscope{padding:0}
+details.lbscope>summary{list-style:none;cursor:pointer;padding:11px 14px;display:flex;align-items:center;gap:10px;border-radius:10px;user-select:none}
+details.lbscope>summary::-webkit-details-marker{display:none}
+details.lbscope>summary::before{content:"▸";color:var(--faint);transition:transform .15s;flex:none}
+details.lbscope[open]>summary::before{transform:rotate(90deg)}
+details.lbscope>summary:hover{background:var(--bg)}
+details.lbscope>summary .sm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.lbscope>summary .sm small{color:var(--dim);font-size:12.5px}
+details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -615,18 +624,19 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 
 <!-- ========== 钉钉 ========== -->
 <div class="board" id="int-tabs" style="display:none">
-  <button class="bt" data-v="dingtalk">🔔 钉钉通知</button>
+  <button class="bt" data-v="notify">📣 通知配置</button>
   <button class="bt" data-v="smartstrm">🎬 SmartStrm 联动</button>
   <button class="bt" data-v="tmdb">🎯 TMDB 设置</button>
   <button class="bt" data-v="pansou">🔎 PanSou 资源搜索</button>
-  <button class="bt" data-v="emby">📹 Emby 联动</button>
-  <button class="bt" data-v="fnmedia">🐧 飞牛影视</button>
+  <button class="bt" data-v="media">📺 媒体库联动</button>
   <button class="bt" data-v="proxy">🌐 网络代理</button>
   <button class="bt" data-v="auto">⚙️ 自动化与备份</button>
 </div>
-<section class="view" id="v-dingtalk">
+<section class="view" id="v-notify">
   <div class="card">
-    <h2>🔔 钉钉通知</h2>
+    <h2>📣 通知配置</h2>
+    <div class="hint" style="margin:0 0 10px">转存、失效、日报等通知从这里发出。目前支持钉钉，以后会增加其他通知渠道；已设置好的渠道收起来只显示一行概要，点开可以修改。</div>
+    <details class="lbscope" id="f-dingtalk"><summary><span class="sm" id="fs-dingtalk"></span></summary><div class="lbbody">
     <label class="chk" style="margin-top:0"><input type="checkbox" id="d-enabled"> 启用钉钉通知</label>
     <label class="l">机器人 Webhook</label><input type="text" id="d-webhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=…">
     <div class="hint" id="d-webhook-h"></div>
@@ -637,6 +647,7 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
     <label class="chk"><input type="checkbox" id="d-err"> 分享链接失效时通知</label>
     <div class="actions"><button class="btn pri" data-save="dingtalk">保存</button><button class="btn" data-test="dingtalk">发送测试消息</button></div>
     <div class="hint" id="dingtalk-msg"></div>
+    </div></details>
   </div>
 </section>
 
@@ -667,7 +678,9 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 <section class="view" id="v-smartstrm">
   <div class="card">
     <h2>🎬 SmartStrm 联动</h2>
-    <div class="hint" style="margin:0 0 10px">转存成功后调用 SmartStrm 的 Webhook，自动生成 STRM；再通知 Emby 刷新。</div>
+    <div class="hint" style="margin:0 0 10px">转存成功后调用 SmartStrm 的 Webhook，自动生成 STRM，再通知 Emby / 飞牛刷新。</div>
+    <div class="hint" style="margin:0 0 10px">Emby 和飞牛各自装了一套 SmartStrm（在不同机器上）时，可以添加多套：转存后<b>每一套都会被通知</b>，并各自等待、各自刷新对应的服务器。两套可以管同一个夸克文件夹，也可以各管各的（用「只处理这些夸克目录」区分）。已设置好的收起来只显示概要，点开可以修改。</div>
+    <details class="lbscope" id="f-smartstrm"><summary><span class="sm" id="fs-smartstrm"></span></summary><div class="lbbody">
     <label class="chk" style="margin-top:0"><input type="checkbox" id="x-enabled"> 启用 SmartStrm 联动</label>
     <label class="l">Webhook 地址（SmartStrm 管理后台 → 设置里复制）</label>
     <input type="text" id="x-webhook" placeholder="http://smartstrm:8024/webhook/…"><div class="hint" id="x-webhook-h"></div>
@@ -675,8 +688,15 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
     <div class="row"><div class="grow"><label class="l">事件名</label><input type="text" id="x-event" placeholder="qas_strm"></div>
       <div class="grow"><label class="l">转存后等待（秒）</label><input type="number" id="x-delay" min="0" max="60"></div></div>
     <label class="chk"><input type="checkbox" id="x-sp"> 只触发本次转存的目标文件夹（推荐，秒级生成）</label>
+    <div class="row"><div class="grow"><label class="l">名称（可选，日志里用来区分）</label><input type="text" id="x-name" placeholder="如：Emby 那台"></div>
+      <div class="grow"><label class="l">这套给谁生成 strm</label><select id="x-target"><option value="">不指定（转存后刷新所有已启用的服务器）</option><option value="emby">Emby</option><option value="fn">飞牛影视</option></select></div></div>
+    <label class="l">只处理这些夸克目录下的转存（可选，多个用英文逗号分隔；留空=全部。两套 SmartStrm 管的夸克目录不一样时填这个）</label><input type="text" id="x-prefix" placeholder="/媒体库/剧集">
     <div class="actions"><button class="btn pri" data-save="smartstrm">保存</button><button class="btn" data-test="smartstrm">测试触发</button></div>
     <div class="hint" id="smartstrm-msg">测试会不带目录触发一次，SmartStrm 可能会执行一次完整任务。</div>
+    </div></details>
+    <div id="ssx-list"></div>
+    <div class="actions"><button class="btn" id="ssx-add">＋ 添加一套</button><button class="btn pri" id="ssx-save">保存其他几套</button></div>
+    <div class="hint" id="ssx-msg">上面第一套（主）在它自己的区域里保存；这里的保存只针对下面添加的几套。</div>
   </div>
 </section>
 
@@ -726,9 +746,11 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
 </section>
 
 <!-- ========== Emby ========== -->
-<section class="view" id="v-emby">
+<section class="view" id="v-media">
   <div class="card">
-    <h2>📹 Emby 联动</h2>
+    <h2>📺 媒体库联动</h2>
+    <div class="hint" style="margin:0 0 10px">Emby 和飞牛影视可以<b>同时启用</b>：已入库判断、缺集判断取两边的并集，转存后两边都会刷新；「媒体库」页里两边分开管理。已设置好的收起来只显示概要，点开可以修改。</div>
+    <details class="lbscope" id="f-emby"><summary><span class="sm" id="fs-emby"></span></summary><div class="lbbody">
     <div class="hint" style="margin:0 0 10px">开启后，转存前会查询 Emby 里这部剧已有哪些集，<b>只转存缺少的集数</b>；转存后通知 Emby 刷新。</div>
     <label class="chk" style="margin-top:0"><input type="checkbox" id="e-enabled"> 启用 Emby 联动</label>
     <label class="l">Emby 地址</label><input type="text" id="e-url" placeholder="http://192.168.1.10:8096">
@@ -739,6 +761,21 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
     <label class="l">刷新前等待（秒，给 STRM 生成留时间）</label><input type="number" id="e-delay" min="0" max="120" style="max-width:200px">
     <div class="actions"><button class="btn pri" data-save="emby">保存</button><button class="btn" data-test="emby">测试连接</button></div>
     <div class="hint" id="emby-msg"></div>
+    </div></details>
+    <details class="lbscope" id="f-fnmedia"><summary><span class="sm" id="fs-fnmedia"></span></summary><div class="lbbody">
+    <div class="hint" style="margin:0 0 10px">可以和 Emby <b>同时启用</b>：已入库判断、缺集判断取两边的并集，转存后两边都会刷新；「媒体库管理」里 Emby 和飞牛各自单独管理。飞牛没有公开接口，这里按网页端接口对接，请先点「测试连接」确认能读到媒体库。</div>
+    <label class="chk" style="margin-top:0"><input type="checkbox" id="f-enabled"> 启用飞牛影视联动</label>
+    <label class="l">飞牛影视地址（影视应用的访问地址，如 http://192.168.1.10:5666）</label><input type="text" id="f-url" placeholder="http://192.168.1.10:5666">
+    <label class="l">用户名</label><input type="text" id="f-user">
+    <label class="l">密码</label><input type="password" id="f-pass"><div class="hint" id="f-pass-h"></div>
+    <label class="l">访问码（飞牛开启了「访问码」才填）</label><input type="password" id="f-code"><div class="hint" id="f-code-h"></div>
+    <div class="hint">删除条目、读取媒体库目录需要管理员账号；普通账号只能读取。</div>
+    <label class="chk"><input type="checkbox" id="f-only"> 只转存飞牛里缺少的集数（仅在没启用 Emby 时用这里的开关）</label>
+    <label class="chk"><input type="checkbox" id="f-refresh"> 转存后通知飞牛扫描媒体库</label>
+    <label class="l">扫描前等待（秒，给 STRM 生成留时间）</label><input type="number" id="f-delay" min="0" max="120" style="max-width:200px">
+    <div class="actions"><button class="btn pri" data-save="fnmedia">保存</button><button class="btn" data-test="fnmedia">测试连接</button></div>
+    <div class="hint" id="fnmedia-msg"></div>
+    </div></details>
   </div>
 </section>
 
@@ -756,23 +793,6 @@ h2.hic{display:flex;align-items:center;gap:8px}h2.hic .ic{width:18px;height:18px
     <div class="hint">夸克、Emby、飞牛、钉钉、PanSou 不会走代理。</div>
     <div class="actions"><button class="btn pri" data-save="proxy">保存</button><button class="btn" data-test="proxy">测试代理</button></div>
     <div class="hint" id="proxy-msg"></div>
-  </div>
-</section>
-<section class="view" id="v-fnmedia">
-  <div class="card">
-    <h2>🐧 飞牛影视（fnOS）联动</h2>
-    <div class="hint" style="margin:0 0 10px">可以和 Emby <b>同时启用</b>：已入库判断、缺集判断取两边的并集，转存后两边都会刷新；「媒体库管理」里 Emby 和飞牛各自单独管理。飞牛没有公开接口，这里按网页端接口对接，请先点「测试连接」确认能读到媒体库。</div>
-    <label class="chk" style="margin-top:0"><input type="checkbox" id="f-enabled"> 启用飞牛影视联动</label>
-    <label class="l">飞牛影视地址（影视应用的访问地址，如 http://192.168.1.10:5666）</label><input type="text" id="f-url" placeholder="http://192.168.1.10:5666">
-    <label class="l">用户名</label><input type="text" id="f-user">
-    <label class="l">密码</label><input type="password" id="f-pass"><div class="hint" id="f-pass-h"></div>
-    <label class="l">访问码（飞牛开启了「访问码」才填）</label><input type="password" id="f-code"><div class="hint" id="f-code-h"></div>
-    <div class="hint">删除条目、读取媒体库目录需要管理员账号；普通账号只能读取。</div>
-    <label class="chk"><input type="checkbox" id="f-only"> 只转存飞牛里缺少的集数（仅在没启用 Emby 时用这里的开关）</label>
-    <label class="chk"><input type="checkbox" id="f-refresh"> 转存后通知飞牛扫描媒体库</label>
-    <label class="l">扫描前等待（秒，给 STRM 生成留时间）</label><input type="number" id="f-delay" min="0" max="120" style="max-width:200px">
-    <div class="actions"><button class="btn pri" data-save="fnmedia">保存</button><button class="btn" data-test="fnmedia">测试连接</button></div>
-    <div class="hint" id="fnmedia-msg"></div>
   </div>
 </section>
 
@@ -878,13 +898,15 @@ const PAGE_HEAD = {
   recommend: ['影视推荐', '看看正在热播的剧集、电影、动漫和综艺，一键订阅'],
   subs: ['订阅追更', '订阅的剧集和电影，缺的集数会自动补齐'],
   library: ['媒体库', '管理 Emby 与夸克网盘里的内容'],
-  integrations: ['通知联动', '钉钉、SmartStrm、TMDB、PanSou、Emby 的连接设置，以及自动化与备份'],
+  integrations: ['通知联动', '通知配置、SmartStrm、媒体库联动（Emby / 飞牛）、TMDB、PanSou、网络代理，以及自动化与备份'],
   account: ['账号登录', '登录夸克账号后才能转存文件'],
   logs: ['运行日志', '最近的运行记录，出错时先看这里'],
 };
-const INT_VIEWS = ['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'proxy', 'auto'];
-let lastInt = 'dingtalk';
+const INT_VIEWS = ['notify', 'smartstrm', 'media', 'tmdb', 'pansou', 'proxy', 'auto'];
+const VIEW_ALIAS = {dingtalk: 'notify', emby: 'media', fnmedia: 'media'};   // 旧的页面名（书签 / 链接）
+let lastInt = 'notify';
 function go(v) {
+  v = VIEW_ALIAS[v] || v;
   if (v === 'integrations') v = lastInt;
   if (!$('#v-' + v)) v = 'subs';
   const inInt = INT_VIEWS.includes(v);
@@ -2026,7 +2048,7 @@ loaders.calendar = () => { if (!cal.y) { const n = new Date(); cal.y = n.getFull
    ====================================================================== */
 const FORMS = {
   dingtalk: {enabled: '#d-enabled', webhook: '#d-webhook', secret: '#d-secret', on_add: '#d-add', on_save: '#d-save', on_error: '#d-err'},
-  smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp'},
+  smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp', name: '#x-name', target: '#x-target', path_prefix: '#x-prefix'},
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
   pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
   auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour'},
@@ -2035,7 +2057,14 @@ const FORMS = {
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
 };
 const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], fnmedia: ['password', 'access_code'], proxy: ['password'], pansou: ['password'], auto: []};
+const FOLD_SUM = {
+  dingtalk: d => `${d.enabled ? '🟢' : '⚪'} <b>钉钉</b> <small>· ${d.webhook_set ? '已配置机器人' : '未配置机器人'}${d.enabled ? '' : ' · 未启用'}</small>`,
+  emby: d => `${d.enabled ? '🟢' : '⚪'} <b>Emby</b> <small>· ${esc(d.url) || '未填写地址'}${d.enabled ? '' : ' · 未启用'}</small>`,
+  fnmedia: d => `${d.enabled ? '🟢' : '⚪'} <b>飞牛影视</b> <small>· ${esc(d.url) || '未填写地址'}${d.username ? ' · ' + esc(d.username) : ''}${d.enabled ? '' : ' · 未启用'}</small>`,
+  smartstrm: d => ssxSum(Object.assign({}, d, {name: (d.name || 'SmartStrm') + '（主）'})),
+};
 function fill(name, d) {
+  const fs = $('#fs-' + name); if (fs && FOLD_SUM[name]) fs.innerHTML = FOLD_SUM[name](d);
   for (const [k, sel] of Object.entries(FORMS[name])) {
     const el = $(sel); if (!el) continue;
     if (el.type === 'checkbox') el.checked = !!d[k]; else el.value = SECRET[name].includes(k) ? '' : (d[k] ?? '');
@@ -2050,7 +2079,40 @@ function fill(name, d) {
 }
 const collect = name => Object.fromEntries(Object.entries(FORMS[name]).map(([k, sel]) => { const el = $(sel); return [k, el.type === 'checkbox' ? el.checked : el.value]; }));
 const loadSettings = guard(async name => fill(name, await api('/settings/' + name)));
-['dingtalk', 'smartstrm', 'tmdb', 'pansou', 'emby', 'fnmedia', 'proxy', 'auto'].forEach(n => loaders[n] = () => loadSettings(n));
+['smartstrm', 'tmdb', 'pansou', 'proxy', 'auto'].forEach(n => loaders[n] = () => loadSettings(n));
+loaders.notify = () => loadSettings('dingtalk');
+loaders.media = () => { loadSettings('emby'); loadSettings('fnmedia'); };
+/* 折叠行：已设置好的条目只显示一行概要，点开才看到详情 */
+const SRV_NAME = {emby: 'Emby', fn: '飞牛'};
+const scopeSum = r => `<b>${esc(r.name || '未命名')}</b> <small>· ${SRV_NAME[r.server === 'fn' ? 'fn' : 'emby']} · ${LB_KIND[r.kind] || ''}${r.lib_name ? ' · ' + esc(r.lib_name) : ''} → ${esc(r.quark_path || '（未选夸克目录）')}</small>`;
+const ssxSum = r => `${r.enabled ? '🟢' : '⚪'} <b>${esc(r.name || '未命名')}</b> <small>· ${r.target ? '给 ' + SRV_NAME[r.target] : '不指定服务器'} · ${r.path_prefix ? esc(r.path_prefix) : '所有目录'}${r.enabled ? '' : ' · 已停用'}</small>`;
+const stripOpen = a => a.map(({_open, ...x}) => x);
+/* ---------- 更多 SmartStrm ---------- */
+let ssx = [];
+function drawSsx() {
+  $('#ssx-list').innerHTML = ssx.map((r, i) => `<details class="lbscope" data-i="${i}" ${(r._open ?? !r.id) ? 'open' : ''}><summary><span class="sm">${ssxSum(r)}</span></summary><div class="lbbody">
+    <label class="chk" style="margin-top:0"><input type="checkbox" data-k="enabled" ${r.enabled ? 'checked' : ''}> 启用这一套</label>
+    <div class="row"><div class="grow"><label class="l">名称</label><input type="text" data-k="name" value="${esc(r.name || '')}" placeholder="如：飞牛那台"></div>
+      <div class="grow"><label class="l">给谁生成 strm</label><select data-k="target"><option value="">不指定</option><option value="emby" ${r.target === 'emby' ? 'selected' : ''}>Emby</option><option value="fn" ${r.target === 'fn' ? 'selected' : ''}>飞牛影视</option></select></div></div>
+    <label class="l">Webhook 地址${r.webhook_set ? '（已保存，留空保持不变）' : ''}</label><input type="text" data-k="webhook" value="" placeholder="http://192.168.1.20:8024/webhook/…">
+    <label class="l">STRM 任务名（可选，多个用英文逗号分隔）</label><input type="text" data-k="strmtask" value="${esc(r.strmtask || '')}">
+    <div class="row"><div class="grow"><label class="l">事件名</label><input type="text" data-k="event" value="${esc(r.event || 'qas_strm')}"></div>
+      <div class="grow"><label class="l">转存后等待（秒）</label><input type="number" data-k="delay" min="0" max="60" value="${r.delay ?? 3}"></div></div>
+    <label class="chk"><input type="checkbox" data-k="send_savepath" ${r.send_savepath !== false ? 'checked' : ''}> 只触发本次转存的目标文件夹</label>
+    <label class="l">只处理这些夸克目录下的转存（可选，逗号分隔；留空=全部）</label><input type="text" data-k="path_prefix" value="${esc(r.path_prefix || '')}" placeholder="/媒体库/电影">
+    <div class="actions"><button class="btn" data-a="test">测试触发</button><button class="btn" data-a="del">删除这一套</button></div></div></details>`).join('') || '<div class="empty">还没有。只有一套 SmartStrm 的话不用管这里。</div>';
+  $$('#ssx-list .lbscope').forEach(box => {
+    const i = +box.dataset.i;
+    box.addEventListener('toggle', () => { ssx[i]._open = box.open; });
+    $$('[data-k]', box).forEach(el => el.onchange = el.oninput = () => { ssx[i][el.dataset.k] = el.type === 'checkbox' ? el.checked : (el.type === 'number' ? +el.value : el.value); $('.sm', box).innerHTML = ssxSum(ssx[i]); });
+    $('[data-a=del]', box).onclick = () => { ssx.splice(i, 1); drawSsx(); };
+    $('[data-a=test]', box).onclick = guard(async () => { const r = await api('/smartstrm/extra/test', 'POST', stripOpen([ssx[i]])[0]); toast('✓ ' + r.msg, 'ok'); });
+  });
+}
+async function loadSsx() { ssx = (await api('/smartstrm/extra')).items; drawSsx(); }
+$('#ssx-add').onclick = () => { ssx.push({_open: true, enabled: true, name: '', target: '', webhook: '', event: 'qas_strm', delay: 3, send_savepath: true, path_prefix: ''}); drawSsx(); };
+$('#ssx-save').onclick = guard(async () => { ssx = (await api('/smartstrm/extra', 'PUT', {items: stripOpen(ssx)})).items; drawSsx(); toast('已保存', 'ok'); });
+const _ssLoad = loaders.smartstrm; loaders.smartstrm = () => { _ssLoad(); loadSsx().catch(e => toast(e.message, 'err')); };
 $$('[data-save]').forEach(b => b.onclick = guard(async () => {
   const n = b.dataset.save; fill(n, await api('/settings/' + n, 'PUT', collect(n))); toast('已保存', 'ok'); refreshStatus();
 }));
@@ -2216,7 +2278,7 @@ async function lbConfig() {
   const m = modal(`<h3>范围设置</h3><div class="sub" style="margin-bottom:8px">每一条 = 一个媒体库（Emby 或飞牛） ↔ 一个夸克目录。只有这里设置的内容才会显示、才能删除。${Object.entries(errBy).map(([k, v]) => `<br><span style="color:#e5484d">读取${LB_SRV[k]}媒体库失败（没启用可忽略）：${esc(v)}</span>`).join('')}</div>
     <div id="lbc-rows"></div><div class="actions"><button class="btn" id="lbc-add">＋ 添加一条</button><button class="btn pri" id="lbc-save">保存</button></div>`, 'wide');
   const draw = () => {
-    $('#lbc-rows', m).innerHTML = rows.map((r, i) => { const fn = r.server === 'fn', libs = libsBy[fn ? 'fn' : 'emby']; return `<div class="lbscope" data-i="${i}">
+    $('#lbc-rows', m).innerHTML = rows.map((r, i) => { const fn = r.server === 'fn', libs = libsBy[fn ? 'fn' : 'emby']; return `<details class="lbscope" data-i="${i}" ${(r._open ?? !r.id) ? 'open' : ''}><summary><span class="sm">${scopeSum(r)}</span></summary><div class="lbbody">
       <div class="row"><div style="width:140px"><label class="l">媒体服务器</label><select data-k="server"><option value="emby" ${!fn ? 'selected' : ''}>Emby</option><option value="fn" ${fn ? 'selected' : ''}>飞牛影视</option></select></div></div>
       <div class="row"><div class="grow"><label class="l">名称</label><input type="text" data-k="name" value="${esc(r.name || '')}" placeholder="如：夸克剧集"></div>
         <div style="width:120px"><label class="l">类型</label><select data-k="kind">${Object.entries(LB_KIND).map(([k, n]) => `<option value="${k}" ${r.kind === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
@@ -2224,11 +2286,12 @@ async function lbConfig() {
       ${fn ? '<div class="sub" style="margin:4px 0 8px">飞牛没有文件路径，只显示「能在下面的夸克目录里找到对应文件夹」的条目（按订阅里的 TMDB ID，其次按名字对应）；同一个媒体库里混着迅雷的内容也不会显示。删除时会连 strm 文件一起删。</div>' : `<div class="row"><div class="grow"><label class="l">Emby 文件夹路径（只显示这个文件夹下面的内容）</label><input type="text" data-k="emby_path" list="lbc-loc-${i}" value="${esc(r.emby_path || '')}" placeholder="如：/mnt/quark/剧集">
         <datalist id="lbc-loc-${i}">${(libs.find(l => l.id === r.lib_id)?.locations || []).map(p => `<option value="${esc(p)}">`).join('')}</datalist></div></div>
       <div class="row"><div class="grow"><label class="l">strm 文件夹在本工具里的路径（可选。填了，删除时本工具会直接删掉 strm 文件；需要先把 Emby 的 strm 目录挂载进本容器）</label><input type="text" data-k="strm_path" value="${esc(r.strm_path || '')}" placeholder="如：/strm/剧集"></div></div>`}
-      <div class="row"><div class="grow"><label class="l">对应的夸克目录</label><input type="text" data-k="quark_path" value="${esc(r.quark_path || '')}" placeholder="如：/影视/剧集"></div><button class="btn" data-a="pick">浏览</button><button class="btn" data-a="del">删除此条</button></div></div>`; }).join('') || '<div class="empty">还没有范围，点下面「添加一条」</div>';
+      <div class="row"><div class="grow"><label class="l">对应的夸克目录</label><input type="text" data-k="quark_path" value="${esc(r.quark_path || '')}" placeholder="如：/影视/剧集"></div><button class="btn" data-a="pick">浏览</button><button class="btn" data-a="del">删除此条</button></div></div></details>`; }).join('') || '<div class="empty">还没有范围，点下面「添加一条」</div>';
     $$('.lbscope', m).forEach(box => {
       const i = +box.dataset.i;
+      box.addEventListener('toggle', () => { rows[i]._open = box.open; });
       $$('[data-k]', box).forEach(el => el.onchange = el.oninput = () => {
-        rows[i][el.dataset.k] = el.value;
+        rows[i][el.dataset.k] = el.value; $('.sm', box).innerHTML = scopeSum(rows[i]);
         if (el.dataset.k === 'server') { rows[i].lib_id = ''; rows[i].lib_name = ''; draw(); }
         if (el.dataset.k === 'lib_id') { rows[i].lib_name = libsBy[rows[i].server === 'fn' ? 'fn' : 'emby'].find(l => l.id === el.value)?.name || ''; draw(); }
       });
@@ -2237,9 +2300,9 @@ async function lbConfig() {
     });
   };
   draw();
-  $('#lbc-add', m).onclick = () => { rows.push({server: 'emby', kind: 'tv', name: '', lib_id: '', emby_path: '', quark_path: ''}); draw(); };
+  $('#lbc-add', m).onclick = () => { rows.push({_open: true, server: 'emby', kind: 'tv', name: '', lib_id: '', emby_path: '', quark_path: ''}); draw(); };
   $('#lbc-save', m).onclick = async () => {
-    try { await api('/library/scopes', 'PUT', {scopes: rows}); m.remove(); toast('已保存'); loadLibrary().catch(e => toast(e.message, 'err')); }
+    try { await api('/library/scopes', 'PUT', {scopes: stripOpen(rows)}); m.remove(); toast('已保存'); loadLibrary().catch(e => toast(e.message, 'err')); }
     catch (e) { toast(e.message, 'err'); }
   };
 }

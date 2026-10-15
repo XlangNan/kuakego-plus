@@ -99,7 +99,7 @@ class Library:
     def _emby(self):
         cli = self.e.emby_only()
         if not cli:
-            raise ValueError("还没有启用 Emby，请先到「通知联动 → Emby」填写并开启")
+            raise ValueError("还没有启用 Emby，请先到「通知联动 → 媒体库联动」填写并开启")
         return cli
 
     def libraries(self, server="emby"):

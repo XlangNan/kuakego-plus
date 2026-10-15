@@ -541,6 +541,9 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <div class="hint">间隔最低 60 分钟。调太低会触发夸克风控，得不偿失。</div>
     <div id="m-recent"></div>
     <label class="chk"><input type="checkbox" id="m-existing" checked> 添加时立即转存链接里已有的视频（取消勾选则只追新、不转已有的）</label>
+    <label class="l" style="margin-top:12px">转存后联动</label>
+    <select id="m-after"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛（默认）</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发（工具、软件、资料等不是影视的文件夹）</option></select>
+    <div class="hint">转存的是工具、软件、资料这类不是影视的文件时，选「都不触发」，就不会白白触发 SmartStrm 和媒体库刷新。钉钉通知不受影响。</div>
     <label class="chk"><input type="checkbox" id="m-mirror"> 🔄 镜像同步：分享里新增的我这边也新增，<b>分享里删掉的我这边也删掉</b></label>
     <div class="hint" id="m-mirror-h" style="display:none">开启后，分享里的文件夹和文件<b>原样复制</b>到上面的目录（不重命名、不过滤、不剥外层文件夹），并一直和它保持一致。默认是<b>预览模式</b>：只会列出「将要删除」的文件，不会真删；确认没问题后，到「编辑」里取消预览模式。只有本任务转存进来的文件会被管理，目录里你自己的文件不会被碰。</div>
     <details><summary>高级选项（过滤规则 / 目录结构）</summary>
@@ -1168,7 +1171,7 @@ $('#m-add').onclick = guard(async () => {
   try {
     const mirror = $('#m-mirror').checked, existing = mirror || $('#m-existing').checked;
     await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
-      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')),
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')), after: $('#m-after').value,
       ...(mirror ? {mirror: {enabled: true, dry_run: true}} : {})});
     toast(mirror ? '已添加，正在后台同步（预览模式：不会真删）' : existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
     $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
@@ -1199,8 +1202,9 @@ async function loadMonitors() {
   bindTaskOps(box, tasks, loadMonitors);
 }
 function mirrorLine(t) {
-  const mi = t.mirror_info; if (!t.mirror || !t.mirror.enabled || !mi) return '';
-  return `<div class="sub">🔄 镜像同步 · 已管理 ${mi.managed} 个${t.mirror.dry_run ? ' · <b>预览模式</b>（不真删）' : ''}</div>` +
+  const af = t.after === 'none' ? '<div class="sub">⏸ 转存后不触发 SmartStrm / 媒体库刷新</div>' : t.after === 'no_media' ? '<div class="sub">⏸ 转存后不刷新媒体库</div>' : '';
+  const mi = t.mirror_info; if (!t.mirror || !t.mirror.enabled || !mi) return af;
+  return af + `<div class="sub">🔄 镜像同步 · 已管理 ${mi.managed} 个${t.mirror.dry_run ? ' · <b>预览模式</b>（不真删）' : ''}</div>` +
     (mi.hold ? `<div class="sub" style="color:var(--warn)">⚠ ${esc(mi.hold)} <button class="btn xs" data-a="mgo" data-id="${t.id}">继续</button></div>` : '') +
     (mi.pending_n ? `<div class="sub" style="color:var(--warn)">⚠ ${mi.pending_n} 个文件待删除 <button class="btn xs" data-a="mpend" data-id="${t.id}">查看并确认</button></div>` : '') +
     (mi.last && mi.last.note ? `<div class="sub">${esc(mi.last.note)}</div>` : '');
@@ -1254,6 +1258,9 @@ function editTask(t, reload) {
     <label class="chk"${hid}><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
     <label class="chk"${mv ? '' : ' style="display:none"'}><input type="checkbox" id="ed-nocam" ${t.no_cam ? 'checked' : ''}> 排除枪版 / 抢先版（TC、TS、CAM）</label>
     <label class="chk"${hid}><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
+    ${t.kind === 'monitor' ? `<label class="l" style="margin-top:12px">转存后联动</label>
+      <select id="ed-after"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛（默认）</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发（工具、软件、资料等不是影视的文件夹）</option></select>
+      <div class="hint">转存的是工具、软件、资料等不是影视的文件时，选「都不触发」。钉钉通知不受影响。</div>` : ''}
     ${t.kind === 'monitor' ? `<div class="card" style="margin:14px 0 0;padding:12px 14px;background:var(--bg);border:0">
       <label class="chk" style="margin-top:0"><input type="checkbox" id="ed-mir" ${t.mirror && t.mirror.enabled ? 'checked' : ''}> 🔄 <b>镜像同步</b>：分享里新增的我这边也新增，分享里删掉的我这边也删掉</label>
       <div id="ed-mirbox" style="display:${t.mirror && t.mirror.enabled ? '' : 'none'}">
@@ -1270,6 +1277,7 @@ function editTask(t, reload) {
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
   $('#ed-mir', m)?.addEventListener('change', e => { $('#ed-mirbox', m).style.display = e.target.checked ? '' : 'none'; });
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
+  if ($('#ed-after', m)) $('#ed-after', m).value = t.after || 'all';
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
   bindQuality($('#ed-q', m)); mountRecent($('#ed-recent', m), $('#ed-path', m));
   $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p);
@@ -1283,6 +1291,7 @@ function editTask(t, reload) {
       rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
       emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, emby_layout: $('#ed-layout', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
+      ...($('#ed-after', m) ? {after: $('#ed-after', m).value} : {}),
       ...($('#ed-mir', m) ? {mirror: {enabled: $('#ed-mir', m).checked, dry_run: $('#ed-mir-dry', m).checked, replace: $('#ed-mir-rep', m).checked,
         grace: +$('#ed-mir-grace', m).value || 2, max_delete: +$('#ed-mir-max', m).value || 10, max_pct: +$('#ed-mir-pct', m).value || 30}} : {}),
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});

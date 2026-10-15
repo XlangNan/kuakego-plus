@@ -213,9 +213,11 @@ class Engine:
             "skip_when_complete": bool(pick("skip_when_complete", True)),
             "poster": pick("poster", ""),
             "mirror": mirror_cfg(pick("mirror", None), (existing or {}).get("mirror")),
+            "after": pick("after", "all") if pick("after", "all") in ("all", "no_media", "none") else "all",
         }
         if kind != "monitor":
             fields["mirror"]["enabled"] = False      # 镜像同步只用于「分享监控」
+            fields["after"] = "all"                  # 订阅的是影视，转存后一定要通知媒体库
         return fields
 
     @staticmethod
@@ -1423,9 +1425,14 @@ class Engine:
         dest = self._dest(task)
         insts = [i for i in [cfg["smartstrm"], *cfg.get("smartstrm_more", {}).get("items", [])]
                  if i.get("enabled") and i.get("webhook")]
-        matched = [i for i in insts if notify.ss_matches(i, dest)]
+        mode = task.get("after") if task.get("after") in ("all", "no_media", "none") else "all"   # 转存后联动：全部 / 不刷新媒体库 / 都不触发
+        matched = [i for i in insts if notify.ss_matches(i, dest)] if mode != "none" else []
         bound = any(i.get("target") for i in insts)        # 有没有指定「给谁生成」
         em = self.media_cfg()
+        refresh = mode == "all" and em["refresh_after_save"]
+        if mode != "all":
+            log.info("《%s》设置了「%s」，%s", task["name"], "不刷新媒体库" if mode == "no_media" else "都不触发",
+                     "仍会通知 SmartStrm，不刷新 Emby / 飞牛" if mode == "no_media" else "不通知 SmartStrm，也不刷新 Emby / 飞牛")
         cli = self.emby_only(), self.fn()
         by_target = {"emby": cli[0], "fn": cli[1]}
         errs = []
@@ -1438,7 +1445,7 @@ class Engine:
             tgt = by_target.get(inst.get("target"))
             if inst.get("target") and not tgt:
                 log.info("SmartStrm「%s」指定给%s，但%s联动没有启用，不刷新媒体库", nm, SRV.get(inst["target"]), SRV.get(inst["target"]))
-            if tgt and em["refresh_after_save"]:      # 这套 SmartStrm 生成完，就通知它对应的那个服务器
+            if tgt and refresh:      # 这套 SmartStrm 生成完，就通知它对应的那个服务器
                 time.sleep(min(em.get("refresh_delay", 10), 120))
                 self._refresh_one(tgt, inst["target"], task)
 
@@ -1449,7 +1456,7 @@ class Engine:
             t.join()
         if not bound:                                   # 没指定对应关系：沿用旧行为，所有已启用的服务器一起刷新
             cli = self.emby()
-            if cli and em["refresh_after_save"]:
+            if cli and refresh:
                 time.sleep(min(em.get("refresh_delay", 10), 120))
                 self._refresh_one(cli, "", task)
         dt = cfg["dingtalk"]

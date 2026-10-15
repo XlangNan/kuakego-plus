@@ -23,7 +23,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.16.0"
+VERSION = "1.17.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")

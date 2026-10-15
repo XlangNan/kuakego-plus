@@ -65,10 +65,10 @@ def test_each_board_searches_only_its_own_section():
 def test_discover_filters_genres():
     t = FakeTmdb()
     t.discover("cn")
-    assert t.calls[-1][1]["without_genres"] == "16|10764|10767"      # 剧集板块排除动画、综艺
+    assert t.calls[-1][1]["without_genres"] == "16|10764|10767|99|10762"      # 剧集板块排除动画、综艺，纪录片 / 儿童单列
     t.variety_discover("cn")
     p = t.calls[-1][1]
-    assert p["with_genres"] == "10764|10767" and p["without_genres"] == "16" and p["with_origin_country"] == "CN"
+    assert p["with_genres"] == "10764|10767" and p["without_genres"] == "16" and p["with_origin_country"] == "CN|TW|HK"
 
 
 def test_similar_stays_in_same_section():

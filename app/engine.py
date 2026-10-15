@@ -1409,6 +1409,7 @@ class Engine:
 
     # ------------------------------------------------------------ 转存后联动
     def _after_save(self, task, saved):
+        SRV = {"emby": "Emby", "fn": "飞牛影视"}
         cfg = self.store.data
         dest = self._dest(task)
         insts = [i for i in [cfg["smartstrm"], *cfg.get("smartstrm_more", {}).get("items", [])]
@@ -1424,8 +1425,10 @@ class Engine:
             nm = inst.get("name") or inst.get("target") or "SmartStrm"
             time.sleep(min(inst.get("delay", 3), 60))
             ok, msg = notify.trigger_smartstrm(inst, dest)
-            log.info("SmartStrm「%s」：%s", nm, msg) if ok else log.warning("SmartStrm「%s」：%s", nm, msg)
+            log.info("已通知 SmartStrm「%s」生成 strm：%s（这一步不是刷新媒体库）", nm, msg) if ok else log.warning("SmartStrm「%s」：%s", nm, msg)
             tgt = by_target.get(inst.get("target"))
+            if inst.get("target") and not tgt:
+                log.info("SmartStrm「%s」指定给%s，但%s联动没有启用，不刷新媒体库", nm, SRV.get(inst["target"]), SRV.get(inst["target"]))
             if tgt and em["refresh_after_save"]:      # 这套 SmartStrm 生成完，就通知它对应的那个服务器
                 time.sleep(min(em.get("refresh_delay", 10), 120))
                 self._refresh_one(tgt, inst["target"], task)

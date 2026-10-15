@@ -9,14 +9,17 @@ _cache = {}
 
 CATEGORIES = {
     "all": {},
-    "cn": {"with_origin_country": "CN"},
-    "kr_jp": {"with_origin_country": "KR|JP"},
-    "us_eu": {"with_origin_country": "US|GB|FR|DE|ES|IT|SE|DK|NO"},
+    "cn": {"with_origin_country": "CN|TW|HK"},
+    "kr_jp": {"with_origin_country": "JP|KP|KR|TH|IN|SG"},
+    "us_eu": {"with_origin_country": "US|FR|GB|DE|ES|IT|NL|PT|RU"},
+    "docu": {"with_genres": "99"},       # 纪录片
+    "kids": {"with_genres": "10762"},    # 儿童
 }
-MOVIE_COUNTRIES = {"cn": "CN|HK|TW", "kr_jp": "KR|JP", "jp": "JP", "us_eu": "US|GB|FR|DE|ES|IT|SE|DK|NO"}
+# 国家分组沿用 MoviePilot v2 的 category.yaml：日韩剧含泰国 / 印度 / 新加坡；国产剧含港台；欧美剧含荷 / 葡 / 俄
+MOVIE_COUNTRIES = {"cn": "CN|HK|TW", "kr_jp": "JP|KP|KR|TH|IN|SG", "jp": "JP", "us_eu": "US|FR|GB|DE|ES|IT|NL|PT|RU"}
 ANIMATION = 16   # TMDB 的「动画」类型 ID（剧集和电影通用）。剧集 / 电影板块排除它，动漫板块只要它
-ANIME_COUNTRIES = {"jp": {"with_origin_country": "JP"}, "cn": {"with_origin_country": "CN"},
-                   "us_eu": {"with_origin_country": "US|GB|FR|DE|ES|IT|SE|DK|NO"}}
+ANIME_COUNTRIES = {"jp": {"with_origin_country": "JP"}, "cn": {"with_origin_country": "CN|TW|HK"},
+                   "us_eu": {"with_origin_country": "US|FR|GB|DE|ES|IT|NL|PT|RU"}}
 # 别名：优先取这些地区的译名（华语地区、日韩、英美），其次是各语言的翻译
 ALT_REGIONS = ("CN", "TW", "HK", "SG", "MO", "JP", "KR", "US", "GB")
 ALT_LANGS = ("zh", "en", "ja", "ko")
@@ -105,6 +108,8 @@ class Tmdb:
             p.update(ANIME_COUNTRIES.get(category, {}))
         else:
             p["without_genres"] = "|".join([str(ANIMATION), *map(str, VARIETY)])   # 动画归动漫、真人秀 / 脱口秀归综艺
+            if category in ("cn", "kr_jp", "us_eu"):      # MoviePilot 里纪录片、儿童优先于国家分类，这里也不混进去
+                p["without_genres"] += "|99|10762"
             p.update(CATEGORIES.get(category, {}))
         if sort == "latest":
             p["first_air_date.lte"] = date.today().isoformat()
@@ -187,7 +192,9 @@ class Tmdb:
             {"label": "🔥 本周热门", "category": "all", "fn": lambda: self.trending()},
             {"label": "🇨🇳 国产剧", "category": "cn", "fn": lambda: self.discover("cn")},
             {"label": "🇰🇷 日韩剧", "category": "kr_jp", "fn": lambda: self.discover("kr_jp")},
-            {"label": "🇺🇸 欧美剧", "category": "us_eu", "fn": lambda: self.discover("us_eu")}])
+            {"label": "🇺🇸 欧美剧", "category": "us_eu", "fn": lambda: self.discover("us_eu")},
+            {"label": "📚 纪录片", "category": "docu", "fn": lambda: self.discover("docu")},
+            {"label": "🧒 儿童", "category": "kids", "fn": lambda: self.discover("kids")}])
 
     def movie_home(self):
         return self._rows([

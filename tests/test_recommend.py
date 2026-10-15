@@ -34,13 +34,16 @@ def test_tv_board_excludes_animation_everywhere():
     t, calls = client({"/trending/tv/week": [raw(1), raw(2, (16, 10759)), raw(3, (16,)), raw(4, (35,))], "/discover/tv": [raw(5)]})
     assert [x["id"] for x in t.trending()["items"]] == [1, 4]                              # 趋势接口不能过滤，手动把动画去掉
     t.discover("cn"); p = calls[-1][1]
-    assert p["without_genres"] == "16|10764|10767" and p["with_origin_country"] == "CN" and "with_genres" not in p   # 动画归动漫、真人秀 / 脱口秀归综艺
-    t.discover("kr_jp", "rating"); assert calls[-1][1]["without_genres"] == "16|10764|10767" and calls[-1][1]["sort_by"] == "vote_average.desc"
+    assert p["without_genres"] == "16|10764|10767|99|10762" and p["with_origin_country"] == "CN|TW|HK" and "with_genres" not in p   # 动画归动漫、综艺归综艺、纪录片 / 儿童单列（同 MoviePilot）
+    t.discover("kr_jp", "rating"); assert calls[-1][1]["without_genres"] == "16|10764|10767|99|10762" and calls[-1][1]["sort_by"] == "vote_average.desc"
+    assert set(calls[-1][1]["with_origin_country"].split("|")) == {"JP", "KP", "KR", "TH", "IN", "SG"}   # 泰国 / 印度 / 新加坡归日韩剧
+    t.discover("docu"); assert calls[-1][1]["with_genres"] == "99"
+    t.discover("kids"); assert calls[-1][1]["with_genres"] == "10762"
 
 
 def test_anime_board_only_animation_with_its_own_regions():
     t, calls = client({"/discover/tv": [raw(5, (16,))]})
-    for cat, country in (("jp", "JP"), ("cn", "CN")):
+    for cat, country in (("jp", "JP"), ("cn", "CN|TW|HK")):
         t.discover(cat, anime=True); p = calls[-1][1]
         assert p["with_genres"] == "16" and p["with_origin_country"] == country and "without_genres" not in p
     t.discover("all", anime=True); assert "with_origin_country" not in calls[-1][1]
@@ -67,7 +70,7 @@ def test_anime_search_merges_tv_and_movies_but_only_animation():
 
 def test_home_rows_per_board_and_one_failure_does_not_break_the_rest():
     t, _ = client({"/trending/tv/week": [raw(1)], "/discover/tv": [raw(2)], "/trending/movie/week": [raw(3)], "/discover/movie": [raw(4)]})
-    assert [r["label"] for r in t.home()] == ["🔥 本周热门", "🇨🇳 国产剧", "🇰🇷 日韩剧", "🇺🇸 欧美剧"]
+    assert [r["label"] for r in t.home()] == ["🔥 本周热门", "🇨🇳 国产剧", "🇰🇷 日韩剧", "🇺🇸 欧美剧", "📚 纪录片", "🧒 儿童"]
     assert [r["label"] for r in t.movie_home()] == ["🔥 本周热门", "🇨🇳 华语", "🇰🇷 日韩", "🇺🇸 欧美", "⭐ 高分经典"]
     rows = t.anime_home()
     assert [r["label"] for r in rows] == ["🔥 热门动漫", "🇯🇵 日本动画", "🇨🇳 国产动画", "🎞 动画电影"] and [r["category"] for r in rows][-1] == "movie"

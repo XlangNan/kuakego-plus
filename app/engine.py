@@ -16,6 +16,7 @@ from .fnmedia import FnMedia, Multi
 from .logbuf import log
 from .library import Library
 from .maintenance import Maintenance
+from .mirror import Mirror, clean_cfg as mirror_cfg
 from .pansou import PanSouError
 from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
                      quality_reason, quality_tags, safe_name, title_seasons,
@@ -78,6 +79,7 @@ class Engine:
         self._q, self._q_cookie = None, None
         self.maint = Maintenance(self)
         self.library = Library(self)
+        self.mirror = Mirror(self)
         self._seed_recent()
         self._seed_recent_dirs()
 
@@ -210,7 +212,10 @@ class Engine:
             "tmdb_id": tmdb_id,
             "skip_when_complete": bool(pick("skip_when_complete", True)),
             "poster": pick("poster", ""),
+            "mirror": mirror_cfg(pick("mirror", None), (existing or {}).get("mirror")),
         }
+        if kind != "monitor":
+            fields["mirror"]["enabled"] = False      # 镜像同步只用于「分享监控」
         return fields
 
     @staticmethod
@@ -280,6 +285,7 @@ class Engine:
         with self.store.lock:
             if fields["savepath"] != task.get("savepath"):
                 self._remember_dir(fields["savepath"], fields["name"], self._dir_kind(fields))
+                task.pop("mstate", None)      # 换了目录：原来的对照清单作废，重新开始
             task.update(fields)
             self.store.save()
         return task
@@ -301,7 +307,8 @@ class Engine:
             return n - len(self.store.data["tasks"])
 
     def public_task(self, t):
-        d = {k: v for k, v in t.items() if k != "links"}
+        d = {k: v for k, v in t.items() if k not in ("links", "mstate")}
+        d["mirror"], d["mirror_info"] = mirror_cfg(t.get("mirror")), self.mirror.info(t)
         d["links"] = [
             {"url": l["url"], "passcode": l.get("passcode", ""), "ban": l.get("ban", ""),
              "fails": l.get("fails", 0), "auto": bool(l.get("auto")), "title": l.get("title", "")}
@@ -700,6 +707,8 @@ class Engine:
         return [{"name": c["target"], "eps": c["eps"]} for c in cands]
 
     def _run(self, task, manual):
+        if task.get("kind") == "monitor" and mirror_cfg(task.get("mirror"))["enabled"]:
+            return self.mirror.run(task, manual)      # 镜像同步：分享里增删，我这边也增删
         if task.get("media") == "movie":
             return self._run_movie(task, manual)
         q = self.quark()
@@ -1408,7 +1417,7 @@ class Engine:
         return out
 
     # ------------------------------------------------------------ 转存后联动
-    def _after_save(self, task, saved):
+    def _after_save(self, task, saved, removed=()):
         SRV = {"emby": "Emby", "fn": "飞牛影视"}
         cfg = self.store.data
         dest = self._dest(task)
@@ -1447,9 +1456,11 @@ class Engine:
         if dt["enabled"] and dt["on_save"]:
             lines = "\n".join(f"- {s['name']}" for s in saved[:30])
             more = f"\n- …共 {len(saved)} 个" if len(saved) > 30 else ""
+            gone = ("\n\n🗑 同步删除：\n" + "\n".join(f"- {n}" for n in list(removed)[:30])
+                    + (f"\n- …共 {len(removed)} 个" if len(removed) > 30 else "")) if removed else ""
             ok, msg = notify.send_dingtalk(
                 dt, f"《{task['name']}》有更新",
-                f"### ✅《{task['name']}》追更\n转存到 `{self._dest(task)}`\n\n{lines}{more}")
+                f"### ✅《{task['name']}》{'镜像同步' if removed or task.get('mirror', {}).get('enabled') else '追更'}\n转存到 `{self._dest(task)}`\n\n{lines}{more}{gone}")
             if not ok:
                 log.warning("钉钉：%s", msg)
 
@@ -1507,10 +1518,11 @@ class Engine:
                     "eps": fmt_eps([e for s in res["saved"] for e in s["eps"]]),
                     "files": [s["name"] for s in res["saved"]][:20]})
                 del recent[200:]
-            if res["saved"] or res["status"] == "error":
+            if res["saved"] or res.get("removed") or res["status"] == "error":
                 task["history"] = ([{
                     "time": task["last_run"], "status": res["status"], "msg": res["msg"],
                     "files": [s["name"] for s in res["saved"]][:50],
+                    "removed": [s["name"] for s in res.get("removed", [])][:50],
                 }] + task.get("history", []))[:30]
             self.store.save()
         icon = {"saved": "✅", "error": "❌", "complete": "🏁"}.get(res["status"], "⏹")

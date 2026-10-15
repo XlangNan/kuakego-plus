@@ -541,6 +541,8 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <div class="hint">间隔最低 60 分钟。调太低会触发夸克风控，得不偿失。</div>
     <div id="m-recent"></div>
     <label class="chk"><input type="checkbox" id="m-existing" checked> 添加时立即转存链接里已有的视频（取消勾选则只追新、不转已有的）</label>
+    <label class="chk"><input type="checkbox" id="m-mirror"> 🔄 镜像同步：分享里新增的我这边也新增，<b>分享里删掉的我这边也删掉</b></label>
+    <div class="hint" id="m-mirror-h" style="display:none">开启后，分享里的文件夹和文件<b>原样复制</b>到上面的目录（不重命名、不过滤、不剥外层文件夹），并一直和它保持一致。默认是<b>预览模式</b>：只会列出「将要删除」的文件，不会真删；确认没问题后，到「编辑」里取消预览模式。只有本任务转存进来的文件会被管理，目录里你自己的文件不会被碰。</div>
     <details><summary>高级选项（过滤规则 / 目录结构）</summary>
       <div class="grid2">
         <div><label class="l">监控名称（留空取目录名）</label><input type="text" id="m-name"></div>
@@ -1151,6 +1153,7 @@ const parseHint = debounce(guard(async () => {
   h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
 }), 300);
 $('#m-links').oninput = parseHint;
+$('#m-mirror').onchange = () => { const on = $('#m-mirror').checked; $('#m-mirror-h').style.display = on ? '' : 'none'; if (on) $('#m-existing').checked = true; $('#m-existing').disabled = on; };
 $('#m-q-slot').innerHTML = qualityBox('m-q'); loadRecent().then(() => mountRecent($('#m-recent'), $('#m-path'))); bindQuality($('#m-q'));
 $('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
 $('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''));
@@ -1163,10 +1166,11 @@ function advFields(p = 'm') {
 $('#m-add').onclick = guard(async () => {
   const btn = $('#m-add'); btn.disabled = true; btn.textContent = '添加中…';
   try {
-    const existing = $('#m-existing').checked;
+    const mirror = $('#m-mirror').checked, existing = mirror || $('#m-existing').checked;
     await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
-      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q'))});
-    toast(existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')),
+      ...(mirror ? {mirror: {enabled: true, dry_run: true}} : {})});
+    toast(mirror ? '已添加，正在后台同步（预览模式：不会真删）' : existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
     $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
     await loadRecent(); mountRecent($('#m-recent'), $('#m-path'));
   } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
@@ -1181,7 +1185,7 @@ async function loadMonitors() {
       const dead = t.links.filter(l => l.ban).length;
       return `<tr><td><div class="nm">${esc(t.name)}</div>
         <div class="sub">${t.links.slice(0, 2).map(l => esc(shortUrl(l.url))).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
-        ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}</td>
+        ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}${mirrorLine(t)}</td>
         <td class="sub">${esc(t.savepath)}</td><td>${stTag(t)}<div class="sub">${esc(nextIn(t))}</div></td>
         <td class="sub">${esc(t.last_run || '—')}</td>
         <td class="sub" style="max-width:260px">${esc(t.last_msg || '—')}${t.saved_total ? `<br>累计转存 ${t.saved_total} 个` : ''}</td>
@@ -1194,9 +1198,19 @@ async function loadMonitors() {
     }).join('')}</tbody></table>`;
   bindTaskOps(box, tasks, loadMonitors);
 }
+function mirrorLine(t) {
+  const mi = t.mirror_info; if (!t.mirror || !t.mirror.enabled || !mi) return '';
+  return `<div class="sub">🔄 镜像同步 · 已管理 ${mi.managed} 个${t.mirror.dry_run ? ' · <b>预览模式</b>（不真删）' : ''}</div>` +
+    (mi.hold ? `<div class="sub" style="color:var(--warn)">⚠ ${esc(mi.hold)} <button class="btn xs" data-a="mgo" data-id="${t.id}">继续</button></div>` : '') +
+    (mi.pending_n ? `<div class="sub" style="color:var(--warn)">⚠ ${mi.pending_n} 个文件待删除 <button class="btn xs" data-a="mpend" data-id="${t.id}">查看并确认</button></div>` : '') +
+    (mi.last && mi.last.note ? `<div class="sub">${esc(mi.last.note)}</div>` : '');
+}
 function bindTaskOps(box, tasks, reload) {
   $$('[data-a]', box).forEach(b => b.onclick = guard(async () => {
     const id = b.dataset.id, t = tasks.find(x => x.id === id);
+    if (b.dataset.a === 'mgo') { await api(`/tasks/${id}/mirror/resolve`, 'POST', {action: 'go'}); toast('已放行，下次扫描开始同步（也可以点「立即扫描」）', 'ok'); return reload(); }
+    if (b.dataset.a === 'mpend') return mirrorPending(t, reload);
+    if (b.dataset.a === 'preview' && t.mirror && t.mirror.enabled) return mirrorPreview(t);
     if (b.dataset.a === 'run') { await api(`/tasks/${id}/run`, 'POST'); toast('已开始扫描，详见运行日志', 'ok'); setTimeout(reload, 800); }
     else if (b.dataset.a === 'toggle') { await api(`/tasks/${id}/toggle`, 'POST'); reload(); }
     else if (b.dataset.a === 'del') { if (confirm(`删除《${t.name}》？已转存的文件不会被删除。`)) { await api('/tasks/' + id, 'DELETE'); reload(); } }
@@ -1240,7 +1254,21 @@ function editTask(t, reload) {
     <label class="chk"${hid}><input type="checkbox" id="ed-strict" ${t.strict_season ? 'checked' : ''}> 只转存本季的集（文件名 / 文件夹里写了别的季就跳过，订阅追更建议开启）</label>
     <label class="chk"${mv ? '' : ' style="display:none"'}><input type="checkbox" id="ed-nocam" ${t.no_cam ? 'checked' : ''}> 排除枪版 / 抢先版（TC、TS、CAM）</label>
     <label class="chk"${hid}><input type="checkbox" id="ed-skip" ${t.skip_when_complete ? 'checked' : ''}> 已收齐 / 已追平时跳过链接检查（省请求）</label>
+    ${t.kind === 'monitor' ? `<div class="card" style="margin:14px 0 0;padding:12px 14px;background:var(--bg);border:0">
+      <label class="chk" style="margin-top:0"><input type="checkbox" id="ed-mir" ${t.mirror && t.mirror.enabled ? 'checked' : ''}> 🔄 <b>镜像同步</b>：分享里新增的我这边也新增，分享里删掉的我这边也删掉</label>
+      <div id="ed-mirbox" style="display:${t.mirror && t.mirror.enabled ? '' : 'none'}">
+        <div class="hint">开启后按分享<b>原样复制</b>（文件夹结构和文件名都保持原样；上面的关键词 / 重命名 / 季号等设置对它不起作用）。只管本任务转存进来的文件，目录里你自己的文件不会被碰。<b>分享链接失效、读取失败、被清空时，一个文件都不会删。</b></div>
+        <label class="chk"><input type="checkbox" id="ed-mir-dry" ${!t.mirror || t.mirror.dry_run ? 'checked' : ''}> 预览模式：只列出将要删除的文件、放进「待确认」，不真删（先观察一阵，没问题再取消勾选）</label>
+        <label class="chk"><input type="checkbox" id="ed-mir-rep" ${!t.mirror || t.mirror.replace ? 'checked' : ''}> 分享里的文件被换了（同路径、大小不同）时，删掉旧的、转存新的</label>
+        <div class="grid2">
+          <div><label class="l">连续几次扫描都不在分享里才删</label><input type="number" id="ed-mir-grace" min="1" max="10" value="${t.mirror ? t.mirror.grace : 2}"></div>
+          <div><label class="l">一次最多自动删几个（超过就放进待确认）</label><input type="number" id="ed-mir-max" min="1" value="${t.mirror ? t.mirror.max_delete : 10}"></div>
+          <div><label class="l">占已管理文件超过百分之几就待确认（≥10 个文件时）</label><input type="number" id="ed-mir-pct" min="1" max="100" value="${t.mirror ? t.mirror.max_pct : 30}"></div>
+        </div>
+        <div class="hint">删除走夸克的删除，文件会进回收站，可以恢复。改了「转存目录」会重新开始对账。</div>
+      </div></div>` : ''}
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
+  $('#ed-mir', m)?.addEventListener('change', e => { $('#ed-mirbox', m).style.display = e.target.checked ? '' : 'none'; });
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
   bindQuality($('#ed-q', m)); mountRecent($('#ed-recent', m), $('#ed-path', m));
@@ -1255,9 +1283,54 @@ function editTask(t, reload) {
       rename: $('#ed-rename', m).value, unparsed: $('#ed-unp', m).value, enddate: $('#ed-end', m).value, emby_name: $('#ed-emby', m).value,
       emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, emby_layout: $('#ed-layout', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
+      ...($('#ed-mir', m) ? {mirror: {enabled: $('#ed-mir', m).checked, dry_run: $('#ed-mir-dry', m).checked, replace: $('#ed-mir-rep', m).checked,
+        grace: +$('#ed-mir-grace', m).value || 2, max_delete: +$('#ed-mir-max', m).value || 10, max_pct: +$('#ed-mir-pct', m).value || 30}} : {}),
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
     toast('已保存', 'ok'); m.remove(); loadRecent(); reload();
   });
+}
+
+/* ---------- 镜像同步：试运行 / 待确认删除 ---------- */
+const mbOf = n => !n ? '' : n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : (n / 1048576).toFixed(1) + ' MB';
+async function mirrorPreview(t) {
+  const m = modal(`<h3>试运行《${esc(t.name)}》</h3><div class="empty">正在读取分享的完整目录并对账…</div>`, 'wide');
+  try {
+    const r = await api(`/tasks/${t.id}/mirror/preview`, 'POST');
+    const tagOf = {save: ['转存', 'ok'], replace: ['替换', 'info'], adopt: ['纳入管理', 'mute'], skip: ['不动', 'mute'], delete: ['删除', 'err']};
+    const cnt = a => r.rows.filter(x => x.action === a).length;
+    $('.modal', m).innerHTML = `<button class="x">×</button><h3>试运行《${esc(t.name)}》<span class="sub" style="font-weight:400"> 只看不动，不会转存也不会删除</span></h3>
+      ${r.hold ? `<div class="banner" style="margin-bottom:10px">⚠ ${esc(r.hold)}</div>` : ''}
+      ${r.errors.length ? `<div class="banner" style="margin-bottom:10px">⚠ 有链接读取失败（${esc(r.errors.join('；'))}）。这种情况下<b>一个文件都不会删</b>。</div>` : ''}
+      <div class="sub" style="margin-bottom:8px">已管理 <b>${r.managed}</b> 个 · 将转存 <b>${cnt('save')}</b> · 替换 <b>${cnt('replace')}</b> · 将删除 <b>${cnt('delete')}</b>（还要看连续次数和批量保护）</div>
+      ${r.rows.length ? `<div class="tbl"><table><thead><tr><th>文件（相对路径）</th><th>大小</th><th>结果</th><th>原因</th></tr></thead><tbody>${
+        r.rows.slice(0, 300).map(x => { const [tx, c] = tagOf[x.action] || ['', 'mute']; return `<tr><td class="sub" style="color:var(--fg)">${esc(x.rel)}</td><td class="sub">${mbOf(x.size)}</td><td><span class="tag ${c}">${tx}</span></td><td class="sub">${esc(x.why)}</td></tr>`; }).join('')
+      }</tbody></table></div>${r.rows.length > 300 ? `<div class="sub">… 只显示前 300 条，共 ${r.rows.length} 条</div>` : ''}` : '<div class="empty">已经和分享一致，没有要做的事</div>'}
+      <div class="actions"><button class="btn" id="pv-close">关闭</button></div>`;
+    $('.x', m).onclick = () => m.remove(); $('#pv-close', m).onclick = () => m.remove();
+  } catch (e) {
+    $('.modal', m).innerHTML = `<button class="x">×</button><h3>试运行失败</h3><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`;
+    $('.x', m).onclick = () => m.remove();
+  }
+}
+function mirrorPending(t, reload) {
+  const rows = t.mirror_info.pending;
+  const m = modal(`<h3>待删除《${esc(t.name)}》</h3>
+    <div class="sub" style="margin-bottom:8px">这些文件已经不在分享里了。<b>确认删除</b>：从我的网盘删掉（进回收站）；<b>忽略</b>：文件保留，并且以后不再管它。</div>
+    <div class="tbl"><table><thead><tr><th style="width:30px"><input type="checkbox" id="mp-all" checked></th><th>文件</th><th>大小</th><th>为什么没自动删</th></tr></thead><tbody>${
+      rows.map(r => `<tr><td><input type="checkbox" class="mp-c" data-r="${esc(r.rel)}" checked></td><td class="sub" style="color:var(--fg)">${esc(r.rel)}</td><td class="sub">${mbOf(r.size)}</td><td class="sub">${esc(r.reason)}</td></tr>`).join('')
+    }</tbody></table></div>
+    ${t.mirror_info.pending_n > rows.length ? `<div class="sub">只显示前 ${rows.length} 个，共 ${t.mirror_info.pending_n} 个（「全部」会处理所有）</div>` : ''}
+    <div class="actions"><button class="btn danger" id="mp-ok">确认删除选中的</button><button class="btn" id="mp-ig">忽略选中的</button><button class="btn" id="mp-no">关闭</button></div>`, 'wide');
+  const picked = () => { const cs = $$('.mp-c', m), on = cs.filter(c => c.checked); return on.length === cs.length && t.mirror_info.pending_n > rows.length ? null : on.map(c => c.dataset.r); };
+  $('#mp-all', m).onchange = e => $$('.mp-c', m).forEach(c => c.checked = e.target.checked);
+  $('#mp-no', m).onclick = () => m.remove();
+  const act = (action, sure) => guard(async () => {
+    const rels = picked(); if (rels && !rels.length) return toast('先勾选文件', 'err');
+    if (sure && !confirm(`从网盘删除 ${rels ? rels.length : t.mirror_info.pending_n} 个文件？文件会进回收站。`)) return;
+    const r = await api(`/tasks/${t.id}/mirror/resolve`, 'POST', {action, rels});
+    toast(action === 'confirm' ? `已删除 ${r.deleted} 个` : `已忽略 ${r.n} 个`, 'ok'); m.remove(); reload();
+  });
+  $('#mp-ok', m).onclick = act('confirm', true); $('#mp-ig', m).onclick = act('ignore', false);
 }
 
 /* ---------- 试运行：只看不转存 ---------- */

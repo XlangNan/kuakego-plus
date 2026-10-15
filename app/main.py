@@ -23,7 +23,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.15.1"
+VERSION = "1.16.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")
@@ -360,6 +360,30 @@ def create_app(store=None, engine=None):
             raise ValueError("这个任务还没有分享链接")
         with engine.run_lock:  # 与正式扫描互斥，避免同时读写目录
             return jsonify(engine.preview(t))
+
+    # 镜像同步：试运行（只看不动）/ 确认 / 忽略 / 放行首次同步
+    @app.post("/api/tasks/<tid>/mirror/preview")
+    def mirror_preview(tid):
+        t = engine.find(tid)
+        if not t:
+            raise KeyError("任务不存在")
+        if t.get("kind") != "monitor":
+            raise ValueError("镜像同步只用于分享监控")
+        with engine.run_lock:
+            return jsonify(engine.mirror.preview(t))
+
+    @app.post("/api/tasks/<tid>/mirror/resolve")
+    def mirror_resolve(tid):
+        t = engine.find(tid)
+        if not t:
+            raise KeyError("任务不存在")
+        d = body()
+        if d.get("action") not in ("confirm", "ignore", "go"):
+            raise ValueError("未知操作")
+        rels = d.get("rels")
+        with engine.run_lock:
+            r = engine.mirror.resolve(t, d["action"], [str(x) for x in rels] if isinstance(rels, list) else None)
+        return jsonify(**r, task=engine.public_task(t))
 
     @app.get("/api/tasks/<tid>/progress")
     def tasks_progress(tid):

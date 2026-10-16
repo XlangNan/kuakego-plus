@@ -53,11 +53,20 @@ class Maintenance:
     def tick(self):
         for name, fn in (("补全板块分类", self.backfill_sections), ("清理失效链接", self.purge_dead_links), ("完结检查", self.auto_finish),
                          ("账号检查", self.check_account), ("洗版检查", self.check_upgrades),
-                         ("每日日报", self.daily_digest)):
+                         ("每日日报", self.daily_digest), ("自动备份", self.auto_backup), ("清理回收站", self.clean_trash)):
             try:
                 fn()
             except Exception:
                 log.exception("维护任务「%s」出错", name)
+
+    # ------------------------------------------------------------ 自动备份 / 回收站
+    def auto_backup(self):
+        self.e.backups.tick(self._due)
+
+    def clean_trash(self):
+        days = int(self.cfg().get("trash_clean_days") or 0)
+        if days > 0 and self._due("trash", 6 * 3600):
+            self.e.mirror.clean_trash(days)
 
     # ------------------------------------------------------------ 升级前的订阅：补上「综艺」分类
     def backfill_sections(self, limit=5):
@@ -167,7 +176,8 @@ class Maintenance:
 
     def alert_space(self, msg):
         log.error(msg)
-        self._dingtalk("夸克网盘空间不足", f"### ⚠️ {msg}\n空间用完后追更会转存失败，请清理网盘。")
+        hint = self.e.mirror.trash_hint()
+        self._dingtalk("夸克网盘空间不足", f"### ⚠️ {msg}\n空间用完后追更会转存失败，请清理网盘。" + (f"\n\n{hint}" if hint else ""))
 
     # ------------------------------------------------------------ 2 洗版提示
     def current_res(self, task):

@@ -23,7 +23,7 @@ from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.17.0"
+VERSION = "1.18.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
 SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")
@@ -297,6 +297,15 @@ def create_app(store=None, engine=None):
             raise ValueError("请先选择要删除的订阅")
         return jsonify(ok=True, deleted=engine.delete_tasks([str(i) for i in ids]))
 
+    @app.post("/api/tasks/batch-update")
+    def tasks_batch_update():
+        d = body()
+        ids = d.get("ids")
+        if not isinstance(ids, list) or not ids:
+            raise ValueError("请先勾选要修改的任务")
+        ok, bad = engine.batch_update([str(i) for i in ids], d.get("changes") or {})
+        return jsonify(ok=True, updated=ok, failed=[{"name": n, "error": e} for n, e in bad])
+
     @app.put("/api/tasks/<tid>")
     def tasks_update(tid):
         return jsonify(task=engine.public_task(engine.update_task(tid, body())))
@@ -371,6 +380,26 @@ def create_app(store=None, engine=None):
             raise ValueError("镜像同步只用于分享监控")
         with engine.run_lock:
             return jsonify(engine.mirror.preview(t))
+
+    @app.get("/api/tasks/<tid>/mirror/log")
+    def mirror_log(tid):
+        t = engine.find(tid)
+        if not t:
+            raise KeyError("任务不存在")
+        return jsonify(items=engine.mirror.log_view(t), managed=len((t.get("mstate") or {}).get("manifest") or {}))
+
+    @app.post("/api/trash/clean")
+    def trash_clean():
+        days = int(store.data["auto"].get("trash_clean_days") or 0)
+        if days <= 0:
+            raise ValueError("先在上面设置「回收站放几天后清理」（大于 0）再点")
+        with engine.run_lock:
+            n = engine.mirror.clean_trash(days)
+        return jsonify(ok=True, cleaned=n)
+
+    @app.get("/api/trash/info")
+    def trash_info():
+        return jsonify(hint=engine.mirror.trash_hint())
 
     @app.post("/api/tasks/<tid>/mirror/resolve")
     def mirror_resolve(tid):
@@ -811,26 +840,62 @@ def create_app(store=None, engine=None):
         return Response(data, mimetype="application/json",
                         headers={"Content-Disposition": f"attachment; filename={name}"})
 
-    @app.post("/api/restore")
-    def backup_restore():
-        import json as _json, shutil
-        raw = request.get_data()
-        try:
-            data = _json.loads(raw.decode("utf-8"))
-        except Exception:
-            raise ValueError("文件不是有效的 JSON 备份")
+    def _restore_data(data):
+        """校验并整体替换当前配置（手动导入、从自动备份恢复共用）。恢复前自动留两份：config.json.bak 和 backups/ 里的 pre 备份。"""
+        import shutil
         if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
             raise ValueError("这不是 kuakego-plus 的备份文件（缺少 tasks）")
         for t in data["tasks"]:
             if not isinstance(t, dict) or "id" not in t or not isinstance(t.get("links", []), list):
                 raise ValueError("备份里的订阅数据格式不对")
+        try:
+            engine.backups.snapshot("pre")
+        except OSError as e:
+            log.warning("恢复前留备份失败（继续恢复）：%s", e)
         with store.lock:
             if os.path.exists(store.path):
-                shutil.copyfile(store.path, store.path + ".bak")   # 恢复前留一份当前配置
+                shutil.copyfile(store.path, store.path + ".bak")
             store.data = _merge(DEFAULTS, data)
             store.save()
         acct["ts"] = 0
-        return jsonify(ok=True, tasks=len(store.data["tasks"]))
+        return len(store.data["tasks"])
+
+    @app.post("/api/restore")
+    def backup_restore():
+        import json as _json
+        try:
+            data = _json.loads(request.get_data().decode("utf-8"))
+        except Exception:
+            raise ValueError("文件不是有效的 JSON 备份")
+        return jsonify(ok=True, tasks=_restore_data(data))
+
+    # 自动备份：每天一份，页面上可以看 / 下载 / 一键恢复
+    @app.get("/api/backups")
+    def backups_list():
+        a = store.data["auto"]
+        return jsonify(items=engine.backups.list(), auto=bool(a.get("backup_auto", True)), keep=a.get("backup_keep", 7))
+
+    @app.post("/api/backups/now")
+    def backups_now():
+        return jsonify(ok=True, name=engine.backups.snapshot("manual"))
+
+    @app.get("/api/backups/<name>/download")
+    def backups_download(name):
+        p = engine.backups.path(name)
+        if not p:
+            raise KeyError("备份不存在")
+        with open(p, "rb") as f:
+            return Response(f.read(), mimetype="application/json", headers={"Content-Disposition": f"attachment; filename={name}"})
+
+    @app.post("/api/backups/<name>/restore")
+    def backups_restore(name):
+        import json as _json
+        p = engine.backups.path(name)
+        if not p:
+            raise KeyError("备份不存在")
+        with open(p, encoding="utf-8") as f:
+            data = _json.load(f)
+        return jsonify(ok=True, tasks=_restore_data(data))
 
     @app.post("/api/batch/inspect")
     def batch_inspect():
@@ -924,13 +989,8 @@ def create_app(store=None, engine=None):
         ok, msg = notify.trigger_smartstrm(notify.clean_ss(d, old), None, force=True)
         return jsonify(ok=ok, msg=msg), (200 if ok else 400)
 
-    @app.post("/api/settings/<name>/test")
-    def settings_test(name):
-        # 用表单里刚填的值测试；密钥留空则回退到已保存的
-        cur = dict(store.data[name])
-        for k, v in body().items():
-            if k in cur and (v or not isinstance(v, str) or k not in ("webhook", "secret", "api_key", "password")):
-                cur[k] = v if v != "__clear__" else ""
+    def run_test(name, cur):
+        """按给定配置测一下某个服务能不能连通 -> (是否成功, 说明)。「测试连接」按钮和「健康状态」页共用。"""
         if name == "dingtalk":
             ok, msg = notify.send_dingtalk(cur, "测试消息", "### ✅ 钉钉通知配置成功\n来自 kuakego-plus", force=True)
         elif name == "smartstrm":
@@ -977,7 +1037,103 @@ def create_app(store=None, engine=None):
                 ok, msg = True, f"连接成功，取到 {n} 条热门剧集"
             except Exception as e:
                 ok, msg = False, f"连接失败：{e}"
+        return ok, msg
+
+    @app.post("/api/settings/<name>/test")
+    def settings_test(name):
+        # 用表单里刚填的值测试；密钥留空则回退到已保存的
+        cur = dict(store.data[name])
+        for k, v in body().items():
+            if k in cur and (v or not isinstance(v, str) or k not in ("webhook", "secret", "api_key", "password")):
+                cur[k] = v if v != "__clear__" else ""
+        ok, msg = run_test(name, cur)
         return jsonify(ok=ok, msg=msg), (200 if ok else 400)
+
+    # ------------------------------------------------------------ 健康状态
+    @app.post("/api/health")
+    def health():
+        """把各个服务的连接状态一次查完。钉钉、SmartStrm 只看配置 / 端口通不通，不会真的发消息或触发任务。"""
+        import shutil, socket
+        from concurrent.futures import ThreadPoolExecutor, wait
+        from urllib.parse import urlparse
+        d = store.data
+
+        def tcp(url):
+            u = urlparse(url if "//" in url else "http://" + url)
+            port = u.port or (443 if u.scheme == "https" else 80)
+            socket.create_connection((u.hostname, port), timeout=3).close()
+
+        def quark_check():
+            if not d.get("cookie"):
+                return "fail", "还没有登录夸克账号"
+            q = engine.quark()
+            return "ok", "已登录：" + (q.nickname or "（取不到昵称）")
+
+        def svc(name, ready, off_msg):
+            def f():
+                if not ready:
+                    return "off", off_msg
+                ok, msg = run_test(name, d[name])
+                return ("ok" if ok else "fail"), msg
+            return f
+
+        def dingtalk_check():
+            c = d["dingtalk"]
+            return ("ok", "已配置机器人（不会真的发消息）") if c["enabled"] and c["webhook"] else ("off", "未启用")
+
+        def ss_check(inst, label):
+            def f():
+                if not (inst.get("enabled") and inst.get("webhook")):
+                    return "off", "未启用"
+                try:
+                    tcp(inst["webhook"])
+                except Exception as e:
+                    return "fail", f"{label}的地址连不上：{e}"
+                return "ok", "端口可以连通（不会真的触发任务）"
+            return f
+
+        def disk_check():
+            base = os.path.dirname(store.path)
+            free = shutil.disk_usage(base).free
+            ok = os.access(base, os.W_OK)
+            return ("ok" if ok and free > 200 * 1024 ** 2 else "fail"), f"配置目录{'可写' if ok else '不可写'}，剩余 {free / 1024 ** 3:.1f} GB"
+
+        checks = [("quark", "夸克账号", quark_check),
+                  ("tmdb", "TMDB", svc("tmdb", bool(d["tmdb"].get("api_key")), "未填写密钥")),
+                  ("emby", "Emby", svc("emby", d["emby"]["enabled"] and d["emby"]["url"] and d["emby"]["api_key"], "未启用")),
+                  ("fnmedia", "飞牛影视", svc("fnmedia", d["fnmedia"]["enabled"] and d["fnmedia"]["url"] and d["fnmedia"]["username"], "未启用")),
+                  ("proxy", "网络代理", svc("proxy", d["proxy"]["enabled"] and d["proxy"]["url"], "未启用")),
+                  ("pansou", "资源搜索（PanSou）", svc("pansou", d["pansou"]["enabled"] and d["pansou"]["url"], "未启用")),
+                  ("dingtalk", "钉钉通知", dingtalk_check),
+                  ("smartstrm", "SmartStrm（主）", ss_check(d["smartstrm"], "主 SmartStrm"))]
+        for i, it in enumerate(d.get("smartstrm_more", {}).get("items", []), 2):
+            nm = it.get("name") or f"第 {i} 套"
+            checks.append((f"smartstrm{i}", f"SmartStrm（{nm}）", ss_check(it, nm)))
+        checks.append(("disk", "配置目录", disk_check))
+
+        def timed(fn):
+            t0 = time.time()
+            try:
+                st, msg = fn()
+            except Exception as e:
+                st, msg = "fail", str(e)
+            return st, msg, int((time.time() - t0) * 1000)
+
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            futs = [(k, n, ex.submit(timed, fn)) for k, n, fn in checks]
+            wait([f for _, _, f in futs], timeout=45)
+            items = []
+            for k, n, f in futs:
+                if f.done():
+                    st, msg, ms = f.result()
+                else:
+                    st, msg, ms = "fail", "检测超时", 45000
+                items.append({"key": k, "name": n, "state": st, "msg": msg, "ms": ms})
+        with store.lock:
+            tasks = list(d["tasks"])
+        return jsonify(items=items, version=VERSION, running=engine.running, tasks=len(tasks),
+                       errors=sum(1 for t in tasks if t.get("last_status") == "error"),
+                       backoff=sum(1 for t in tasks if t.get("fail_streak", 0) >= 2))
 
     # ------------------------------------------------------------ 日志
     @app.get("/api/logs")

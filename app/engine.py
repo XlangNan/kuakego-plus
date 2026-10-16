@@ -16,6 +16,7 @@ from .fnmedia import FnMedia, Multi
 from .logbuf import log
 from .library import Library
 from .maintenance import Maintenance
+from .backups import Backups
 from .mirror import Mirror, clean_cfg as mirror_cfg
 from .pansou import PanSouError
 from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title, parse_episodes, parse_share_text,
@@ -25,6 +26,7 @@ from .quark import Quark, QuarkError
 from .tmdb import Tmdb
 
 MIN_INTERVAL = 60        # 分钟。再低容易触发夸克风控
+BACKOFF = (1, 1, 2, 3, 4, 6)   # 连续失败第 N 次时，下次扫描间隔放大几倍（第 1 次失败照常，之后逐步拉长，成功一次就恢复）
 INCREMENTAL_LIMIT = 30   # 追更时单轮最多转存个数；首次回填不限
 # ---- 自动找资源的安全限制 ----
 AUTO_MAX_LINKS = 5       # 每个订阅最多同时保留几个有效链接
@@ -80,6 +82,7 @@ class Engine:
         self.maint = Maintenance(self)
         self.library = Library(self)
         self.mirror = Mirror(self)
+        self.backups = Backups(store)
         self._seed_recent()
         self._seed_recent_dirs()
 
@@ -213,6 +216,7 @@ class Engine:
             "skip_when_complete": bool(pick("skip_when_complete", True)),
             "poster": pick("poster", ""),
             "mirror": mirror_cfg(pick("mirror", None), (existing or {}).get("mirror")),
+            "category": str(pick("category", "") or "").strip()[:12],
             "after": pick("after", "all") if pick("after", "all") in ("all", "no_media", "none") else "all",
         }
         if kind != "monitor":
@@ -292,6 +296,28 @@ class Engine:
             self.store.save()
         return task
 
+    BATCH_KEYS = ("interval", "after", "category", "enabled")
+
+    def batch_update(self, ids, changes):
+        """批量改：只允许改间隔 / 转存后联动 / 分类 / 启停，以及镜像同步里的几个开关。每个任务各自校验，返回 (成功个数, 失败的[(名称, 原因)])。"""
+        ch = {k: changes[k] for k in self.BATCH_KEYS if k in changes}
+        mir = changes.get("mirror")
+        if isinstance(mir, dict):
+            ch["mirror"] = {k: mir[k] for k in ("enabled", "dry_run", "replace", "grace", "max_delete", "max_pct") if k in mir}
+        if not ch:
+            raise ValueError("没有要修改的内容")
+        ok, bad = 0, []
+        for tid in ids:
+            t = self.find(tid)
+            if not t:
+                continue
+            try:
+                self.update_task(tid, ch)
+                ok += 1
+            except (ValueError, KeyError) as ex:
+                bad.append((t["name"], str(ex)))
+        return ok, bad
+
     def delete_task(self, tid):
         with self.store.lock:
             n = len(self.store.data["tasks"])
@@ -311,6 +337,8 @@ class Engine:
     def public_task(self, t):
         d = {k: v for k, v in t.items() if k not in ("links", "mstate")}
         d["mirror"], d["mirror_info"] = mirror_cfg(t.get("mirror")), self.mirror.info(t)
+        d["fail_streak"] = t.get("fail_streak", 0)
+        d["backoff"] = BACKOFF[min(d["fail_streak"], len(BACKOFF) - 1)]
         d["links"] = [
             {"url": l["url"], "passcode": l.get("passcode", ""), "ban": l.get("ban", ""),
              "fails": l.get("fails", 0), "auto": bool(l.get("auto")), "title": l.get("title", "")}
@@ -1514,7 +1542,12 @@ class Engine:
         with self.store.lock:
             task["last_run"] = now.strftime("%Y-%m-%d %H:%M:%S")
             task["last_status"], task["last_msg"] = res["status"], res["msg"]
-            task["next_run"] = int(time.time()) + task["interval"] * 60 + random.randint(0, 90)
+            if res["status"] == "error":
+                task["fail_streak"] = task.get("fail_streak", 0) + 1
+            elif res["status"] != "idle":
+                task["fail_streak"] = 0
+            mult = BACKOFF[min(task.get("fail_streak", 0), len(BACKOFF) - 1)]
+            task["next_run"] = int(time.time()) + task["interval"] * 60 * mult + random.randint(0, 90)
             if res["saved"]:
                 task["saved_total"] = task.get("saved_total", 0) + len(res["saved"])
             if res["saved"]:

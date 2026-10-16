@@ -21,7 +21,8 @@ from .quark import QuarkError
 
 DEFAULTS = {"enabled": False, "dry_run": True, "grace": 2, "max_delete": 10, "max_pct": 30, "replace": True}
 MAX_SAVE_PER_RUN = 500       # 首次同步文件很多时，分几轮转完
-MAX_DEPTH, MAX_DIRS = 8, 400  # 读分享目录树的深度 / 子目录个数上限，超了就当作「没读全」，不删东西
+MAX_DEPTH, MAX_DIRS = 8, 400
+LOG_MAX, TRASH_MAX, TRASH_KEEP_DAYS = 300, 500, 90   # 同步记录最多留几条；回收站追踪最多几条、最久留几天  # 读分享目录树的深度 / 子目录个数上限，超了就当作「没读全」，不删东西
 
 
 def clean_cfg(raw, old=None):
@@ -65,13 +66,38 @@ class Mirror:
         st.setdefault("go", False)      # 首次同步前的「目录对不上」检查是否已放行
         st.setdefault("hold", "")
         st.setdefault("last", {})
+        st.setdefault("log", [])        # 同步记录：新增 / 替换 / 删除 / 待确认 / 暂停 / 出错
+        st.setdefault("trash", [])      # 本工具删掉、可能还在夸克回收站里的文件：[{fid, name, size, ts}]
         return st
+
+    @staticmethod
+    def _ev(st, kind, rel="", size=0, pid="", note=""):
+        st["log"].insert(0, {"ts": int(time.time()), "kind": kind, "rel": rel, "size": size, "pid": pid, "note": note})
+        del st["log"][LOG_MAX:]
+
+    @staticmethod
+    def _src(task, pid):
+        """这个文件来自任务里的第几个链接（从 1 数）；链接已经被去掉了返回 0。"""
+        for i, l in enumerate(task.get("links") or [], 1):
+            if l.get("pwd_id") == pid:
+                return i
+        return 0
+
+    def log_view(self, task):
+        st = task.get("mstate") or {}
+        return [{**x, "src": self._src(task, x.get("pid"))} for x in (st.get("log") or [])]
+
+    @staticmethod
+    def _trim_trash(st):
+        cut = time.time() - TRASH_KEEP_DAYS * 86400
+        st["trash"] = [t for t in st["trash"] if t.get("ts", 0) >= cut][:TRASH_MAX]
 
     def info(self, task):
         """给界面看的概要（不含整张清单）。"""
         cfg = clean_cfg(task.get("mirror"))
         st = task.get("mstate") or {}
-        return {"enabled": cfg["enabled"], "managed": len(st.get("manifest") or {}), "pending": list(st.get("pending") or [])[:200],
+        return {"enabled": cfg["enabled"], "managed": len(st.get("manifest") or {}),
+                "pending": [{**p, "src": self._src(task, p.get("pid"))} for p in list(st.get("pending") or [])[:200]],
                 "pending_n": len(st.get("pending") or []), "hold": st.get("hold", ""), "last": st.get("last") or {}}
 
     # ------------------------------------------------------------ 读分享的完整目录树
@@ -174,20 +200,21 @@ class Mirror:
         st = self.state(task)
         an = self.analyze(task, q)
         man, cfg = st["manifest"], an["cfg"]
-        rows = ([{"rel": r, "size": an["present"][r]["size"], "action": "save", "why": "分享里新增"} for r in an["new"]] +
-                [{"rel": r, "size": an["present"][r]["size"], "action": "replace", "why": "分享里这个文件变了（大小不同），会删旧的转新的"} for r in an["changed"]] +
-                [{"rel": r, "size": an["present"][r]["size"], "action": "adopt", "why": "目录里已有同名同大小的文件，纳入管理，不重复转存"} for r in an["adopt"]] +
-                [{"rel": r, "size": an["present"][r]["size"], "action": "skip", "why": "目录里有同名但大小不同的文件，当作你自己的，不动"} for r in an["conflict"]])
+        sr = lambda r: self._src(task, an["present"][r]["pwd_id"])
+        rows = ([{"rel": r, "size": an["present"][r]["size"], "action": "save", "why": "分享里新增", "src": sr(r)} for r in an["new"]] +
+                [{"rel": r, "size": an["present"][r]["size"], "action": "replace", "why": "分享里这个文件变了（大小不同），会删旧的转新的", "src": sr(r)} for r in an["changed"]] +
+                [{"rel": r, "size": an["present"][r]["size"], "action": "adopt", "why": "目录里已有同名同大小的文件，纳入管理，不重复转存", "src": sr(r)} for r in an["adopt"]] +
+                [{"rel": r, "size": an["present"][r]["size"], "action": "skip", "why": "目录里有同名但大小不同的文件，当作你自己的，不动", "src": sr(r)} for r in an["conflict"]])
         total = len(man)
         for r in an["removed"]:
             n = st["missing"].get(r, 0) + 1
-            rows.append({"rel": r, "size": man[r].get("size", 0), "action": "delete",
+            rows.append({"rel": r, "size": man[r].get("size", 0), "action": "delete", "src": self._src(task, man[r].get("link")),
                          "why": (f"分享里已经没有了（连续第 {n} 次，满 {cfg['grace']} 次才会删）" if an["all_ok"] else "分享里没有，但有链接读取失败，本轮不会删")})
         return {"rows": rows, "ok": an["all_ok"], "managed": total, "hold": an["hold"], "cfg": cfg,
                 "errors": [str(e) for _, e in an["link_errors"]] + an["errors"]}
 
     # ------------------------------------------------------------ 删除我这边的文件
-    def _delete(self, q, task, rels, man):
+    def _delete(self, q, task, rels, man, trash=None):
         """删掉 rels 对应的文件。只删「名字和大小都对得上」的：你自己改过 / 换过的文件不动。
         -> (已删除, 本来就不在了, 被改动过所以没删)"""
         dest = _norm(task["savepath"])
@@ -210,11 +237,13 @@ class Mirror:
                 if ms and it.get("size") and int(it["size"]) != int(ms):
                     kept.append(r)
                     continue
-                todo.append((r, it["fid"]))
+                todo.append((r, it["fid"], it["file_name"], int(it.get("size") or 0)))
             for i in range(0, len(todo), 50):
                 chunk = todo[i:i + 50]
-                q.delete([fid for _, fid in chunk])
-                deleted += [r for r, _ in chunk]
+                q.delete([c[1] for c in chunk])
+                deleted += [c[0] for c in chunk]
+                if trash is not None:      # 记下来：它们进了夸克回收站，还占着空间
+                    trash += [{"fid": c[1], "name": c[2], "size": c[3], "ts": int(time.time())} for c in chunk]
         # 删完之后留下的空文件夹一并清掉（只清我们刚动过的那几层，根目录不动）
         for d in sorted(set(by_dir), key=lambda x: -x.count("/")):
             cur = d
@@ -254,7 +283,7 @@ class Mirror:
                 for r in rs:
                     if _base(r) in names:
                         man[r] = {"size": present[r]["size"], "link": present[r]["pwd_id"], "ts": int(time.time())}
-                        saved.append({"name": r, "eps": [], "link": ""})
+                        saved.append({"name": r, "eps": [], "link": "", "pid": present[r]["pwd_id"]})
                     else:
                         log.warning("《%s》转存后没在目录里找到 %s，下一轮重试", task["name"], r)
             except QuarkError as ex:
@@ -295,7 +324,7 @@ class Mirror:
             man.pop(r, None)
             st["missing"].pop(r, None)
         st["hold"] = an["hold"]
-        notes, saved, removed = [], [], []
+        notes, saved, removed, replaced = [], [], [], set()
         managed_before = len(man)
         if an["hold"]:
             notes.append("首次同步已暂停（目录里有对不上的文件）")
@@ -306,10 +335,12 @@ class Mirror:
             # 纳入管理（目录里已有同名同大小的文件）
             for r in an["adopt"]:
                 man[r] = {"size": an["present"][r]["size"], "link": an["present"][r]["pwd_id"], "ts": int(time.time())}
+            if an["adopt"]:
+                self._ev(st, "adopt", note=f"目录里已有 {len(an['adopt'])} 个同名同大小的文件，纳入管理（没有重复转存）")
             # 被替换的：先删旧的
             if an["changed"]:
                 if an["all_ok"]:
-                    d_ok, gone, kept = self._delete(q, task, an["changed"], man)
+                    d_ok, gone, kept = self._delete(q, task, an["changed"], man, st["trash"])
                     for r in kept:
                         man.pop(r, None)
                     redo = [r for r in an["changed"] if r not in kept]
@@ -318,12 +349,18 @@ class Mirror:
                     if kept:
                         notes.append(f"{len(kept)} 个文件被你改动过，不替换")
                     removed += [{"name": r, "why": "被替换"} for r in d_ok]
+                    replaced = set(d_ok)
                     an["new"] += [r for r in redo if r not in an["new"]]
                 else:
                     notes.append("有链接读取失败，本轮不替换文件")
             if an["conflict"]:
                 notes.append(f"{len(an['conflict'])} 个同名但大小不同的文件当作你自己的，没动")
             saved = self._save(q, task, an["new"], an, man, errors)
+            for x in saved:
+                self._ev(st, "replace" if x["name"] in replaced else "save", x["name"], man.get(x["name"], {}).get("size", 0), x.get("pid", ""),
+                         "分享里的文件变了，已换成新的" if x["name"] in replaced else "")
+            for r in replaced - {x["name"] for x in saved}:      # 旧的已删、新的没转成：下一轮会重试，先记一笔
+                self._ev(st, "delete", r, 0, "", "被替换：旧文件已删，新文件还没转存成功，下一轮重试")
             if len(an["new"]) > MAX_SAVE_PER_RUN:
                 notes.append(f"还有 {len(an['new']) - MAX_SAVE_PER_RUN} 个留到下一轮")
             # 分享里删掉的 → 宽限计数 → 删除 / 待确认
@@ -350,25 +387,39 @@ class Mirror:
                 elif cfg["dry_run"] and ready:
                     reason = "预览模式（还没开启真删）"
                 if ready and reason:
-                    st["pending"] = [{"rel": r, "size": man[r].get("size", 0), "reason": reason} for r in ready]
+                    st["pending"] = [{"rel": r, "size": man[r].get("size", 0), "reason": reason, "pid": man[r].get("link", "")} for r in ready]
                     notes.append(f"{len(ready)} 个待删除：{reason}")
                     sig = "|".join(sorted(ready))
+                    if st.get("pending_sig") != sig:
+                        st["pending_sig"] = sig
+                        self._ev(st, "pending", note=f"{len(ready)} 个文件已不在分享里，待删除：{reason}")
                     if not cfg["dry_run"] and st.get("pending_notified") != sig:
                         st["pending_notified"] = sig
                         e._notify_error(task, "镜像同步有待确认的删除", f"{reason}\n\n" + "\n".join(f"- {r}" for r in ready[:30]) + "\n\n请到监控页确认或忽略。")
                 elif ready:
-                    d_ok, gone, kept = self._delete(q, task, ready, man)
+                    src = {r: (man.get(r) or {}) for r in ready}
+                    d_ok, gone, kept = self._delete(q, task, ready, man, st["trash"])
                     for r in d_ok + gone + kept:
                         man.pop(r, None)
                         st["missing"].pop(r, None)
                     removed += [{"name": r, "why": "分享里已删除"} for r in d_ok]
+                    for r in d_ok:
+                        self._ev(st, "delete", r, src[r].get("size", 0), src[r].get("link", ""), "分享里已删除")
                     st["pending"] = []
                     if kept:
                         notes.append(f"{len(kept)} 个文件被你改动过，没删，已不再管理")
                 else:
                     st["pending"] = []
+                    st["pending_sig"] = ""
             else:
                 notes.append("有链接读取失败，本轮不删除任何文件")
+        if an["hold"] and st.get("hold_logged") != an["hold"]:
+            st["hold_logged"] = an["hold"]
+            self._ev(st, "hold", note=an["hold"])
+        for er in dict.fromkeys(errors):
+            if not (st["log"] and st["log"][0]["kind"] == "error" and st["log"][0]["note"] == er):
+                self._ev(st, "error", note=er)
+        self._trim_trash(st)
         st["last"] = {"ts": int(time.time()), "new": len(saved), "removed": len(removed), "pending": len(st["pending"]), "note": "；".join(notes)}
         with e.store.lock:
             e.store.save()
@@ -401,17 +452,21 @@ class Mirror:
         deleted = []
         if action == "confirm":
             q = e.quark()
-            d_ok, gone, kept = self._delete(q, task, pick, man)
+            d_ok, gone, kept = self._delete(q, task, pick, man, st["trash"])
             deleted = d_ok
+            for r in d_ok:
+                self._ev(st, "delete", r, pend[r].get("size", 0), pend[r].get("pid", ""), "你确认删除")
             for r in d_ok + gone + kept:
                 man.pop(r, None)
+            self._trim_trash(st)
         else:
             for r in pick:
+                self._ev(st, "ignore", r, pend[r].get("size", 0), pend[r].get("pid", ""), "你选择忽略：文件保留，以后不再管")
                 man.pop(r, None)
         for r in pick:
             st["missing"].pop(r, None)
         st["pending"] = [p for p in st["pending"] if p["rel"] not in pick]
-        st["pending_notified"] = ""
+        st["pending_notified"], st["pending_sig"] = "", ""
         st["last"] = {**st.get("last", {}), "pending": len(st["pending"]), "note": "" if not st["pending"] else st.get("last", {}).get("note", "")}
         with e.store.lock:
             e.store.save()
@@ -419,3 +474,48 @@ class Mirror:
             e._after_save(task, [], deleted)
             log.info("《%s》已按你的确认删除 %d 个文件", task["name"], len(deleted))
         return {"ok": True, "n": len(pick), "deleted": len(deleted)}
+
+    # ------------------------------------------------------------ 回收站（实验性）
+    def trash_hint(self):
+        """镜像同步删掉的文件还在回收站里占多少空间（按我们自己的记录估算，不去查夸克）。"""
+        n = size = 0
+        for t in self.e.store.data["tasks"]:
+            for x in (t.get("mstate") or {}).get("trash", []):
+                n, size = n + 1, size + int(x.get("size") or 0)
+        return f"镜像同步删掉的 {n} 个文件（约 {size / 1024 ** 3:.1f} GB）可能还在夸克回收站里占着空间，清空回收站能腾出来。" if n else ""
+
+    def clean_trash(self, days):
+        """把「本工具删掉、已在回收站放满 days 天」的文件从夸克回收站彻底清掉。只动我们自己记过的文件（按 fid 对上），别的一概不碰。
+        -> 清掉的个数"""
+        cut = time.time() - days * 86400
+        olds = {}
+        for t in self.e.store.data["tasks"]:
+            for x in (t.get("mstate") or {}).get("trash", []):
+                if x.get("ts", 0) <= cut:
+                    olds[x["fid"]] = x
+        if not olds:
+            return 0
+        q = self.e.quark()
+        records, seen, page, total = {}, 0, 1, 1
+        while page <= 20 and seen < total:
+            items, total = q.recycle_list(page)
+            if not items:
+                break
+            for it in items:
+                if it.get("fid") in olds and (it.get("record_id") or it.get("id")):
+                    records[it["fid"]] = it.get("record_id") or it.get("id")
+            seen, page = seen + len(items), page + 1
+        full = seen >= total            # 整个回收站都翻完了，没找到的就是已经被清掉 / 恢复了
+        ids = list(records.values())
+        for i in range(0, len(ids), 50):
+            q.recycle_remove(ids[i:i + 50])
+        drop = set(records) | (set(olds) - set(records) if full else set())
+        with self.e.store.lock:
+            for t in self.e.store.data["tasks"]:
+                st = t.get("mstate")
+                if st and st.get("trash"):
+                    st["trash"] = [x for x in st["trash"] if x["fid"] not in drop]
+            self.e.store.save()
+        if ids:
+            log.info("已从夸克回收站清掉 %d 个镜像同步删除的文件", len(ids))
+        return len(ids)

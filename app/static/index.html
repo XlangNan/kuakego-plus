@@ -544,6 +544,9 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <label class="l" style="margin-top:12px">转存后联动</label>
     <select id="m-after"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛（默认）</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发（工具、软件、资料等不是影视的文件夹）</option></select>
     <div class="hint">转存的是工具、软件、资料这类不是影视的文件时，选「都不触发」，就不会白白触发 SmartStrm 和媒体库刷新。钉钉通知不受影响。</div>
+    <label class="l" style="margin-top:12px">分类标签（可选，用来在列表里分组筛选）</label>
+    <input type="text" id="m-cat" list="cat-list" maxlength="12" placeholder="影视 / 工具 / 资料 / 软件 / 音乐，也可以自己写">
+    <datalist id="cat-list"><option value="影视"><option value="工具"><option value="资料"><option value="软件"><option value="音乐"></datalist>
     <label class="chk"><input type="checkbox" id="m-mirror"> 🔄 镜像同步：分享里新增的我这边也新增，<b>分享里删掉的我这边也删掉</b></label>
     <div class="hint" id="m-mirror-h" style="display:none">开启后，分享里的文件夹和文件<b>原样复制</b>到上面的目录（不重命名、不过滤、不剥外层文件夹），并一直和它保持一致。默认是<b>预览模式</b>：只会列出「将要删除」的文件，不会真删；确认没问题后，到「编辑」里取消预览模式。只有本任务转存进来的文件会被管理，目录里你自己的文件不会被碰。</div>
     <details><summary>高级选项（过滤规则 / 目录结构）</summary>
@@ -565,6 +568,7 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
   </div>
   <div class="card">
     <h2>📡 手动链接列表 <small>（每 30 秒自动刷新）</small></h2>
+    <div id="m-tools"></div>
     <div class="tbl" id="m-list"><div class="empty">加载中…</div></div>
   </div>
 </section>
@@ -636,6 +640,7 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
   <button class="bt" data-v="media">📺 媒体库联动</button>
   <button class="bt" data-v="proxy">🌐 网络代理</button>
   <button class="bt" data-v="auto">⚙️ 自动化与备份</button>
+  <button class="bt" data-v="health">🩺 健康状态</button>
 </div>
 <section class="view" id="v-notify">
   <div class="card">
@@ -656,6 +661,17 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
   </div>
 </section>
 
+<!-- ========== 健康状态 ========== -->
+<section class="view" id="v-health">
+  <div class="card">
+    <h2>🩺 健康状态 <small id="hl-ver"></small></h2>
+    <div class="hint" style="margin:0 0 10px">一次检查所有联动的连接情况。钉钉、SmartStrm 只看配置和端口是否通，<b>不会真的发消息或触发任务</b>。</div>
+    <div class="actions" style="margin-top:0"><button class="btn pri" id="hl-go">重新检测</button></div>
+    <div id="hl-sum" class="sub" style="margin:10px 0"></div>
+    <div id="hl-body"><div class="empty">加载中…</div></div>
+  </div>
+</section>
+
 <!-- ========== 自动化与备份 ========== -->
 <section class="view" id="v-auto">
   <div class="card">
@@ -666,8 +682,12 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <div class="row"><div class="grow"><label class="l">失效链接保留几天后自动清理（0 = 不自动清理）</label><input type="number" id="au-purge" min="0" max="365"></div></div>
     <label class="chk"><input type="checkbox" id="au-digest"> 📰 每天发送追剧日报到钉钉（今天入库 / 今天播出 / 缺集 / 异常）</label>
     <div class="row"><div class="grow"><label class="l">日报发送时间（几点之后发，0-23）</label><input type="number" id="au-hour" min="0" max="23"></div></div>
+    <div class="row"><div class="grow"><label class="l">🗑 镜像同步删掉的文件，在夸克回收站放几天后清掉（0 = 不清理，实验性）</label><input type="number" id="au-trash" min="0" max="365"></div></div>
+    <div class="hint" id="au-trash-h"></div>
+    <label class="chk"><input type="checkbox" id="au-bk"> 💾 每天自动备份一份配置</label>
+    <div class="row"><div class="grow"><label class="l">自动备份保留几份（1-60）</label><input type="number" id="au-bkn" min="1" max="60"></div></div>
     <div class="actions"><button class="btn pri" data-save="auto">保存</button><button class="btn" id="au-digest-now">立即发一份日报</button>
-      <button class="btn" id="au-purge-now">立即清理失效链接</button></div>
+      <button class="btn" id="au-purge-now">立即清理失效链接</button><button class="btn" id="au-trash-now">立即清理回收站</button></div>
     <div class="hint" id="auto-msg">日报和通知都走「钉钉通知」里配置的机器人；洗版提醒在每个订阅的「分享链接」页单独开启。</div>
   </div>
   <div class="card">
@@ -676,6 +696,10 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <div class="actions"><a class="btn pri" href="/api/backup" download>⬇ 导出备份</a>
       <button class="btn" id="bk-restore">⬆ 导入备份…</button><input type="file" id="bk-file" accept=".json,application/json" style="display:none"></div>
     <div class="hint" id="bk-msg"></div>
+    <h3 style="margin:16px 0 6px;font-size:14px">🕘 自动备份记录</h3>
+    <div class="hint" style="margin:0 0 8px">每天自动留一份，只保留最近几份；恢复前也会自动留一份，万一恢复错了还能退回来。</div>
+    <div id="bk-list"><div class="empty">加载中…</div></div>
+    <div class="actions"><button class="btn" id="bk-now">立即备份一份</button></div>
   </div>
 </section>
 
@@ -907,7 +931,7 @@ const PAGE_HEAD = {
   account: ['账号登录', '登录夸克账号后才能转存文件'],
   logs: ['运行日志', '最近的运行记录，出错时先看这里'],
 };
-const INT_VIEWS = ['notify', 'smartstrm', 'media', 'tmdb', 'pansou', 'proxy', 'auto'];
+const INT_VIEWS = ['notify', 'smartstrm', 'media', 'tmdb', 'pansou', 'proxy', 'auto', 'health'];
 const VIEW_ALIAS = {dingtalk: 'notify', emby: 'media', fnmedia: 'media'};   // 旧的页面名（书签 / 链接）
 let lastInt = 'notify';
 function go(v) {
@@ -1142,10 +1166,12 @@ function stTag(t) {
   const [txt, cls] = ST[t.status] || ST.ok; return `<span class="tag ${cls}">${txt}</span>`;
 }
 const shortUrl = u => u.replace(/^https?:\/\//, '').replace(/\?pwd=\w+/, '');
+const TOOL_CATS = ['工具', '资料', '软件', '音乐'];     // 这些分类不是影视，新建时默认不触发媒体库联动
 const nextIn = t => {
   if (!t.enabled || !t.next_run) return '';
   const m = Math.round((t.next_run * 1000 - Date.now()) / 60000);
-  return m > 0 ? `下次约 ${m} 分钟后` : '即将扫描';
+  const w = m > 0 ? `下次约 ${m} 分钟后` : '即将扫描';
+  return t.fail_streak >= 2 && t.backoff > 1 ? `${w} · 连续失败 ${t.fail_streak} 次，间隔已拉长到 ×${t.backoff}` : w;
 };
 
 const parseHint = debounce(guard(async () => {
@@ -1156,6 +1182,7 @@ const parseHint = debounce(guard(async () => {
   h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
 }), 300);
 $('#m-links').oninput = parseHint;
+$('#m-cat').oninput = () => { if (TOOL_CATS.includes($('#m-cat').value.trim()) && $('#m-after').value === 'all') $('#m-after').value = 'none'; };
 $('#m-mirror').onchange = () => { const on = $('#m-mirror').checked; $('#m-mirror-h').style.display = on ? '' : 'none'; if (on) $('#m-existing').checked = true; $('#m-existing').disabled = on; };
 $('#m-q-slot').innerHTML = qualityBox('m-q'); loadRecent().then(() => mountRecent($('#m-recent'), $('#m-path'))); bindQuality($('#m-q'));
 $('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
@@ -1171,7 +1198,7 @@ $('#m-add').onclick = guard(async () => {
   try {
     const mirror = $('#m-mirror').checked, existing = mirror || $('#m-existing').checked;
     await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
-      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')), after: $('#m-after').value,
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')), after: $('#m-after').value, category: $('#m-cat').value,
       ...(mirror ? {mirror: {enabled: true, dry_run: true}} : {})});
     toast(mirror ? '已添加，正在后台同步（预览模式：不会真删）' : existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
     $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
@@ -1179,14 +1206,26 @@ $('#m-add').onclick = guard(async () => {
   } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
 });
 
+const mSel = new Set(); let mCat = null;      // 批量选中的任务 / 当前分类筛选（null=全部）
 async function loadMonitors() {
-  const {tasks} = await api('/tasks?kind=monitor');
+  const {tasks: all} = await api('/tasks?kind=monitor');
   const box = $('#m-list');
-  if (!tasks.length) { box.innerHTML = '<div class="empty">还没有监控项</div>'; return; }
-  box.innerHTML = `<table><thead><tr><th>名称 / 链接</th><th>转存目录</th><th>状态</th><th>上次扫描</th><th>最近结果</th><th>操作</th></tr></thead><tbody>${
+  if (!all.length) { box.innerHTML = '<div class="empty">还没有监控项</div>'; $('#m-tools').innerHTML = ''; return; }
+  [...mSel].forEach(id => { if (!all.some(t => t.id === id)) mSel.delete(id); });
+  const cats = [...new Set(all.map(t => t.category || ''))].sort();
+  if (mCat !== null && !cats.includes(mCat)) mCat = null;
+  const tasks = mCat === null ? all : all.filter(t => (t.category || '') === mCat);
+  $('#m-tools').innerHTML = `${cats.length > 1 ? `<div class="chips" style="margin:0 0 8px"><span class="chip ${mCat === null ? 'on' : ''}" data-c="">全部 ${all.length}</span>${
+      cats.map(c => `<span class="chip ${mCat === c ? 'on' : ''}" data-c="${esc(c)}" data-has="1">${esc(c || '未分类')} ${all.filter(t => (t.category || '') === c).length}</span>`).join('')}</div>` : ''}
+    <div class="actions" style="margin:0 0 8px"><label class="chk" style="margin:0"><input type="checkbox" id="mb-all" ${tasks.length && tasks.every(t => mSel.has(t.id)) ? 'checked' : ''}> 全选当前列表</label>
+      <button class="btn sm pri" id="mb-go" ${mSel.size ? '' : 'disabled'}>批量修改（${mSel.size}）</button></div>`;
+  $$('#m-tools .chip').forEach(c => c.onclick = () => { mCat = c.dataset.has ? c.dataset.c : null; loadMonitors(); });
+  $('#mb-all').onchange = e => { tasks.forEach(t => e.target.checked ? mSel.add(t.id) : mSel.delete(t.id)); loadMonitors(); };
+  $('#mb-go').onclick = () => batchEdit([...mSel], all, loadMonitors);
+  box.innerHTML = `<table><thead><tr><th style="width:28px"></th><th>名称 / 链接</th><th>转存目录</th><th>状态</th><th>上次扫描</th><th>最近结果</th><th>操作</th></tr></thead><tbody>${
     tasks.map(t => {
       const dead = t.links.filter(l => l.ban).length;
-      return `<tr><td><div class="nm">${esc(t.name)}</div>
+      return `<tr><td><input type="checkbox" class="mb-c" data-id="${t.id}" ${mSel.has(t.id) ? 'checked' : ''}></td><td><div class="nm">${esc(t.name)}${t.category ? ` <span class="tag mute">${esc(t.category)}</span>` : ''}</div>
         <div class="sub">${t.links.slice(0, 2).map(l => esc(shortUrl(l.url))).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
         ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}${mirrorLine(t)}</td>
         <td class="sub">${esc(t.savepath)}</td><td>${stTag(t)}<div class="sub">${esc(nextIn(t))}</div></td>
@@ -1199,7 +1238,36 @@ async function loadMonitors() {
           <button class="btn sm" data-a="toggle" data-id="${t.id}">${t.enabled ? '暂停' : '恢复'}</button>
           <button class="btn sm danger" data-a="del" data-id="${t.id}">删除</button></div></td></tr>`;
     }).join('')}</tbody></table>`;
+  $$('.mb-c', box).forEach(c => c.onchange = () => { c.checked ? mSel.add(c.dataset.id) : mSel.delete(c.dataset.id); $('#mb-go').disabled = !mSel.size; $('#mb-go').textContent = `批量修改（${mSel.size}）`; });
   bindTaskOps(box, tasks, loadMonitors);
+}
+/* ---------- 批量修改 ---------- */
+function batchEdit(ids, all, reload) {
+  const hasMir = all.some(t => ids.includes(t.id) && t.mirror && t.mirror.enabled);
+  const m = modal(`<h3>批量修改（${ids.length} 个任务）</h3>
+    <div class="sub" style="margin-bottom:10px">只改下面<b>选了「改」</b>的项目，其它保持原样。转存目录、分享链接等不在批量修改范围内。</div>
+    <div class="grid2">
+      <div><label class="l">扫描间隔（分钟，最低 60）</label><div class="row"><input type="checkbox" id="bm-i-on"><input type="number" id="bm-i" min="60" value="60"></div></div>
+      <div><label class="l">分类标签</label><div class="row"><input type="checkbox" id="bm-c-on"><input type="text" id="bm-c" list="cat-list" maxlength="12" placeholder="留空 = 清除分类"></div></div>
+      <div style="grid-column:1/-1"><label class="l">转存后联动</label><div class="row"><input type="checkbox" id="bm-a-on"><select id="bm-a"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发</option></select></div></div>
+      <div><label class="l">启用 / 暂停</label><div class="row"><input type="checkbox" id="bm-e-on"><select id="bm-e"><option value="1">全部恢复</option><option value="0">全部暂停</option></select></div></div>
+      ${hasMir ? `<div><label class="l">镜像同步的预览模式（只对已开镜像同步的任务生效）</label><div class="row"><input type="checkbox" id="bm-d-on"><select id="bm-d"><option value="1">开启预览（不真删）</option><option value="0">关闭预览（会真删）</option></select></div></div>` : ''}
+    </div>
+    <div class="actions"><button class="btn pri" id="bm-ok">应用到 ${ids.length} 个任务</button><button class="btn" id="bm-no">取消</button></div>`);
+  $('#bm-no', m).onclick = () => m.remove();
+  $('#bm-ok', m).onclick = guard(async () => {
+    const ch = {};
+    if ($('#bm-i-on', m).checked) ch.interval = +$('#bm-i', m).value;
+    if ($('#bm-c-on', m).checked) ch.category = $('#bm-c', m).value;
+    if ($('#bm-a-on', m).checked) ch.after = $('#bm-a', m).value;
+    if ($('#bm-e-on', m).checked) ch.enabled = $('#bm-e', m).value === '1';
+    if ($('#bm-d-on', m)?.checked) ch.mirror = {dry_run: $('#bm-d', m).value === '1'};
+    if (!Object.keys(ch).length) return toast('先勾选要修改的项目', 'err');
+    if (ch.mirror && !ch.mirror.dry_run && !confirm('关闭预览后，已开镜像同步的任务会真的删除「分享里已经没有」的文件（进回收站）。确定吗？')) return;
+    const r = await api('/tasks/batch-update', 'POST', {ids, changes: ch});
+    toast(r.failed.length ? `已修改 ${r.updated} 个，${r.failed.length} 个失败：${r.failed.map(f => f.name + '（' + f.error + '）').join('；')}` : `已修改 ${r.updated} 个任务`, r.failed.length ? 'err' : 'ok');
+    m.remove(); mSel.clear(); reload();
+  });
 }
 function mirrorLine(t) {
   const af = t.after === 'none' ? '<div class="sub">⏸ 转存后不触发 SmartStrm / 媒体库刷新</div>' : t.after === 'no_media' ? '<div class="sub">⏸ 转存后不刷新媒体库</div>' : '';
@@ -1207,13 +1275,15 @@ function mirrorLine(t) {
   return af + `<div class="sub">🔄 镜像同步 · 已管理 ${mi.managed} 个${t.mirror.dry_run ? ' · <b>预览模式</b>（不真删）' : ''}</div>` +
     (mi.hold ? `<div class="sub" style="color:var(--warn)">⚠ ${esc(mi.hold)} <button class="btn xs" data-a="mgo" data-id="${t.id}">继续</button></div>` : '') +
     (mi.pending_n ? `<div class="sub" style="color:var(--warn)">⚠ ${mi.pending_n} 个文件待删除 <button class="btn xs" data-a="mpend" data-id="${t.id}">查看并确认</button></div>` : '') +
-    (mi.last && mi.last.note ? `<div class="sub">${esc(mi.last.note)}</div>` : '');
+    (mi.last && mi.last.note ? `<div class="sub">${esc(mi.last.note)}</div>` : '') +
+    `<div class="sub"><a data-a="mlog" data-id="${t.id}" style="cursor:pointer">📜 同步记录</a></div>`;
 }
 function bindTaskOps(box, tasks, reload) {
   $$('[data-a]', box).forEach(b => b.onclick = guard(async () => {
     const id = b.dataset.id, t = tasks.find(x => x.id === id);
     if (b.dataset.a === 'mgo') { await api(`/tasks/${id}/mirror/resolve`, 'POST', {action: 'go'}); toast('已放行，下次扫描开始同步（也可以点「立即扫描」）', 'ok'); return reload(); }
     if (b.dataset.a === 'mpend') return mirrorPending(t, reload);
+    if (b.dataset.a === 'mlog') return mirrorLog(t);
     if (b.dataset.a === 'preview' && t.mirror && t.mirror.enabled) return mirrorPreview(t);
     if (b.dataset.a === 'run') { await api(`/tasks/${id}/run`, 'POST'); toast('已开始扫描，详见运行日志', 'ok'); setTimeout(reload, 800); }
     else if (b.dataset.a === 'toggle') { await api(`/tasks/${id}/toggle`, 'POST'); reload(); }
@@ -1261,6 +1331,7 @@ function editTask(t, reload) {
     ${t.kind === 'monitor' ? `<label class="l" style="margin-top:12px">转存后联动</label>
       <select id="ed-after"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛（默认）</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发（工具、软件、资料等不是影视的文件夹）</option></select>
       <div class="hint">转存的是工具、软件、资料等不是影视的文件时，选「都不触发」。钉钉通知不受影响。</div>` : ''}
+    ${t.kind === 'monitor' ? `<label class="l" style="margin-top:12px">分类标签（可选）</label><input type="text" id="ed-cat" list="cat-list" maxlength="12" value="${esc(t.category || '')}">` : ''}
     ${t.kind === 'monitor' ? `<div class="card" style="margin:14px 0 0;padding:12px 14px;background:var(--bg);border:0">
       <label class="chk" style="margin-top:0"><input type="checkbox" id="ed-mir" ${t.mirror && t.mirror.enabled ? 'checked' : ''}> 🔄 <b>镜像同步</b>：分享里新增的我这边也新增，分享里删掉的我这边也删掉</label>
       <div id="ed-mirbox" style="display:${t.mirror && t.mirror.enabled ? '' : 'none'}">
@@ -1292,6 +1363,7 @@ function editTask(t, reload) {
       emby_series_id: $('#ed-sid', m).value, keep_tree: $('#ed-tree', m).checked, emby_layout: $('#ed-layout', m).checked, strict_season: $('#ed-strict', m).checked, no_cam: $('#ed-nocam', m).checked, ...readQuality($('#ed-q', m)),
       skip_when_complete: $('#ed-skip', m).checked,
       ...($('#ed-after', m) ? {after: $('#ed-after', m).value} : {}),
+      ...($('#ed-cat', m) ? {category: $('#ed-cat', m).value} : {}),
       ...($('#ed-mir', m) ? {mirror: {enabled: $('#ed-mir', m).checked, dry_run: $('#ed-mir-dry', m).checked, replace: $('#ed-mir-rep', m).checked,
         grace: +$('#ed-mir-grace', m).value || 2, max_delete: +$('#ed-mir-max', m).value || 10, max_pct: +$('#ed-mir-pct', m).value || 30}} : {}),
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
@@ -1299,7 +1371,22 @@ function editTask(t, reload) {
   });
 }
 
-/* ---------- 镜像同步：试运行 / 待确认删除 ---------- */
+/* ---------- 镜像同步：试运行 / 待确认删除 / 同步记录 ---------- */
+const srcTag = n => n ? `<span class="tag mute">链接 ${n}</span>` : '';
+async function mirrorLog(t) {
+  const m = modal(`<h3>同步记录《${esc(t.name)}》</h3><div class="empty">加载中…</div>`, 'wide');
+  try {
+    const r = await api(`/tasks/${t.id}/mirror/log`);
+    const K = {save: ['转存', 'ok'], replace: ['替换', 'info'], delete: ['删除', 'err'], adopt: ['纳入管理', 'mute'], pending: ['待确认', 'warn'], hold: ['暂停', 'warn'], error: ['出错', 'err'], ignore: ['忽略', 'mute']};
+    const fmt = ts => { const d = new Date(ts * 1000), z = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+    $('.modal', m).innerHTML = `<button class="x">×</button><h3>同步记录《${esc(t.name)}》<span class="sub" style="font-weight:400"> 已管理 ${r.managed} 个 · 最近 ${r.items.length} 条</span></h3>
+      ${r.items.length ? `<div class="tbl"><table><thead><tr><th>时间</th><th>动作</th><th>文件</th><th>大小</th><th>来源</th><th>说明</th></tr></thead><tbody>${
+        r.items.map(x => { const [tx, c] = K[x.kind] || [x.kind, 'mute']; return `<tr><td class="sub">${fmt(x.ts)}</td><td><span class="tag ${c}">${tx}</span></td><td class="sub" style="color:var(--fg)">${esc(x.rel || '')}</td><td class="sub">${mbOf(x.size)}</td><td>${srcTag(x.src)}</td><td class="sub">${esc(x.note || '')}</td></tr>`; }).join('')
+      }</tbody></table></div>` : '<div class="empty">还没有记录。每次转存、删除、待确认、出错都会记在这里。</div>'}
+      <div class="actions"><button class="btn" id="ml-close">关闭</button></div>`;
+    $('.x', m).onclick = () => m.remove(); $('#ml-close', m).onclick = () => m.remove();
+  } catch (e) { $('.modal', m).innerHTML = `<button class="x">×</button><h3>读取失败</h3><div class="empty" style="color:var(--err)">${esc(e.message)}</div>`; $('.x', m).onclick = () => m.remove(); }
+}
 const mbOf = n => !n ? '' : n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : (n / 1048576).toFixed(1) + ' MB';
 async function mirrorPreview(t) {
   const m = modal(`<h3>试运行《${esc(t.name)}》</h3><div class="empty">正在读取分享的完整目录并对账…</div>`, 'wide');
@@ -1311,8 +1398,8 @@ async function mirrorPreview(t) {
       ${r.hold ? `<div class="banner" style="margin-bottom:10px">⚠ ${esc(r.hold)}</div>` : ''}
       ${r.errors.length ? `<div class="banner" style="margin-bottom:10px">⚠ 有链接读取失败（${esc(r.errors.join('；'))}）。这种情况下<b>一个文件都不会删</b>。</div>` : ''}
       <div class="sub" style="margin-bottom:8px">已管理 <b>${r.managed}</b> 个 · 将转存 <b>${cnt('save')}</b> · 替换 <b>${cnt('replace')}</b> · 将删除 <b>${cnt('delete')}</b>（还要看连续次数和批量保护）</div>
-      ${r.rows.length ? `<div class="tbl"><table><thead><tr><th>文件（相对路径）</th><th>大小</th><th>结果</th><th>原因</th></tr></thead><tbody>${
-        r.rows.slice(0, 300).map(x => { const [tx, c] = tagOf[x.action] || ['', 'mute']; return `<tr><td class="sub" style="color:var(--fg)">${esc(x.rel)}</td><td class="sub">${mbOf(x.size)}</td><td><span class="tag ${c}">${tx}</span></td><td class="sub">${esc(x.why)}</td></tr>`; }).join('')
+      ${r.rows.length ? `<div class="tbl"><table><thead><tr><th>文件（相对路径）</th><th>来源</th><th>大小</th><th>结果</th><th>原因</th></tr></thead><tbody>${
+        r.rows.slice(0, 300).map(x => { const [tx, c] = tagOf[x.action] || ['', 'mute']; return `<tr><td class="sub" style="color:var(--fg)">${esc(x.rel)}</td><td>${srcTag(x.src)}</td><td class="sub">${mbOf(x.size)}</td><td><span class="tag ${c}">${tx}</span></td><td class="sub">${esc(x.why)}</td></tr>`; }).join('')
       }</tbody></table></div>${r.rows.length > 300 ? `<div class="sub">… 只显示前 300 条，共 ${r.rows.length} 条</div>` : ''}` : '<div class="empty">已经和分享一致，没有要做的事</div>'}
       <div class="actions"><button class="btn" id="pv-close">关闭</button></div>`;
     $('.x', m).onclick = () => m.remove(); $('#pv-close', m).onclick = () => m.remove();
@@ -1325,8 +1412,8 @@ function mirrorPending(t, reload) {
   const rows = t.mirror_info.pending;
   const m = modal(`<h3>待删除《${esc(t.name)}》</h3>
     <div class="sub" style="margin-bottom:8px">这些文件已经不在分享里了。<b>确认删除</b>：从我的网盘删掉（进回收站）；<b>忽略</b>：文件保留，并且以后不再管它。</div>
-    <div class="tbl"><table><thead><tr><th style="width:30px"><input type="checkbox" id="mp-all" checked></th><th>文件</th><th>大小</th><th>为什么没自动删</th></tr></thead><tbody>${
-      rows.map(r => `<tr><td><input type="checkbox" class="mp-c" data-r="${esc(r.rel)}" checked></td><td class="sub" style="color:var(--fg)">${esc(r.rel)}</td><td class="sub">${mbOf(r.size)}</td><td class="sub">${esc(r.reason)}</td></tr>`).join('')
+    <div class="tbl"><table><thead><tr><th style="width:30px"><input type="checkbox" id="mp-all" checked></th><th>文件</th><th>来源</th><th>大小</th><th>为什么没自动删</th></tr></thead><tbody>${
+      rows.map(r => `<tr><td><input type="checkbox" class="mp-c" data-r="${esc(r.rel)}" checked></td><td class="sub" style="color:var(--fg)">${esc(r.rel)}</td><td>${srcTag(r.src)}</td><td class="sub">${mbOf(r.size)}</td><td class="sub">${esc(r.reason)}</td></tr>`).join('')
     }</tbody></table></div>
     ${t.mirror_info.pending_n > rows.length ? `<div class="sub">只显示前 ${rows.length} 个，共 ${t.mirror_info.pending_n} 个（「全部」会处理所有）</div>` : ''}
     <div class="actions"><button class="btn danger" id="mp-ok">确认删除选中的</button><button class="btn" id="mp-ig">忽略选中的</button><button class="btn" id="mp-no">关闭</button></div>`, 'wide');
@@ -2133,7 +2220,7 @@ const FORMS = {
   smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp', name: '#x-name', target: '#x-target', path_prefix: '#x-prefix'},
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
   pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
-  auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour'},
+  auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour', trash_clean_days: '#au-trash', backup_auto: '#au-bk', backup_keep: '#au-bkn'},
   proxy: {enabled: '#px-enabled', url: '#px-url', username: '#px-user', password: '#px-pass', use_tmdb: '#px-tmdb', use_platforms: '#px-pf', fallback: '#px-fb'},
   fnmedia: {enabled: '#f-enabled', url: '#f-url', username: '#f-user', password: '#f-pass', access_code: '#f-code', only_missing: '#f-only', refresh_after_save: '#f-refresh', refresh_delay: '#f-delay'},
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
@@ -2206,6 +2293,31 @@ $$('[data-test]').forEach(b => b.onclick = async () => {
 });
 
 $('#au-digest-now').onclick = guard(async () => { await api('/maintenance/digest', 'POST'); toast('日报已发送到钉钉', 'ok'); });
+const loadTrashHint = guard(async () => { const r = await api('/trash/info'); $('#au-trash-h').textContent = r.hint || '镜像同步删掉的文件会先进夸克回收站；回收站不清空，网盘空间就不会释放。'; });
+const loadBackups = guard(async () => {
+  const r = await api('/backups'), KN = {auto: '自动', manual: '手动', pre: '恢复前'};
+  const z = n => String(n).padStart(2, '0');
+  $('#bk-list').innerHTML = r.items.length ? `<div class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>任务数</th><th>大小</th><th>操作</th></tr></thead><tbody>${r.items.map(x => { const d = new Date(x.ts * 1000);
+    return `<tr><td class="sub">${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}</td><td><span class="tag mute">${KN[x.kind] || x.kind}</span></td><td class="sub">${x.tasks}</td><td class="sub">${(x.size / 1024).toFixed(0)} KB</td>
+    <td><div class="ops"><a class="btn sm" href="/api/backups/${encodeURIComponent(x.name)}/download" download>下载</a><button class="btn sm danger" data-rs="${esc(x.name)}">恢复</button></div></td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${r.auto ? '还没有备份，每天会自动留一份' : '自动备份已关闭'}</div>`;
+  $$('#bk-list [data-rs]').forEach(b => b.onclick = guard(async () => {
+    if (!confirm('用这份备份整体替换当前配置？恢复前会自动再留一份当前配置，可以退回。')) return;
+    const x = await api(`/backups/${encodeURIComponent(b.dataset.rs)}/restore`, 'POST'); toast(`已恢复，共 ${x.tasks} 个任务`, 'ok'); loadBackups(); loadSettings('auto');
+  }));
+});
+$('#bk-now').onclick = guard(async () => { await api('/backups/now', 'POST'); toast('已备份', 'ok'); loadBackups(); });
+$('#au-trash-now').onclick = guard(async () => { const r = await api('/trash/clean', 'POST'); toast(`已从回收站清掉 ${r.cleaned} 个文件`, 'ok'); loadTrashHint(); });
+{ const _au = loaders.auto; loaders.auto = () => { _au(); loadTrashHint(); loadBackups(); }; }
+const loadHealth = guard(async () => {
+  const btn = $('#hl-go'); btn.disabled = true; btn.textContent = '检测中…'; $('#hl-body').innerHTML = '<div class="empty">正在检测…</div>';
+  try {
+    const r = await api('/health', 'POST'), IC = {ok: '🟢', fail: '🔴', off: '⚪'};
+    $('#hl-ver').textContent = r.version ? 'v' + r.version : '';
+    $('#hl-sum').innerHTML = `运行中任务 <b>${r.running ? '是' : '否'}</b> · 共 ${r.tasks} 个任务 · 最近一次出错 <b style="color:${r.errors ? 'var(--err)' : 'inherit'}">${r.errors}</b> 个${r.backoff ? ` · <span style="color:var(--warn)">${r.backoff} 个因连续失败已拉长间隔</span>` : ''}`;
+    $('#hl-body').innerHTML = `<div class="tbl"><table><tbody>${r.items.map(i => `<tr><td style="width:36px">${IC[i.state] || ''}</td><td><b>${esc(i.name)}</b></td><td class="sub" style="${i.state === 'fail' ? 'color:var(--err)' : ''}">${esc(i.msg)}</td><td class="sub">${i.state === 'off' ? '' : i.ms + ' ms'}</td></tr>`).join('')}</tbody></table></div>`;
+  } finally { btn.disabled = false; btn.textContent = '重新检测'; }
+});
+$('#hl-go').onclick = loadHealth; loaders.health = loadHealth;
 $('#au-purge-now').onclick = guard(async () => { const r = await api('/maintenance/purge-dead', 'POST'); toast(`已清理 ${r.removed} 个失效链接`, 'ok'); });
 $('#bk-restore').onclick = () => $('#bk-file').click();
 $('#bk-file').onchange = async e => {

@@ -259,3 +259,29 @@ class Quark:
         if r.get("code") != 0:
             raise QuarkError(f"删除失败: {r.get('message')}")
         self.wait_task(r["data"]["task_id"])
+
+    # ---------------- 回收站（实验性：接口写法参考社区的夸克工具，没有官方文档） ----------------
+    def recycle_list(self, page=1, size=50):
+        r = self._send(
+            "GET", f"{self.BASE_URL}/1/clouddrive/file/recycle/list",
+            params={"pr": "ucpro", "fr": "pc", "uc_param_str": "", "_page": page, "_size": size, "_fetch_total": 1},
+        )
+        if r.get("code") != 0:
+            raise QuarkError(f"读取回收站失败: {r.get('message')}")
+        return r["data"]["list"], (r.get("metadata") or {}).get("_total", 0)
+
+    def recycle_remove(self, record_ids):
+        """从回收站彻底删除（不可恢复）。record_ids 是回收站条目的 record_id，不是文件 fid。"""
+        record_ids = [i for i in record_ids if i]
+        if not record_ids:
+            return
+        r = self._send(
+            "POST", f"{self.BASE_URL}/1/clouddrive/file/recycle/remove",
+            params={"pr": "ucpro", "fr": "pc", "uc_param_str": ""},
+            json={"select_mode": 2, "record_list": record_ids},
+        )
+        if r.get("code") != 0:
+            raise QuarkError(f"清空回收站失败: {r.get('message')}")
+        tid = (r.get("data") or {}).get("task_id")
+        if tid:
+            self.wait_task(tid)

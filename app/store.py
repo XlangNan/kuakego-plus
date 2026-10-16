@@ -49,6 +49,8 @@ DEFAULTS = {
         "missing_retry": True,     # 已播出的集还缺着，缩短自动找资源的间隔
         "account_alert": True,     # Cookie 失效 / 网盘空间不足时通知
         "digest": False, "digest_hour": 20,   # 每日日报
+        "trash_clean_days": 0,     # 镜像同步删掉的文件，在夸克回收站里放几天后清掉；0=不清理（实验性）
+        "backup_auto": True, "backup_keep": 7,   # 每天自动备份一份配置，保留几份
     },
     "platforms": {"iqiyi_cookie": ""},   # 「平台」板块：爱奇艺有风控，需要登录后的 Cookie（可选）
     "library": {"scopes": []},   # 媒体库管理的范围：[{id, name, kind, lib_id, lib_name, emby_path, quark_path}]

@@ -181,6 +181,11 @@ tr:last-child td{border-bottom:0}
 .lk{display:flex;gap:6px;align-items:center;padding:4px 0;font-size:12.5px}
 .lk .n{width:18px;height:18px;border-radius:5px;background:var(--mutebg);color:var(--dim);display:grid;place-items:center;font-size:10px;flex:none}
 .lk .u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk .u.two{white-space:normal;display:flex;flex-direction:column;gap:1px}
+.lk .u.two .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk .u.two a{color:var(--pri,#3b82f6);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none}
+.lk .u.two a:hover{text-decoration:underline}
+.lk .cp{flex:none}
 .lk.dead .u{text-decoration:line-through;color:var(--faint)}
 .addlk{display:flex;gap:6px;margin-top:8px}
 .addlk textarea{min-height:34px;height:34px;padding:6px 10px;font-size:12.5px}
@@ -1314,7 +1319,7 @@ async function loadMonitors() {
     tasks.map(t => {
       const dead = t.links.filter(l => l.ban).length;
       return `<tr><td><input type="checkbox" class="mb-c" data-id="${t.id}" ${mSel.has(t.id) ? 'checked' : ''}></td><td><div class="nm">${esc(t.name)}${t.drive === 'xunlei' ? ' <span class="tag info">迅雷</span>' : ''}${t.category ? ` <span class="tag mute">${esc(t.category)}</span>` : ''}</div>
-        <div class="sub">${t.links.slice(0, 2).map(l => esc(shortUrl(l.url))).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
+        <div class="sub">${t.links.slice(0, 2).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="点击打开">${esc(shortUrl(l.url))}</a>`).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
         ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}${mirrorLine(t)}</td>
         <td class="sub">${esc(t.savepath)}</td><td>${stTag(t)}<div class="sub">${esc(nextIn(t))}</div></td>
         <td class="sub">${esc(t.last_run || '—')}</td>
@@ -2115,7 +2120,8 @@ function renderSub(m, t, tab) {
       ${up && up.items && up.items.length ? `<div class="files" style="margin-top:6px">${up.items.map(i => `<div>${({3: '4K', 2: '1080P', 1: '720P'})[i.res]}　${esc(i.title)}　<a href="${esc(i.url)}" target="_blank" rel="noopener">打开</a></div>`).join('')}</div>` : ''}
       ${t.upgrade_watch && PANSOU_ON ? '<div class="actions" style="margin-top:8px"><button class="btn xs" data-upgnow>立即检查</button></div>' : ''}</div>`;
     panel = autoBox + upBox + (t.links.length ? t.links.map((l, i) => `<div class="lk ${l.ban ? 'dead' : ''}"><span class="n">${i + 1}</span>
-        <span class="u" title="${esc((l.title ? l.title + '\n' : '') + l.url)}">${l.auto ? '🤖 ' : ''}${esc(l.auto && l.title ? l.title : shortUrl(l.url))}</span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
+        <span class="u two">${l.auto && l.title ? `<span class="tt" title="${esc(l.title)}">🤖 ${esc(l.title)}</span>` : ''}<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="点击打开：${esc(l.url)}">${esc(l.url.replace(/^https?:\/\//, ''))}</a></span>${l.ban ? `<span class="tag err" title="${esc(l.ban)}">失效：${esc(l.ban)}</span>` : ''}
+        <button class="btn xs cp" data-cp="${i}" title="复制链接">复制</button>
         <button class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn xs" data-mv="1" data-i="${i}" ${i === t.links.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="btn xs danger" data-rm="${i}">×</button></div>`).join('')
@@ -2148,6 +2154,7 @@ function renderSub(m, t, tab) {
   $$('[data-tab]', m).forEach(c => c.onclick = () => renderSub(m, subsData.find(x => x.id === t.id) || t, c.dataset.tab));
   const setLinks = guard(async urls => { await api('/tasks/' + t.id, 'PUT', {links_text: urls.join('\n')}); await reload('links'); });
   $$('[data-mv]', m).forEach(x => x.onclick = () => { const u = t.links.map(l => l.url), i = +x.dataset.i, j = i + +x.dataset.mv; [u[i], u[j]] = [u[j], u[i]]; setLinks(u); });
+  $$('[data-cp]', m).forEach(x => x.onclick = async () => { const u = t.links[+x.dataset.cp].url; try { await navigator.clipboard.writeText(u); toast('已复制', 'ok'); } catch (_) { prompt('复制这个链接：', u); } });
   $$('[data-rm]', m).forEach(x => x.onclick = () => { const u = t.links.map(l => l.url); u.splice(+x.dataset.rm, 1); setLinks(u); });
   $('[data-add]', m)?.addEventListener('click', guard(async () => {
     const txt = $('#sd-add', m).value; if (!txt.trim()) return;

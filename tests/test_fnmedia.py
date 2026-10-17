@@ -66,7 +66,7 @@ def test_fn_client_basics():
 class EmbyStub:
     base = "e"
     def tmdb_ids(self, kind="Series", ttl=300): return {99}
-    def find_series(self, n, t=None): return ("7", "庆余年") if n == "庆余年" else (None, None)
+    def find_series(self, n, t=None, y=None): return ("7", "庆余年") if n == "庆余年" else (None, None)
     def episodes(self, sid): return {(1, 3)}
     def refresh(self, sid=None): self.r = sid
 
@@ -234,3 +234,12 @@ def test_fn_flat_show_folder_without_season_dir():
     r = c.post("/api/library/delete", json={"scope": sc, "id": "g1", "paths": ["庆余年.S01E02.mkv"]}, headers=h).get_json()
     assert not r["whole"] and f.deleted == ["e2"]
     assert q.deleted == ["/影视/剧集/国产剧/庆余年/庆余年.S01E02.mkv"]
+
+
+def test_fn_same_name_other_version_not_matched():
+    f = FnFake()
+    f.tv = [{"guid": "g9", "title": "家", "type": "TV", "trim_id": "tm111", "release_date": "2001-05-01"}]
+    f._search = lambda q, ty: f.tv if q == "家" else []
+    assert f.find_series("家", 222, 2024) == (None, None)
+    assert f.find_series("家", None, 2024) == (None, None)
+    assert f.find_series("家", 111, 2001)[0] == "g9"

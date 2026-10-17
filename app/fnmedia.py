@@ -197,7 +197,22 @@ class FnMedia:
         res = self.call("/search/list", params={"q": q}) or []
         return [i for i in res if i.get("type") == ty]
 
-    def find_series(self, name, tmdb_id=None):
+    @classmethod
+    def _version_ok(cls, it, tmdb_id, year):
+        """同名的剧可能有好几个版本：候选的 TMDB ID 不同、或年份差超过 1 年，就不是同一部。"""
+        t = cls.tmdb_of(it)
+        if tmdb_id and t and t != int(tmdb_id):
+            return False
+        y = ""
+        for k in ("release_date", "air_date", "first_air_date", "year"):
+            if it.get(k):
+                y = str(it[k])[:4]
+                break
+        if year and y.isdigit() and abs(int(y) - int(year)) > 1:
+            return False
+        return True
+
+    def find_series(self, name, tmdb_id=None, year=None):
         if tmdb_id:
             try:
                 for it in self._list(None, ("TV",)):
@@ -211,7 +226,7 @@ class FnMedia:
         for q in dict.fromkeys([name, stripped]):
             if not q:
                 continue
-            items = self._search(q, "TV")
+            items = [it for it in self._search(q, "TV") if self._version_ok(it, tmdb_id, year)]
             for it in items:
                 if it.get("title") in (name, q):
                     return it["guid"], it["title"]
@@ -371,8 +386,8 @@ class Multi:
             raise err
         return ("|".join(toks) or None), name
 
-    def find_series(self, name, tmdb_id=None):
-        return self._find("find_series", name, tmdb_id)
+    def find_series(self, name, tmdb_id=None, year=None):
+        return self._find("find_series", name, tmdb_id, year)
 
     def find_movie(self, name, tmdb_id=None, year=None):
         return self._find("find_movie", name, tmdb_id, year)

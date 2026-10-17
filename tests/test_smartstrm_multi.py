@@ -8,7 +8,7 @@ from tests.test_layout_aliases import make_client
 
 class Cli:
     def __init__(self): self.refreshed = []
-    def find_series(self, n, t=None): return None, None
+    def find_series(self, n, t=None, y=None): return None, None
     def find_movie(self, n, t=None, y=None): return None, None
     def refresh(self, sid=None): self.refreshed.append(sid)
 

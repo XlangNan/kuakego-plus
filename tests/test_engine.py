@@ -84,7 +84,7 @@ class FakeEmby:
     def __init__(self, have):
         self.have = have
 
-    def find_series(self, name, tmdb_id=None):
+    def find_series(self, name, tmdb_id=None, year=None):
         return "sid", name
 
     def episodes(self, sid):

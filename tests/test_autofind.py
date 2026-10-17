@@ -239,3 +239,17 @@ def test_name_with_season_suffix_still_matches_titles():
     eng.auto_find(t["id"])
     assert ps.calls == ["庆余年", "庆余年 第2季"]
     assert "good" in ids(t) and t["find"]["seen"]["noseason"]["verdict"] == "reject"    # 「庆余年 全集 国语」被检测过（而不是被当成无关）
+
+
+def test_year_filter_rejects_other_version_of_same_name():
+    ok = E.Engine._year_ok
+    t1 = {"year": 2001, "season": 1}
+    assert not ok(t1, "倚天屠龙记 (2003) 4K WEB-DL H265 AAC 2.0")       # 2003 版不是 2001 版
+    assert ok(t1, "倚天屠龙记 (2001) 4K 全集") and ok(t1, "倚天屠龙记 2002 版") and ok(t1, "倚天屠龙记 全集 4K")   # ±1 年、没写年份：放行
+    assert ok({"year": 0, "season": 1}, "倚天屠龙记 (2003)")           # 任务不知道年份：不排除
+    t2 = {"year": 2022, "season": 2}
+    assert ok(t2, "某剧 第二季 (2024)") and not ok(t2, "某剧 (2001)")    # 第 2 季以后：只排除比首播年还早的
+    store, eng, fq, ps, calls, t = setup(items=[item("a", "庆余年 第二季 (2003) 全集"), item("b", "庆余年 第二季 (2019) 全集")],
+                                         shares={"a": {"files": eps(2, range(1, 17))}, "b": {"files": eps(2, range(1, 17))}}, year=2019)
+    eng.auto_find(t["id"], force=True)
+    assert ids(t) == ["b"], ids(t)

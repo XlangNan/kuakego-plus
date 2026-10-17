@@ -516,7 +516,7 @@ class Engine:
         sid = task.get("emby_series_id")
         if sid:
             return sid
-        sid, matched = cli.find_series(task.get("emby_name") or task["name"], task.get("tmdb_id") or None)
+        sid, matched = cli.find_series(task.get("emby_name") or task["name"], task.get("tmdb_id") or None, task.get("year") or None)
         task["emby_match"] = matched or ""
         return sid
 
@@ -1105,6 +1105,18 @@ class Engine:
                 note("🔁", f"用「{kws[0]}」只搜到 {fresh} 个对得上的，换别名「{groups[gi + 1][0]}」再搜")
         return results
 
+    @staticmethod
+    def _year_ok(task, title):
+        """标题里写的年份和这部剧对得上吗？同名的剧常有好几个版本（2001 版、2003 版…）。
+        标题没写年份 / 任务不知道年份：不排除。第 1 季：年份要在 ±1 年内；第 2 季以后：只排除比首播年还早的。"""
+        year = int(task.get("year") or 0)
+        years = {int(y) for y in re.findall(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)", title or "")}
+        if not year or not years:
+            return True
+        if int(task.get("season") or 1) <= 1:
+            return bool(years & {year - 1, year, year + 1})
+        return any(y >= year - 1 for y in years)
+
     def _auto_find(self, task, ps):
         if task.get("media") == "movie":
             return self._auto_find_movie(task, ps)
@@ -1138,7 +1150,7 @@ class Engine:
         groups = [[n] + ([f"{n} 第{S}季"] if S > 1 and gi < 2 else []) for gi, (n, _) in enumerate(names)]
         known = {l["pwd_id"] for l in task["links"]}
         results = self._search_by_names(ps, names, groups, known, note)
-        skip = {"已有": 0, "名字对不上": 0, "标题写的是别的季": 0, "标题标的是别的版本": 0, "最近看过": 0}
+        skip = {"已有": 0, "名字对不上": 0, "标题写的是别的季": 0, "标题标的是别的版本": 0, "年份对不上": 0, "最近看过": 0}
         cands = []
         for it in results:
             if it["pwd_id"] in known:
@@ -1150,6 +1162,9 @@ class Engine:
                 continue
             if self._other_version(task, names, it["title"]):
                 skip["标题标的是别的版本"] += 1   # 例如「我的大叔(中国版)」不是韩剧原版
+                continue
+            if not self._year_ok(task, it["title"]):
+                skip["年份对不上"] += 1            # 例如要 2001 版，标题写的是 2003 版
                 continue
             ment = title_seasons(it["title"], hit)
             if ment and S not in ment:

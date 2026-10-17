@@ -29,8 +29,20 @@ class Emby:
         info = self._req("GET", "/System/Info")
         return f"{info.get('ServerName', 'Emby')} {info.get('Version', '')}".strip()
 
-    def find_series(self, name, tmdb_id=None):
-        """返回 (id, 显示名)；优先按 TMDB ID 精确匹配，其次按剧名。"""
+    @staticmethod
+    def _version_ok(it, tmdb_id, year):
+        """同名的剧可能有好几个版本（翻拍、不同年份）。候选的 TMDB ID 和我们要的不同、或年份差超过 1 年，就不是同一部。"""
+        pv = it.get("ProviderIds") or {}
+        t = pv.get("Tmdb") or pv.get("tmdb")
+        if tmdb_id and t and str(t) != str(tmdb_id):
+            return False
+        y = it.get("ProductionYear")
+        if year and y and abs(int(y) - int(year)) > 1:
+            return False
+        return True
+
+    def find_series(self, name, tmdb_id=None, year=None):
+        """返回 (id, 显示名)；优先按 TMDB ID 精确匹配，其次按剧名。按剧名找时会核对 TMDB ID / 年份，避免把同名的另一个版本当成这部。"""
         if tmdb_id:
             try:
                 data = self._req(
@@ -51,8 +63,9 @@ class Emby:
                 continue
             items = self._req(
                 "GET", "/Items", Recursive="true", IncludeItemTypes="Series",
-                SearchTerm=q, Limit=10,
+                SearchTerm=q, Fields="ProviderIds,ProductionYear", Limit=20,
             ).get("Items", [])
+            items = [it for it in items if self._version_ok(it, tmdb_id, year)]
             for it in items:  # 名字完全一致优先
                 if it.get("Name") in (name, q):
                     return it["Id"], it["Name"]

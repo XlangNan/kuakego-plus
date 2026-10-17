@@ -97,7 +97,7 @@ def test_emby_failure_does_not_mass_resave():
 def test_emby_series_not_found_still_allows_new_show():
     store, eng = env()
     class NotFound(FakeEmby_):
-        def find_series(self, name, tmdb_id=None): return None, None
+        def find_series(self, name, tmdb_id=None, year=None): return None, None
     eng.emby = lambda: NotFound(set())
     fq, t = mk(eng, SHARE, ["aaa"])
     eng.run_task(t["id"], manual=True)
@@ -206,3 +206,23 @@ def test_icons_are_public_but_api_is_not():
     assert c.get("/favicon.png").status_code in (401, 404)
     h = {"Authorization": "Basic " + base64.b64encode(b"admin:pw").decode()}
     assert c.get("/api/overview", headers=h).get_json()["stats"]["subs"] == 0
+
+
+def test_same_name_other_version_is_not_matched():
+    """同名不同年份 / 不同 TMDB 的另一个版本，不能当成这部剧（否则会不转存或转存不完整）。"""
+    def fake(items):
+        e = Emby("http://x", "k")
+        e._req = lambda m, p, **kw: {"Items": items} if kw.get("SearchTerm") else {"Items": []}
+        return e
+    old = {"Id": "1", "Name": "家", "ProductionYear": 2001, "ProviderIds": {"Tmdb": "111"}}
+    new = {"Id": "2", "Name": "家", "ProductionYear": 2024, "ProviderIds": {"Tmdb": "222"}}
+    # 要转存 2024 版：Emby 里只有 2001 版 -> 没找到
+    assert fake([old]).find_series("家", 222, 2024) == (None, None)
+    assert fake([old]).find_series("家", None, 2024) == (None, None)          # 没有 TMDB ID，只靠年份也能分开
+    # 两个版本都在：选对的那个
+    assert fake([old, new]).find_series("家", 222, 2024)[0] == "2"
+    assert fake([old, new]).find_series("家", 111, 2001)[0] == "1"
+    # 不知道年份和 TMDB ID：保持原来的行为（按名字）
+    assert fake([old]).find_series("家")[0] == "1"
+    # 候选没有 TMDB ID / 年份信息：不能因此排除
+    assert fake([{"Id": "3", "Name": "家"}]).find_series("家", 222, 2024)[0] == "3"

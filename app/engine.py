@@ -23,6 +23,7 @@ from .parser import (RES_LABEL, emby_folder_name, fmt_eps, is_video, norm_title,
                      quality_reason, quality_tags, safe_name, title_seasons,
                      season_from_text)
 from .quark import Quark, QuarkError
+from .xunlei import Xunlei, is_xunlei_url
 from .tmdb import Tmdb
 
 MIN_INTERVAL = 60        # 分钟。再低容易触发夸克风控
@@ -38,7 +39,21 @@ AUTO_MAX_ADD_MOVIE = 2   # 电影每轮最多自动添加几个（一个主用 +
 AUTO_MAX_NAMES = 5       # 一部剧 / 电影最多用几个名称（主名 + 别名）去搜；每多一个名称就多搜一轮
 AUTO_NAME_ENOUGH = 3     # 用某个名称搜到这么多个「名字对得上」的新结果，就不再换别名
 AUTO_RECHECK = {"reject": 24 * 3600, "dead": 72 * 3600, "ok": 0, "cap": 0, "added": 10 ** 9}   # 看过的候选多久后再看
-PERMANENT_ERR = re.compile(r"失效|取消|不存在|删除|违规|过期|封禁|提取码|passcode|expired", re.I)
+PERMANENT_ERR = re.compile(r"失效|取消|不存在|删除|违规|过期|封禁|提取码|passcode|expired|share_not_found|not_found|deleted|cancel|forbid|violat|invalid_pass|share_status", re.I)
+
+
+class _DriveSearch:
+    """把 PanSou 绑定到某个网盘：自动找资源里的 ps.search(kw) 就只搜这个网盘。"""
+    def __init__(self, ps, drive):
+        self._ps, self._drive = ps, drive
+
+    def search(self, kw, limit=60):
+        if self._drive == "quark":
+            return self._ps.search(kw) if limit == 60 else self._ps.search(kw, limit)
+        return self._ps.search(kw, limit, drive=self._drive)
+
+    def __getattr__(self, name):
+        return getattr(self._ps, name)
 
 
 class EmbyError(Exception):
@@ -96,6 +111,19 @@ class Engine:
             self._q.init()
         return self._q
 
+    def xunlei(self):
+        if getattr(self, "_x", None) is None:
+            self._x = Xunlei(self.store)
+        if not getattr(self._x, "_inited", False):
+            self._x.init()    # 第一次用时确认登录有效（没登录会抛出清楚的提示）
+            self._x._inited = True
+        return self._x
+
+    def client(self, drive_or_task="quark"):
+        """按网盘取客户端：传任务（看它的 drive）或 "quark" / "xunlei"。两种客户端的方法和返回格式一致。"""
+        d = drive_or_task.get("drive") if isinstance(drive_or_task, dict) else drive_or_task
+        return self.xunlei() if d == "xunlei" else self.quark()
+
     def tmdb(self):
         return Tmdb(self.store.data["tmdb"])
 
@@ -145,6 +173,13 @@ class Engine:
                     links.append({**it, "ban": "", "fails": 0, "baseline": None})
         elif existing:
             links = existing["links"]
+        drives = {l.get("drive") or ("xunlei" if is_xunlei_url(l.get("url")) else "quark") for l in links}
+        if len(drives) > 1:
+            raise ValueError("一个任务里的分享链接必须是同一个网盘的（夸克和迅雷请分开建任务）")
+        if drives:
+            drive = drives.pop()
+        else:      # 还没有链接的订阅（等自动找资源）：用选的网盘
+            drive = p.get("drive") if p.get("drive") in ("quark", "xunlei") else (existing or {}).get("drive", "quark")
 
         savepath = _norm_path(p.get("savepath", (existing or {}).get("savepath", "")))
         name = (p.get("name") or (existing or {}).get("name") or "").strip()
@@ -218,6 +253,8 @@ class Engine:
             "mirror": mirror_cfg(pick("mirror", None), (existing or {}).get("mirror")),
             "category": str(pick("category", "") or "").strip()[:12],
             "after": pick("after", "all") if pick("after", "all") in ("all", "no_media", "none") else "all",
+            "drive": drive,
+            "strm": [str(k) for k in pick("strm", None)] if isinstance(pick("strm", None), list) else None,   # 转存后要触发的 SmartStrm 任务（None=沿用旧规则：按目录前缀匹配）
         }
         if kind != "monitor":
             fields["mirror"]["enabled"] = False      # 镜像同步只用于「分享监控」
@@ -426,7 +463,7 @@ class Engine:
         return out
 
     def snapshot_baseline(self, task):
-        q = self.quark()
+        q = self.client(task)
         for link in task["links"]:
             try:
                 stoken = self._get_stoken(q, link)
@@ -438,14 +475,15 @@ class Engine:
     def _have_detail(self, task, dir_items, strict=False):
         """-> (合并后的已有集, 说明, 目录里的集, Emby 里的集)"""
         dir_have, emby_have = set(), set()
+        dn = "迅雷" if task.get("drive") == "xunlei" else "夸克"
         for it in dir_items:
             if not it["dir"] and is_video(it["file_name"]):
                 dir_have.update(parse_episodes(it["file_name"], task["season"]))
-        emby_msg = "Emby 联动未启用（只按夸克目录里的文件判断）"
+        emby_msg = f"Emby 联动未启用（只按{dn}目录里的文件判断）"
         cfg = self.media_cfg()
         cli = self.emby()
         if cli and not cfg["only_missing"]:
-            emby_msg = "「只转存 Emby 里缺少的集数」未勾选（只按夸克目录里的文件判断）"
+            emby_msg = f"「只转存 Emby 里缺少的集数」未勾选（只按{dn}目录里的文件判断）"
         elif cli:
             try:
                 sid = self._emby_sid(cli, task)
@@ -453,11 +491,11 @@ class Engine:
                     emby_have = cli.episodes(sid)
                     emby_msg = f"Emby 匹配《{task.get('emby_match') or sid}》，共 {len(emby_have)} 集"
                 else:
-                    emby_msg = "Emby 里没找到这部剧（只按夸克目录里的文件判断）"
+                    emby_msg = f"Emby 里没找到这部剧（只按{dn}目录里的文件判断）"
             except Exception as ex:
                 if strict:
                     raise EmbyError(str(ex)) from ex
-                emby_msg = f"Emby 查询失败（只按夸克目录里的文件判断）：{ex}"
+                emby_msg = f"Emby 查询失败（只按{dn}目录里的文件判断）：{ex}"
                 log.warning("《%s》%s", task["name"], emby_msg)
         return dir_have | emby_have, emby_msg, dir_have, emby_have
 
@@ -507,7 +545,7 @@ class Engine:
 
     def progress(self, task):
         if task.get("media") == "movie":
-            q = self.quark()
+            q = self.client(task)
             found = q.get_fids([_norm_path(task["savepath"])])
             have, msg = self._movie_have(task, q.ls_dir(found[0]["fid"]) if found else [])
             with self.store.lock:
@@ -517,7 +555,7 @@ class Engine:
                 self.store.save()
             return {"movie": True, "have": have, "have_count": 1 if have else 0, "emby": msg,
                     "aired": None, "total": 1, "missing": [], "source": ""}
-        q = self.quark()
+        q = self.client(task)
         found = q.get_fids([self._dest(task)])  # 只查不建：看进度不该有副作用
         have, emby_msg = self._have(task, q.ls_dir(found[0]["fid"]) if found else [])
         season = task["season"]
@@ -741,7 +779,7 @@ class Engine:
             return self.mirror.run(task, manual)      # 镜像同步：分享里增删，我这边也增删
         if task.get("media") == "movie":
             return self._run_movie(task, manual)
-        q = self.quark()
+        q = self.client(task)
         if not task["links"]:
             return {"status": "idle", "msg": "还没有分享链接", "saved": []}
         live = [l for l in task["links"] if not l.get("ban")]
@@ -758,8 +796,8 @@ class Engine:
             msg = f"Emby 查询失败，为避免把已有的集重复转存，本次不转存：{ex}"
             log.error("《%s》%s", task["name"], msg)
             return {"status": "error", "saved": [], "msg": msg}
-        log.info("《%s》%s｜本任务季号 %d｜夸克目录已有：%s｜Emby 已有：%s", task["name"], emby_msg,
-                 task["season"], fmt_eps(dir_have) or "无", fmt_eps(emby_have) or "无")
+        log.info("《%s》%s｜本任务季号 %d｜%s目录已有：%s｜Emby 已有：%s", task["name"], emby_msg,
+                 task["season"], "迅雷" if task.get("drive") == "xunlei" else "夸克", fmt_eps(dir_have) or "无", fmt_eps(emby_have) or "无")
         warn = self._season_warning(task, emby_have)
         if warn:
             log.warning("《%s》%s", task["name"], warn)
@@ -826,7 +864,7 @@ class Engine:
         """
         parsed = parse_share_text(url)
         if not parsed:
-            raise ValueError("不是有效的夸克分享链接")
+            raise ValueError("不是有效的夸克 / 迅雷分享链接")
         link = parsed[0]
         prefs = prefs or {}
         want_res = [r for r in (prefs.get("res") or []) if r in RES_LABEL]
@@ -838,7 +876,7 @@ class Engine:
         hit = cache.get(ckey)
         if hit and time.time() - hit[0] < 600:
             return hit[1]
-        q = self.quark()
+        q = self.client(link.get("drive"))
         try:
             entries = self._entries({}, q, link, self._get_stoken(q, link), max_dirs=30)
         except LinkError as e:
@@ -915,6 +953,7 @@ class Engine:
         ps = self.pansou()
         if not task or task.get("kind") != "subscription" or not ps or tid in self.pending:
             return None
+        ps = _DriveSearch(ps, task.get("drive") or "quark")      # 只在这个任务的网盘里找资源
         self.pending.add(tid)
         res = {"added": [], "msg": "", "lines": []}
         try:
@@ -1069,7 +1108,7 @@ class Engine:
     def _auto_find(self, task, ps):
         if task.get("media") == "movie":
             return self._auto_find_movie(task, ps)
-        q = self.quark()
+        q = self.client(task)
         f, now, S = self._find_state(task), time.time(), task["season"]
         lines = []
 
@@ -1153,7 +1192,8 @@ class Engine:
         for _, _, it in add:
             f["seen"][it["pwd_id"]]["verdict"] = "added"
             task["links"].append({"url": it["url"], "pwd_id": it["pwd_id"], "passcode": it["passcode"], "ban": "", "fails": 0,
-                                  "baseline": None, "auto": True, "title": it["title"][:80], "added": int(now)})
+                                  "baseline": None, "auto": True, "title": it["title"][:80], "added": int(now),
+                                  "drive": "xunlei" if is_xunlei_url(it["url"]) else "quark"})
         msg = (f"自动添加了 {len(add)} 个资源" if add else
                ("没有找到合适的新资源" if cands else "搜索结果里没有新的候选"))
         if add:
@@ -1175,18 +1215,19 @@ class Engine:
 
     def _movie_have(self, task, dir_items, strict=False):
         """(是否已有, 说明)。目标目录里已经有视频，或 Emby 里已经有这部电影，都算已有。"""
+        dn = "迅雷" if task.get("drive") == "xunlei" else "夸克"
         if any(not i["dir"] and is_video(i["file_name"]) for i in dir_items):
-            return True, "夸克目录里已有视频"
+            return True, dn + "目录里已有视频"
         cli = self.emby()
         if not cli or not self.media_cfg()["only_missing"]:
-            return False, "Emby 联动未启用（只按夸克目录判断）"
+            return False, f"Emby 联动未启用（只按{dn}目录判断）"
         try:
             mid, matched = cli.find_movie(task.get("emby_name") or task["name"], task.get("tmdb_id") or None, task.get("year") or None)
         except Exception as ex:
             if strict:
                 raise EmbyError(str(ex)) from ex
-            log.warning("《%s》Emby 查询失败（只按夸克目录判断）：%s", task["name"], ex)
-            return False, f"Emby 查询失败（只按夸克目录判断）：{ex}"
+            log.warning("《%s》Emby 查询失败（只按%s目录判断）：%s", task["name"], dn, ex)
+            return False, f"Emby 查询失败（只按{dn}目录判断）：{ex}"
         return (True, f"Emby 里已有《{matched}》") if mid else (False, "Emby 里还没有这部电影")
 
     def _pick_movie_file(self, task, entries, share_title=""):
@@ -1204,7 +1245,7 @@ class Engine:
         return (cands[0] if cands else None), skipped, cands
 
     def _run_movie(self, task, manual):
-        q = self.quark()
+        q = self.client(task)
         found = q.get_fids([_norm_path(task["savepath"])])
         dir_items = q.ls_dir(found[0]["fid"]) if found else []
         try:
@@ -1275,7 +1316,7 @@ class Engine:
         return {"status": "nochange", "saved": [], "msg": "分享里还没有合适的视频"}
 
     def _preview_movie(self, task):
-        q = self.quark()
+        q = self.client(task)
         found = q.get_fids([_norm_path(task["savepath"])])
         have, msg = self._movie_have(task, q.ls_dir(found[0]["fid"]) if found else [])
         out = {"movie": True, "season": 1, "emby_msg": msg, "dir_have": "", "emby_have": "", "links": [],
@@ -1325,7 +1366,7 @@ class Engine:
         return "ok", f"一部 {r['max_mb'] / 1024:.1f} GB 的视频（{'、'.join(r['quality']) or '没标注画质'}）{extra}"
 
     def _auto_find_movie(self, task, ps):
-        q = self.quark()
+        q = self.client(task)
         f, now = self._find_state(task), time.time()
         lines = []
 
@@ -1405,7 +1446,8 @@ class Engine:
         for _, _, it in add:
             f["seen"][it["pwd_id"]]["verdict"] = "added"
             task["links"].append({"url": it["url"], "pwd_id": it["pwd_id"], "passcode": it["passcode"], "ban": "", "fails": 0,
-                                  "baseline": None, "auto": True, "title": it["title"][:80], "added": int(now)})
+                                  "baseline": None, "auto": True, "title": it["title"][:80], "added": int(now),
+                                  "drive": "xunlei" if is_xunlei_url(it["url"]) else "quark"})
         msg = f"自动添加了 {len(add)} 个资源" if add else ("没有找到合适的片源" if cands else "搜索结果里没有新的候选")
         if add:
             note("🤖", msg)
@@ -1415,7 +1457,7 @@ class Engine:
         """试运行：不转存、不建目录，逐个文件说明"会不会转、为什么"。"""
         if task.get("media") == "movie":
             return self._preview_movie(task)
-        q = self.quark()
+        q = self.client(task)
         path = self._dest(task)
         found = q.get_fids([path])
         fid = found[0]["fid"] if found else None
@@ -1454,7 +1496,24 @@ class Engine:
         insts = [i for i in [cfg["smartstrm"], *cfg.get("smartstrm_more", {}).get("items", [])]
                  if i.get("enabled") and i.get("webhook")]
         mode = task.get("after") if task.get("after") in ("all", "no_media", "none") else "all"   # 转存后联动：全部 / 不刷新媒体库 / 都不触发
-        matched = [i for i in insts if notify.ss_matches(i, dest)] if mode != "none" else []
+        sel = task.get("strm")
+        if mode == "none":
+            matched = []
+        elif isinstance(sel, list):        # 创建任务时勾选了具体的 SmartStrm 任务：只触发它们
+            by_inst = {}
+            for k in sel:
+                iid, _, tn = k.partition("|")
+                by_inst.setdefault(iid, []).append(tn) if tn else by_inst.setdefault(iid, [])
+            matched = []
+            for i in insts:
+                iid = i.get("id") or "main"
+                if iid in by_inst:
+                    matched.append(dict(i, strmtask=",".join(by_inst[iid])) if by_inst[iid] else i)
+            if not matched:
+                log.info("《%s》没有勾选任何 SmartStrm 任务，不通知 SmartStrm", task["name"])
+        else:                              # 旧任务：按目录前缀匹配；并且只用适用这个网盘的 SmartStrm
+            dv = task.get("drive") or "quark"
+            matched = [i for i in insts if notify.ss_matches(i, dest) and (not i.get("drive") or i["drive"] == dv)]
         bound = any(i.get("target") for i in insts)        # 有没有指定「给谁生成」
         em = self.media_cfg()
         refresh = mode == "all" and em["refresh_after_save"]
@@ -1468,7 +1527,7 @@ class Engine:
         def one(inst):
             nm = inst.get("name") or inst.get("target") or "SmartStrm"
             time.sleep(min(inst.get("delay", 3), 60))
-            ok, msg = notify.trigger_smartstrm(inst, dest)
+            ok, msg = notify.trigger_smartstrm(inst, dest, drive=task.get("drive") or "quark")
             log.info("已通知 SmartStrm「%s」生成 strm：%s（这一步不是刷新媒体库）", nm, msg) if ok else log.warning("SmartStrm「%s」：%s", nm, msg)
             tgt = by_target.get(inst.get("target"))
             if inst.get("target") and not tgt:

@@ -18,38 +18,42 @@ _URL_RE = re.compile(
 _PWD_RE = re.compile(r"(?:提取码|访问码|密码|pwd|passcode)\s*[:：=]?\s*([A-Za-z0-9]{4,8})", re.I)
 
 
+_XL_RE = re.compile(r"(?:https?://)?pan\.xunlei\.com/s/([A-Za-z0-9_\-]+)(?:\?[^\s#]*)?(?:#[^\s]*)?", re.I)
+
+
 def parse_share_text(text):
     """
-    从任意粘贴文本里识别 [{url, pwd_id, passcode}]，支持多段。
+    从任意粘贴文本里识别 [{url, pwd_id, passcode, drive}]，支持多段，夸克和迅雷链接都认。
     提取码优先取 url 里的 pwd=，其次取紧跟其后的"提取码：xxxx"，再次取其前面的。
     """
     text = text or ""
-    matches = list(_URL_RE.finditer(text))
+    matches = sorted([(m, "quark") for m in _URL_RE.finditer(text)] + [(m, "xunlei") for m in _XL_RE.finditer(text)],
+                     key=lambda x: x[0].start())
     out, seen = [], set()
-    for i, m in enumerate(matches):
+    for i, (m, drive) in enumerate(matches):
         raw = m.group(0)
         pwd_id = m.group(1)
         q = re.search(r"pwd=(\w+)", raw)
         passcode = q.group(1) if q else ""
         if not passcode:
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            end = matches[i + 1][0].start() if i + 1 < len(matches) else len(text)
             after = _PWD_RE.search(text[m.end():end])
             if after:
                 passcode = after.group(1)
             else:
-                start = matches[i - 1].end() if i > 0 else 0
+                start = matches[i - 1][0].end() if i > 0 else 0
                 before = _PWD_RE.search(text[max(start, m.start() - 30):m.start()])
                 if before:
                     passcode = before.group(1)
-        frag = re.search(r"#/list/share.*", raw)
-        url = f"https://pan.quark.cn/s/{pwd_id}"
+        frag = re.search(r"#/list/share.*", raw) if drive == "quark" else None
+        url = f"https://pan.{'quark.cn' if drive == 'quark' else 'xunlei.com'}/s/{pwd_id}"
         if passcode:
             url += f"?pwd={passcode}"
         if frag:
             url += frag.group(0)
         if url not in seen:
             seen.add(url)
-            out.append({"url": url, "pwd_id": pwd_id, "passcode": passcode})
+            out.append({"url": url, "pwd_id": pwd_id, "passcode": passcode, "drive": drive})
     return out
 
 

@@ -6,6 +6,8 @@ import os
 import tempfile
 import threading
 
+from .xunlei import DEFAULT_ACCOUNT as _XL_DEFAULT
+
 CONFIG_DIR = os.environ.get("CONFIG_DIR", "/app/config")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
@@ -58,9 +60,10 @@ DEFAULTS = {
     "smartstrm": {
         "enabled": False, "webhook": "", "strmtask": "", "event": "qas_strm", "delay": 3,
         "send_savepath": True,
-        "name": "", "target": "", "path_prefix": "",   # target：这套 SmartStrm 给谁生成 strm（emby / fn / 空=不指定）；path_prefix：只处理这些夸克目录下的转存（逗号分隔，空=全部）
+        "name": "", "target": "", "path_prefix": "", "drive": "",   # drive：这套 SmartStrm 适用哪个网盘（quark / xunlei / 空=都适用）；   # target：这套 SmartStrm 给谁生成 strm（emby / fn / 空=不指定）；path_prefix：只处理这些夸克目录下的转存（逗号分隔，空=全部）
     },
-    "smartstrm_more": {"items": []},   # 第 2、3… 套 SmartStrm（装在别的机器上），字段同上，另有 id
+    "smartstrm_more": {"items": []},
+    "xunlei": copy.deepcopy(_XL_DEFAULT),   # 迅雷云盘账号（refresh_token 登录）   # 第 2、3… 套 SmartStrm（装在别的机器上），字段同上，另有 id
 }
 
 # 这些字段不会通过 GET 返回明文
@@ -73,6 +76,7 @@ SECRET_FIELDS = {
     "smartstrm": ["webhook"],
     "pansou": ["password"],
     "platforms": ["iqiyi_cookie"],
+    "xunlei": ["refresh_token", "access_token", "client_secret", "captcha_token", "sign_key"],
 }
 
 

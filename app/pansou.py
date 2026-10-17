@@ -88,12 +88,13 @@ class PanSou:
             self._token(force=True)   # 顺便验证用户名密码
         return "连接成功" + ("，认证通过" if self.user else "")
 
-    def search(self, kw, limit=60):
-        """返回夸克链接列表 [{url, pwd_id, passcode, title, source, time}]，保持 PanSou 的排序。"""
+    def search(self, kw, limit=60, drive="quark"):
+        """drive：quark / xunlei，只搜这个网盘。返回链接列表 [{url, pwd_id, passcode, title, source, time}]，保持 PanSou 的排序。"""
         kw = (kw or "").strip()
         if not kw:
             return []
-        params = {"kw": kw, "cloud_types": "quark", "res": "merge", "src": self.src}
+        drive = "xunlei" if drive == "xunlei" else "quark"
+        params = {"kw": kw, "cloud_types": drive, "res": "merge", "src": self.src}
         if self.channels and self.src != "plugin":
             params["channels"] = self.channels
         if self.plugins and self.src != "tg":
@@ -101,18 +102,18 @@ class PanSou:
         d = self._get("/api/search", params)
         if isinstance(d.get("data"), dict):   # 新版本外面多包了一层 {code, message, data}
             d = d["data"]
-        raw = list((d.get("merged_by_type") or {}).get("quark") or [])
+        raw = list((d.get("merged_by_type") or {}).get(drive) or [])
         if not raw:   # 兜底：results 格式（每条结果带 links）
             for r in d.get("results") or []:
                 for l in r.get("links") or []:
-                    if l.get("type") == "quark":
+                    if l.get("type") == drive:
                         raw.append({"url": l.get("url"), "password": l.get("password"), "note": r.get("title"),
                                     "datetime": r.get("datetime"), "source": f"tg:{r.get('channel', '')}"})
         out, seen = [], set()
         for it in raw:
             url, pw = it.get("url") or "", it.get("password") or ""
             parsed = parse_share_text(url + (f" 提取码：{pw}" if pw and "pwd=" not in url else ""))
-            if not parsed or parsed[0]["pwd_id"] in seen:
+            if not parsed or parsed[0]["pwd_id"] in seen or parsed[0].get("drive") != drive:
                 continue
             p = parsed[0]
             seen.add(p["pwd_id"])

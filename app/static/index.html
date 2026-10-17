@@ -102,6 +102,17 @@ details[open]>summary::before{transform:rotate(90deg)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
+.acc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.acc-card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer;background:var(--card);transition:border-color .15s,box-shadow .15s;display:flex;flex-direction:column;gap:6px}
+.acc-card:hover{border-color:var(--pri,#3b82f6);box-shadow:0 2px 10px rgba(20,24,40,.08)}
+.acc-card .t{display:flex;align-items:center;gap:8px;font-weight:600}
+.acc-card .t .ico{font-size:20px}
+.acc-card .t .st{margin-left:auto;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--bg);color:var(--dim)}
+.acc-card .t .st.ok{background:rgba(34,160,90,.12);color:#1f9d57}
+.acc-card .t .st.bad{background:rgba(229,72,77,.12);color:#e5484d}
+.acc-card .nm{font-size:14px}
+.acc-card .sub{font-size:12.5px;color:var(--dim)}
+.acc-card.add{border-style:dashed;align-items:center;justify-content:center;color:var(--dim);min-height:96px}
 .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:13px}
 .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
 .banner{background:var(--warnbg);color:var(--warn);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px}
@@ -524,8 +535,9 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
 
 <!-- ========== 手动链接（原分享监控） ========== -->
 <section class="view" id="v-monitor">
-  <div class="card">
-    <h2>➕ 添加手动链接任务</h2>
+  <div id="m-formsrc" style="display:none"><div id="m-form">
+    <div id="m-drive-row" style="display:none;margin:0 0 12px"><label class="l">转存到哪个网盘</label><select id="m-drive"><option value="quark">夸克网盘</option><option value="xunlei">迅雷云盘</option></select>
+      <div class="hint">选哪个网盘，下面的目录浏览、SmartStrm 任务都对应这个网盘。粘贴迅雷链接会自动切换。</div></div>
     <div class="banner" style="margin:0 0 12px">追剧、追电影请到「影视推荐」订阅，能自动补集、找资源、进追剧日历。这里适合综艺、纪录片、课程、固定更新的合集，或 TMDB 里查不到的内容。</div>
     <label class="l">夸克分享链接（可整段粘贴，提取码会自动识别；多个链接按先后顺序作为备用源）</label>
     <textarea id="m-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
@@ -540,6 +552,7 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     </div>
     <div class="hint">间隔最低 60 分钟。调太低会触发夸克风控，得不偿失。</div>
     <div id="m-recent"></div>
+    <div id="m-strm"></div>
     <label class="chk"><input type="checkbox" id="m-existing" checked> 添加时立即转存链接里已有的视频（取消勾选则只追新、不转已有的）</label>
     <label class="l" style="margin-top:12px">转存后联动</label>
     <select id="m-after"><option value="all">通知 SmartStrm，并刷新 Emby / 飞牛（默认）</option><option value="no_media">只通知 SmartStrm，不刷新 Emby / 飞牛</option><option value="none">都不触发（工具、软件、资料等不是影视的文件夹）</option></select>
@@ -565,8 +578,9 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
       <div id="m-q-slot"></div>
     </details>
     <div class="actions"><button class="btn pri" id="m-add">＋ 添加监控</button></div>
-  </div>
+  </div></div>
   <div class="card">
+    <div class="actions" style="margin:0 0 12px"><button class="btn pri" id="m-new">＋ 添加任务</button><span class="sub">追剧、追电影请到「影视推荐」订阅；这里适合综艺、纪录片、课程、固定更新的合集，以及工具 / 资料这类不是影视的文件夹。</span></div>
     <h2>📡 手动链接列表 <small>（每 30 秒自动刷新）</small></h2>
     <div id="m-tools"></div>
     <div class="tbl" id="m-list"><div class="empty">加载中…</div></div>
@@ -719,6 +733,8 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
     <label class="chk"><input type="checkbox" id="x-sp"> 只触发本次转存的目标文件夹（推荐，秒级生成）</label>
     <div class="row"><div class="grow"><label class="l">名称（可选，日志里用来区分）</label><input type="text" id="x-name" placeholder="如：Emby 那台"></div>
       <div class="grow"><label class="l">这套给谁生成 strm</label><select id="x-target"><option value="">不指定（转存后刷新所有已启用的服务器）</option><option value="emby">Emby</option><option value="fn">飞牛影视</option></select></div></div>
+    <label class="l">这套 SmartStrm 适用哪个网盘（添加任务时，只会列出适用所选网盘的 SmartStrm 任务）</label>
+    <select id="x-drive"><option value="">都适用</option><option value="quark">夸克</option><option value="xunlei">迅雷</option></select>
     <label class="l">只处理这些夸克目录下的转存（可选，多个用英文逗号分隔；留空=全部。两套 SmartStrm 管的夸克目录不一样时填这个）</label><input type="text" id="x-prefix" placeholder="/媒体库/剧集">
     <div class="actions"><button class="btn pri" data-save="smartstrm">保存</button><button class="btn" data-test="smartstrm">测试触发</button></div>
     <div class="hint" id="smartstrm-msg">测试会不带目录触发一次，SmartStrm 可能会执行一次完整任务。</div>
@@ -828,6 +844,12 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
 <!-- ========== 账号 ========== -->
 <section class="view" id="v-account">
   <div class="card">
+    <div class="toolbar" style="margin:0 0 12px"><h2 style="margin:0;flex:1">🔐 网盘账号</h2><button class="btn pri" id="acc-add">＋ 添加账号</button></div>
+    <div class="acc-grid" id="acc-cards"></div>
+    <div class="hint" style="margin-top:10px">点卡片进入详情，修改登录信息、测试连接。以后会支持更多网盘，也会支持同一种网盘登录多个账号。</div>
+  </div>
+  <div id="acc-src" style="display:none">
+  <div class="card" id="accf-quark">
     <h2>🔐 夸克账号登录</h2>
     <div id="a-state" class="hint" style="margin:0 0 8px"></div>
     <label class="l">Cookie</label>
@@ -837,6 +859,39 @@ details.lbscope>.lbbody{padding:2px 14px 14px;border-top:1px solid var(--line)}
       <button class="btn" id="a-sign">立即签到</button><button class="btn danger" id="a-out">退出登录</button></div>
     <label class="chk"><input type="checkbox" id="a-auto"> 每天自动签到</label>
     <div class="hint" id="a-msg"></div>
+  </div>
+  <div class="card" id="accf-xunlei">
+    <h2>⚡ 迅雷云盘登录</h2>
+    <div class="hint" style="margin:0 0 8px">填了这里，添加手动链接时直接粘贴 <code>https://pan.xunlei.com/s/…</code> 迅雷分享链接即可，会自动识别网盘。一个任务里的链接必须是同一个网盘的；迅雷也支持镜像同步，删除的文件会进迅雷回收站。</div>
+    <div id="xl-state" class="hint" style="margin:0 0 8px"></div>
+    <label class="l">refresh_token（必填，用来自动换新的 access_token）</label><input type="password" id="xl-rt" autocomplete="off"><div class="hint" id="xl-rt-h"></div>
+    <label class="l">access_token（可选）</label><input type="password" id="xl-at" autocomplete="off"><div class="hint" id="xl-at-h"></div>
+    <div class="grid2">
+      <div><label class="l">client_id</label><input type="text" id="xl-cid"></div>
+      <div><label class="l">device_id</label><input type="text" id="xl-dev"></div>
+    </div>
+    <details><summary>导入 cURL / 高级参数</summary>
+      <div class="hint" style="margin:8px 0">浏览器登录 pan.xunlei.com，F12 → 网络 → 找到 <code>captcha/init</code> 请求 → 右键「复制为 cURL (bash)」，粘贴到下面导入，会自动填好 client_id、device_id、captcha 参数。只在本机解析，不会发到别处。</div>
+      <textarea id="xl-curl" placeholder="curl 'https://xluser-ssl.xunlei.com/v1/shield/captcha/init' ..."></textarea>
+      <div class="actions"><button class="btn" id="xl-curl-go">导入 cURL</button></div>
+      <div class="hint" id="xl-curl-msg"></div>
+      <div class="grid2">
+        <div><label class="l">captcha_token（一般自动申请，不用填）</label><input type="password" id="xl-cap" autocomplete="off"><div class="hint" id="xl-cap-h"></div></div>
+        <div><label class="l">签名密钥 sign_key（自动算 captcha 签名用，可选）</label><input type="password" id="xl-sk" autocomplete="off"><div class="hint" id="xl-sk-h"></div></div>
+        <div><label class="l">client_version</label><input type="text" id="xl-cv"></div>
+        <div><label class="l">package_name</label><input type="text" id="xl-pkg"></div>
+        <div style="grid-column:1/-1"><label class="l">User-Agent（留空用默认）</label><input type="text" id="xl-ua"></div>
+      </div>
+    </details>
+    <details><summary>🔍 诊断分享链接（搜到的链接检测显示「没有文件」时用）</summary>
+      <div class="hint" style="margin:8px 0">粘贴一个迅雷分享链接（带提取码），会列出迅雷每一步返回了什么：能读到几个文件、是文件还是文件夹。不包含任何 token，可以直接复制发给开发者。</div>
+      <input type="text" id="xl-dg-url" placeholder="https://pan.xunlei.com/s/VP…?pwd=abcd">
+      <div class="actions"><button class="btn" id="xl-dg">开始诊断</button></div>
+      <pre id="xl-dg-out" style="white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:320px;overflow:auto;background:var(--bg);padding:10px;border-radius:8px;display:none"></pre>
+    </details>
+    <div class="actions"><button class="btn pri" data-save="xunlei">保存</button><button class="btn" id="xl-test">保存并测试连接</button></div>
+    <div class="hint" id="xunlei-msg">接口没有官方文档，第一次请先点「保存并测试连接」确认能读到网盘；失败时会显示迅雷返回的原文。</div>
+  </div>
   </div>
   <div class="card">
     <h2>📦 从 quark-auto-save 迁移</h2>
@@ -970,9 +1025,9 @@ async function refreshStatus() {
 /* ======================================================================
    目录浏览弹窗
    ====================================================================== */
-function browse(initial, onPick) {
+function browse(initial, onPick, drive = 'quark') {
   const stack = [{fid: '0', name: ''}];
-  const m = modal(`<h3>选择转存目录</h3><div class="recent" id="br-recent" style="margin:0 0 10px"></div><div class="crumbs" id="bc"></div><div class="dirs" id="bd"></div>
+  const m = modal(`<h3>选择转存目录${drive === 'xunlei' ? '（迅雷云盘）' : ''}</h3><div class="recent" id="br-recent" style="margin:0 0 10px"></div><div class="crumbs" id="bc"></div><div class="dirs" id="bd"></div>
     <div class="row" style="margin-top:12px"><div class="grow"><input type="text" id="bn" placeholder="新建文件夹名称"></div>
     <button class="btn" id="bmk">新建并进入</button></div>
     <div class="actions"><button class="btn pri" id="bok">选择当前目录</button><span class="hint" id="bp"></span></div>`);
@@ -983,14 +1038,14 @@ function browse(initial, onPick) {
     $$('#bc a', m).forEach(a => a.onclick = () => { stack.length = +a.dataset.i + 1; load(); });
     const box = $('#bd', m); box.innerHTML = '<div class="sub">读取中…</div>';
     try {
-      const {dirs} = await api('/browse?fid=' + encodeURIComponent(stack.at(-1).fid));
+      const {dirs} = await api('/browse?drive=' + drive + '&fid=' + encodeURIComponent(stack.at(-1).fid));
       box.innerHTML = dirs.length ? dirs.map(d => `<div data-f="${esc(d.fid)}" data-n="${esc(d.name)}">📁 ${esc(d.name)}</div>`).join('') : '<div class="sub">（没有子文件夹）</div>';
       $$('div[data-f]', box).forEach(d => d.onclick = () => { stack.push({fid: d.dataset.f, name: d.dataset.n}); load(); });
     } catch (e) { box.innerHTML = `<div class="sub" style="color:var(--err)">${esc(e.message)}</div>`; }
   }
   $('#bmk', m).onclick = guard(async () => {
     const n = $('#bn', m).value.trim().replace(/\//g, ''); if (!n) return;
-    const r = await api('/browse/mkdir', 'POST', {path: path() + '/' + n});
+    const r = await api('/browse/mkdir', 'POST', {path: path() + '/' + n, drive});
     stack.push({fid: r.fid, name: n}); $('#bn', m).value = ''; load();
   });
   $('#br-recent', m).innerHTML = recentHTML().replace(/<a [^>]*data-rclear[^>]*>.*?<\/a>/, '');
@@ -1078,8 +1133,27 @@ const inText = ts => { const m = Math.round((ts * 1000 - Date.now()) / 60000); r
 /* ======================================================================
    资源搜索（PanSou）：搜索 → 检测 → 勾选 → 回填
    ====================================================================== */
-function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, movie = false, title = '', aliases = [], onPick}) {
-  const m = modal(`<h3>🔎 搜索资源 <span class="sub" style="font-weight:400">来自 PanSou，只显示夸克网盘</span></h3>
+let XL_ON = false; const DN = {quark: '夸克', xunlei: '迅雷'};
+api('/settings/xunlei').then(d => { XL_ON = !!(d.refresh_token_set || d.access_token_set); }).catch(() => {});
+const driveRow = () => XL_ON ? `<div class="drive-top" style="margin:0 0 12px"><label class="l">转存到哪个网盘</label><select id="sd-drive"><option value="quark">夸克网盘</option><option value="xunlei">迅雷云盘</option></select>
+  <div class="hint">选哪个网盘，下面的目录浏览、资源搜索、SmartStrm 任务都对应这个网盘。</div></div>` : '';
+/* 转存后要触发的 SmartStrm 任务：列出适用当前网盘的，默认全选；picked = 已保存的选择（null = 全选） */
+async function mountStrm(slot, drive, picked, onDirty) {
+  if (!slot) return;
+  let items = [];
+  try { items = (await api('/smartstrm/items?drive=' + drive)).items; } catch (_) {}
+  slot._items = items;
+  slot.innerHTML = items.length ? `<label class="l" style="margin-top:12px">转存后触发的 SmartStrm 任务</label>${items.map(i => `<label class="chk" style="margin-top:4px"><input type="checkbox" class="strm-ck" value="${esc(i.key)}" ${!picked || picked.includes(i.key) ? 'checked' : ''}> ${esc(i.label)}${i.target ? ` <span class="sub">→ ${i.target === 'fn' ? '飞牛' : 'Emby'}</span>` : ''}</label>`).join('')}
+    <div class="hint">只会触发勾选的 SmartStrm 任务；全部取消就不通知 SmartStrm。</div>`
+    : `<div class="hint" style="margin-top:10px">还没有适用于${DN[drive] || ''}的 SmartStrm 任务（到「通知联动 → SmartStrm」添加并启用；可在那里设置每套适用哪个网盘）。</div>`;
+  $$('.strm-ck', slot).forEach(c => c.onchange = () => onDirty && onDirty());
+}
+const strmValue = slot => slot && slot._items && slot._items.length ? $$('.strm-ck', slot).filter(c => c.checked).map(c => c.value) : null;
+const driveOf = m => $('#sd-drive', m)?.value || 'quark';
+function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = null, movie = false, title = '', aliases = [], drive = 'quark', lockDrive = false, onPick}) {
+  let drv = drive;
+  const m = modal(`<h3>🔎 搜索资源 <span class="sub" style="font-weight:400" id="ps-sub">来自 PanSou，只显示${DN[drive]}网盘</span></h3>
+    ${XL_ON && !lockDrive ? `<div class="chips" style="margin-bottom:8px" id="ps-dr"><span class="chip ${drive === 'quark' ? 'on' : ''}" data-dr="quark">夸克</span><span class="chip ${drive === 'xunlei' ? 'on' : ''}" data-dr="xunlei">迅雷</span></div>` : ''}
     <div class="row"><div class="grow"><input type="text" id="ps-q" value="${esc(keyword)}" placeholder="输入剧名…"></div><button class="btn pri" id="ps-go">搜索</button></div>
     ${aliases.length ? `<div class="recent" id="ps-alias"><span class="sub">其他名称（一个名字搜不到就换一个）：</span>${aliases.map(a => `<span class="chip" data-a="${esc(a)}">${esc(a)}</span>`).join('')}</div>` : ''}
     <div class="hint" id="ps-msg">先点「检测」看看里面有多少集、什么画质，再勾选。勾选多个时，从上到下就是检查优先级。</div>
@@ -1125,13 +1199,13 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
     $$('#ps-alias .chip', m).forEach(c => c.classList.toggle('on', c.dataset.a === kw));
     msg.className = 'hint'; msg.textContent = '搜索中…（可能需要 10～30 秒）'; list.innerHTML = ''; $('#ps-foot', m).style.display = 'none';
     try {
-      items = (await api('/pansou/search?kw=' + encodeURIComponent(kw))).items;
+      items = (await api('/pansou/search?drive=' + drv + '&kw=' + encodeURIComponent(kw))).items;
       if (!items.length) {
         const next = aliases.find(a => !tried.has(a));   // 这个名字没搜到：自动换下一个别名
         if (next) { msg.textContent = `「${kw}」没有搜到，换别名「${next}」再搜…`; $('#ps-q', m).value = next; return search(); }
-        msg.textContent = aliases.length ? '所有名称都没有搜到夸克资源，可以手动改关键词再试（比如去掉「第二季」）' : '没有找到夸克资源，换个关键词试试（比如去掉「第二季」）'; return;
+        msg.textContent = aliases.length ? `所有名称都没有搜到${DN[drv]}资源，可以手动改关键词再试（比如去掉「第二季」）` : `没有找到${DN[drv]}资源，换个关键词试试（比如去掉「第二季」）`; return;
       }
-      msg.textContent = `找到 ${items.length} 个夸克资源。先点「检测」看看里面有多少集、什么画质，再勾选。`;
+      msg.textContent = `找到 ${items.length} 个${DN[drv]}资源。先点「检测」看看里面有多少集、什么画质，再勾选。`;
       list.innerHTML = items.map((x, i) => `<div class="ps-row" data-i="${i}"><input type="checkbox" class="ps-ck">
         <div class="ps-main"><div class="ps-t" title="${esc(x.title)}">${esc(x.title || x.url)}</div>
           <div class="ps-m">${esc([x.source, x.time].filter(Boolean).join(' · '))}${x.source || x.time ? ' · ' : ''}<span title="${esc(x.url)}">${esc(shortUrl(x.url))}</span></div>
@@ -1144,13 +1218,14 @@ function pansouPicker({keyword = '', total = 0, aired = 0, season = 1, prefs = n
     }
   }
   $$('#ps-alias .chip', m).forEach(c => c.onclick = () => { $('#ps-q', m).value = c.dataset.a; search(); });
+  $$('#ps-dr .chip', m).forEach(c => c.onclick = () => { drv = c.dataset.dr; $$('#ps-dr .chip', m).forEach(x => x.classList.toggle('on', x === c)); $('#ps-sub', m).textContent = `来自 PanSou，只显示${DN[drv]}网盘`; items = []; list.innerHTML = ''; tried.clear(); if ($('#ps-q', m).value.trim()) search(); });
   $('#ps-go', m).onclick = () => { tried.clear(); search(); }; $('#ps-q', m).onkeydown = e => { if (e.key === 'Enter') search(); };
   $('#ps-all', m).onclick = async () => {
     const rows = $$('.ps-row', m).filter(r => !items[r.dataset.i]._r).slice(0, 10), b = $('#ps-all', m); b.disabled = true;
     for (let k = 0; k < rows.length; k++) { b.textContent = `检测中 ${k + 1}/${rows.length}`; if (!(await inspect(rows[k]))) break; await new Promise(r => setTimeout(r, 500)); }
     b.disabled = false; b.textContent = '检测前 10 个';
   };
-  $('#ps-ok', m).onclick = () => { const urls = checked().map(c => items[c.closest('.ps-row').dataset.i].url); m.remove(); onPick(urls); };
+  $('#ps-ok', m).onclick = () => { const urls = checked().map(c => items[c.closest('.ps-row').dataset.i].url); m.remove(); onPick(urls, drv); };
   if (keyword) search(); else $('#ps-q', m).focus();
 }
 const appendLinks = (ta, urls) => { ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + urls.join('\n'); ta.dispatchEvent(new Event('input')); };
@@ -1178,15 +1253,28 @@ const parseHint = debounce(guard(async () => {
   const text = $('#m-links').value, h = $('#m-parse');
   if (!text.trim()) { h.textContent = ''; h.className = 'hint'; return; }
   const {links} = await api('/parse', 'POST', {text});
+  const ds = [...new Set(links.map(l => l.drive))];
+  if (ds.length === 1 && XL_ON && $('#m-drive').value !== ds[0]) { $('#m-drive').value = ds[0]; mountStrm($('#m-strm'), ds[0]); }
   h.className = 'hint ' + (links.length ? 'ok' : 'err');
-  h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') : '没有识别到夸克分享链接';
+  h.textContent = links.length ? `识别到 ${links.length} 个链接：` + links.map(l => (l.drive === 'xunlei' ? '迅雷 · ' : '夸克 · ') + (l.passcode ? `提取码 ${l.passcode}` : '无提取码')).join('、') + (new Set(links.map(l => l.drive)).size > 1 ? '（⚠ 夸克和迅雷的链接请分开建任务）' : '') : '没有识别到夸克分享链接';
 }), 300);
 $('#m-links').oninput = parseHint;
 $('#m-cat').oninput = () => { if (TOOL_CATS.includes($('#m-cat').value.trim()) && $('#m-after').value === 'all') $('#m-after').value = 'none'; };
 $('#m-mirror').onchange = () => { const on = $('#m-mirror').checked; $('#m-mirror-h').style.display = on ? '' : 'none'; if (on) $('#m-existing').checked = true; $('#m-existing').disabled = on; };
 $('#m-q-slot').innerHTML = qualityBox('m-q'); loadRecent().then(() => mountRecent($('#m-recent'), $('#m-path'))); bindQuality($('#m-q'));
-$('#m-search').onclick = () => pansouPicker({keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
-$('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''));
+$('#m-search').onclick = () => pansouPicker({drive: $('#m-drive').value, keyword: $('#m-name').value, season: +$('#m-season').value || 1, prefs: prefsOf(readQuality($('#m-q'))), onPick: urls => appendLinks($('#m-links'), urls)});
+$('#m-browse').onclick = () => browse($('#m-path').value, p => $('#m-path').value = p.replace(/^\//, ''), $('#m-drive').value);
+let addModal = null;
+$('#m-new').onclick = () => {
+  const form = $('#m-form'), src = $('#m-formsrc');
+  addModal = modal('<h3>添加手动链接任务</h3><div id="m-slot"></div>', 'wide');
+  $('#m-slot', addModal).append(form);
+  $('#m-drive-row').style.display = XL_ON ? '' : 'none';
+  mountStrm($('#m-strm'), $('#m-drive').value);
+  const mm = addModal, obs = new MutationObserver(() => { if (!document.body.contains(mm)) { src.append(form); obs.disconnect(); if (addModal === mm) addModal = null; } });
+  obs.observe(document.body, {childList: true});
+};
+$('#m-drive').onchange = () => mountStrm($('#m-strm'), $('#m-drive').value);
 
 function advFields(p = 'm') {
   return {name: $(`#${p}-name`).value, season: $(`#${p}-season`).value, include_kw: $(`#${p}-inc`).value,
@@ -1198,10 +1286,10 @@ $('#m-add').onclick = guard(async () => {
   try {
     const mirror = $('#m-mirror').checked, existing = mirror || $('#m-existing').checked;
     await api('/tasks', 'POST', {kind: 'monitor', links_text: $('#m-links').value, savepath: $('#m-path').value,
-      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')), after: $('#m-after').value, category: $('#m-cat').value,
+      interval: $('#m-interval').value, save_existing: existing, ...advFields('m'), ...readQuality($('#m-q')), after: $('#m-after').value, category: $('#m-cat').value, drive: $('#m-drive').value, strm: strmValue($('#m-strm')),
       ...(mirror ? {mirror: {enabled: true, dry_run: true}} : {})});
     toast(mirror ? '已添加，正在后台同步（预览模式：不会真删）' : existing ? '已添加，正在后台转存已有视频' : '已添加，之后只追新', 'ok');
-    $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors();
+    $('#m-links').value = ''; $('#m-parse').textContent = ''; loadMonitors(); if (addModal) addModal.remove();
     await loadRecent(); mountRecent($('#m-recent'), $('#m-path'));
   } finally { btn.disabled = false; btn.textContent = '＋ 添加监控'; }
 });
@@ -1225,7 +1313,7 @@ async function loadMonitors() {
   box.innerHTML = `<table><thead><tr><th style="width:28px"></th><th>名称 / 链接</th><th>转存目录</th><th>状态</th><th>上次扫描</th><th>最近结果</th><th>操作</th></tr></thead><tbody>${
     tasks.map(t => {
       const dead = t.links.filter(l => l.ban).length;
-      return `<tr><td><input type="checkbox" class="mb-c" data-id="${t.id}" ${mSel.has(t.id) ? 'checked' : ''}></td><td><div class="nm">${esc(t.name)}${t.category ? ` <span class="tag mute">${esc(t.category)}</span>` : ''}</div>
+      return `<tr><td><input type="checkbox" class="mb-c" data-id="${t.id}" ${mSel.has(t.id) ? 'checked' : ''}></td><td><div class="nm">${esc(t.name)}${t.drive === 'xunlei' ? ' <span class="tag info">迅雷</span>' : ''}${t.category ? ` <span class="tag mute">${esc(t.category)}</span>` : ''}</div>
         <div class="sub">${t.links.slice(0, 2).map(l => esc(shortUrl(l.url))).join('<br>')}${t.links.length > 2 ? `<br>… 共 ${t.links.length} 个` : ''}</div>
         ${dead ? `<div class="sub" style="color:var(--err)">${dead} 个链接失效</div>` : ''}${mirrorLine(t)}</td>
         <td class="sub">${esc(t.savepath)}</td><td>${stTag(t)}<div class="sub">${esc(nextIn(t))}</div></td>
@@ -1345,13 +1433,15 @@ function editTask(t, reload) {
         </div>
         <div class="hint">删除走夸克的删除，文件会进回收站，可以恢复。改了「转存目录」会重新开始对账。</div>
       </div></div>` : ''}
+    <div id="ed-strm"></div>
     <div class="actions"><button class="btn pri" id="ed-ok">保存</button><button class="btn" id="ed-no">取消</button></div>`, 'wide');
+  let strmDirty = false; mountStrm($('#ed-strm', m), t.drive || 'quark', t.strm, () => { strmDirty = true; });
   $('#ed-mir', m)?.addEventListener('change', e => { $('#ed-mirbox', m).style.display = e.target.checked ? '' : 'none'; });
   $('#ed-rename', m).value = t.rename; $('#ed-unp', m).value = t.unparsed;
   if ($('#ed-after', m)) $('#ed-after', m).value = t.after || 'all';
   $$('#ed-wk .chip', m).forEach(c => c.onclick = () => c.classList.toggle('on'));
   bindQuality($('#ed-q', m)); mountRecent($('#ed-recent', m), $('#ed-path', m));
-  $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p);
+  $('#ed-browse', m).onclick = () => browse('', p => $('#ed-path', m).value = p, t.drive || 'quark');
   $('#ed-no', m).onclick = () => m.remove();
   $('#ed-reset', m)?.addEventListener('click', guard(async () => { await api(`/tasks/${t.id}/reset-links`, 'POST'); toast('已重置', 'ok'); m.remove(); reload(); }));
   $('#ed-ok', m).onclick = guard(async () => {
@@ -1364,6 +1454,7 @@ function editTask(t, reload) {
       skip_when_complete: $('#ed-skip', m).checked,
       ...($('#ed-after', m) ? {after: $('#ed-after', m).value} : {}),
       ...($('#ed-cat', m) ? {category: $('#ed-cat', m).value} : {}),
+      ...(strmDirty ? {strm: strmValue($('#ed-strm', m))} : {}),
       ...($('#ed-mir', m) ? {mirror: {enabled: $('#ed-mir', m).checked, dry_run: $('#ed-mir-dry', m).checked, replace: $('#ed-mir-rep', m).checked,
         grace: +$('#ed-mir-grace', m).value || 2, max_delete: +$('#ed-mir-max', m).value || 10, max_pct: +$('#ed-mir-pct', m).value || 30}} : {}),
       run_weeks: $$('#ed-wk .chip.on', m).map(c => +c.dataset.d)});
@@ -1730,12 +1821,14 @@ function subscribeMovieDialog(mv) {
   const plain = mv.year ? `${mv.name} (${mv.year})` : mv.name, tmdbName = mv.folder_name || plain;   // Emby 规范：片名 (年份) {tmdb-编号}
   const nameFor = () => $('#sd-layout', m).checked ? tmdbName : plain;
   const m = modal(`<h3>订阅电影《${esc(mv.name)}》${mv.year ? ` (${esc(mv.year)})` : ''}</h3>
+    ${driveRow()}
     ${mv.release_date && mv.release_date > todayStr() ? `<div class="banner">这部电影 ${esc(mv.release_date)} 才上映。订阅后会等上映再找片源。</div>` : ''}
     <div class="row"><div class="grow"><label class="l">转存目录（每部电影单独一个文件夹，Emby 推荐命名为「片名 (年份)」）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(tmdbName, 1, kind, true))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
     <div class="hint" id="sd-bh"></div>
     <label class="chk"><input type="checkbox" id="sd-layout" checked> 文件夹按 Emby 规范命名：片名 (年份) {tmdb-编号}，方便 Emby 直接认出是哪一部</label>
     <div class="hint" style="margin-top:6px">${last ? `已参照你上次${mv.anime ? '动漫' : '电影'}的目录 ${esc(last.path)}（《${esc(last.name)}》）自动填写；点下面的推荐目录可以切换。` : `还没有${mv.anime ? '动漫' : '电影'}的历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。`}</div><div id="sd-recent"></div>
+    <div id="sd-strm"></div>
     <label class="l">分享链接（可留空，让程序自动找）</label>
     <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd" style="min-height:70px"></textarea>
     <button class="btn xs" id="sd-search" type="button" style="margin-top:6px">🔎 搜索资源</button>
@@ -1747,6 +1840,7 @@ function subscribeMovieDialog(mv) {
     <label class="chk"><input type="checkbox" id="sd-exist" checked> 添加后立即检查并转存</label>
     <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
   bindQuality($('#sd-q', m)); mountSuggest($('#sd-recent', m), $('#sd-path', m), tmdbName, 1, kind, true);
+  mountStrm($('#sd-strm', m), driveOf(m)); $('#sd-drive', m)?.addEventListener('change', () => mountStrm($('#sd-strm', m), driveOf(m)));
   let autoPath = $('#sd-path', m).value, parent = null;      // 勾选 / 取消「规范命名」时，如果路径还是自动填的那个，就跟着换；parent = 手动浏览选的上级目录
   const buildPath = () => parent === null ? defaultSavePath(nameFor(), 1, kind, true) : joinShowFolder(parent, mv.name, nameFor(), 1, true, false).path;
   $('#sd-layout', m).onchange = () => {
@@ -1757,12 +1851,12 @@ function subscribeMovieDialog(mv) {
   $('#sd-browse', m).onclick = () => browse('', p => {
     parent = p; const r = joinShowFolder(p, mv.name, nameFor(), 1, true, false);
     $('#sd-path', m).value = autoPath = r.path; browseHint(m, r, '部电影');
-  });
-  $('#sd-search', m).onclick = () => pansouPicker({keyword: mv.name, movie: true, title: mv.name, aliases: mv.aliases || [],
+  }, driveOf(m));
+  $('#sd-search', m).onclick = () => pansouPicker({keyword: mv.name, movie: true, title: mv.name, aliases: mv.aliases || [], drive: driveOf(m), lockDrive: true,
     prefs: {...prefsOf(readQuality($('#sd-q', m))), no_cam: $('#sd-nocam', m).checked}, onPick: urls => appendLinks($('#sd-links', m), urls)});
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
-    await api('/subscriptions', 'POST', {media: 'movie', tmdb_id: mv.id, savepath: $('#sd-path', m).value, links_text: $('#sd-links', m).value,
+    await api('/subscriptions', 'POST', {media: 'movie', drive: driveOf(m), strm: strmValue($('#sd-strm', m)), tmdb_id: mv.id, savepath: $('#sd-path', m).value, links_text: $('#sd-links', m).value,
       interval: $('#sd-int', m).value, no_cam: $('#sd-nocam', m).checked, auto_find: $('#sd-auto', m).checked,
       save_existing: $('#sd-exist', m).checked, ...readQuality($('#sd-q', m))});
     const auto = $('#sd-auto', m).checked; loadRecent();
@@ -1777,6 +1871,7 @@ function subscribeDialog(show, season = 1) {
   const tmdbName = show.folder_name || show.name;                                       // Emby 规范：剧名 (年份) {tmdb-编号}
   const nameFor = () => $('#sd-layout', m).checked ? tmdbName : show.name;
   const m = modal(`<h3>订阅《${esc(show.name)}》</h3>
+    ${driveRow()}
     <div class="row"><div style="width:110px"><label class="l">季号</label><input type="number" id="sd-season" min="0" value="${season}"></div>
     <div class="grow"><label class="l">转存目录（剧集文件夹）</label><input type="text" id="sd-path" value="${esc(defaultSavePath(tmdbName, season, kind, true))}"></div>
     <button class="btn" id="sd-browse">浏览…</button></div>
@@ -1785,6 +1880,7 @@ function subscribeDialog(show, season = 1) {
     <div class="hint" style="margin-top:6px">${lastOf(kind)
       ? `已参照你上次${kindName}的目录 ${esc(lastOf(kind).path)}（《${esc(lastOf(kind).name)}》）自动填写，每部剧单独一个文件夹；点下面的推荐目录可以切换。`
       : '还没有历史目录，先按默认位置填写；订阅后会记住，下次自动沿用。'}</div><div id="sd-recent"></div>
+    <div id="sd-strm"></div>
     <label class="l">分享链接（可留空稍后再加；多个按先后顺序检查，后面的只补前面没有的集数）</label>
     <textarea id="sd-links" placeholder="https://pan.quark.cn/s/xxxxxx 提取码：abcd"></textarea>
     <button class="btn xs" id="sd-search" type="button" style="margin-top:6px">🔎 搜索资源</button>
@@ -1798,9 +1894,10 @@ function subscribeDialog(show, season = 1) {
     <div class="actions"><button class="btn pri" id="sd-ok">订阅</button><button class="btn" id="sd-no">取消</button></div>`);
   $('#sd-search', m).onclick = () => {
     const sn = +$('#sd-season', m).value, eps = (show.seasons || []).find(s => s.season_number === sn)?.episode_count || 0;
-    pansouPicker({keyword: show.name, total: eps, season: sn, aliases: show.aliases || [], prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
+    pansouPicker({keyword: show.name, total: eps, season: sn, aliases: show.aliases || [], drive: driveOf(m), lockDrive: true, prefs: prefsOf(readQuality($('#sd-q', m))), onPick: urls => appendLinks($('#sd-links', m), urls)});
   };
   bindQuality($('#sd-q', m));
+  mountStrm($('#sd-strm', m), driveOf(m)); $('#sd-drive', m)?.addEventListener('change', () => mountStrm($('#sd-strm', m), driveOf(m)));
   let autoPath = $('#sd-path', m).value, parent = null;      // 改季号时，如果路径还是自动填的那个，就跟着换（带不带「第 N 季」）；parent = 手动浏览选的上级目录
   const layoutOn = () => $('#sd-layout', m).checked;
   const refreshStruct = () => {
@@ -1818,10 +1915,10 @@ function subscribeDialog(show, season = 1) {
   $('#sd-browse', m).onclick = () => browse('', p => {
     parent = p; const r = joinShowFolder(p, show.name, nameFor(), +$('#sd-season', m).value || 1, layoutOn(), true);
     $('#sd-path', m).value = autoPath = r.path; browseHint(m, r, '部剧'); refreshStruct();
-  });
+  }, driveOf(m));
   $('#sd-no', m).onclick = () => m.remove();
   $('#sd-ok', m).onclick = guard(async () => {
-    await api('/subscriptions', 'POST', {tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
+    await api('/subscriptions', 'POST', {drive: driveOf(m), strm: strmValue($('#sd-strm', m)), tmdb_id: show.id, season: $('#sd-season', m).value, savepath: $('#sd-path', m).value,
       links_text: $('#sd-links', m).value, interval: $('#sd-int', m).value, total_episodes: $('#sd-total', m).value,
       keep_tree: $('#sd-tree', m).checked, emby_layout: layoutOn(), save_existing: $('#sd-exist', m).checked, auto_find: $('#sd-auto', m).checked, ...readQuality($('#sd-q', m))});
     const auto = $('#sd-auto', m).checked; loadRecent();
@@ -1848,7 +1945,7 @@ function movieTileHTML(t) {
       ${b && !done ? `<span class="wb ${b[1]}">${b[0]}</span>` : ''}<span class="wm" style="background:rgba(0,0,0,.62)">🎬</span>
       <div class="wov"><div class="wbar"><i style="width:${done ? 100 : 0}%"></i></div>${state}</div></div>
     <div class="wn" title="${esc(t.name)}">${esc(t.name)}</div>
-    <div class="wsub" ${d && d < t.links.length ? 'style="color:var(--warn)"' : ''}>${esc(t.year || '')} · 电影 · ${d && d < t.links.length ? `⚠ ${d} 个链接失效` : esc(done ? '已完成' : nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div></div>`;
+    <div class="wsub" ${d && d < t.links.length ? 'style="color:var(--warn)"' : ''}>${esc(t.year || '')} · 电影 · ${t.drive === 'xunlei' ? '迅雷 · ' : ''}${d && d < t.links.length ? `⚠ ${d} 个链接失效` : esc(done ? '已完成' : nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div></div>`;
 }
 function tileHTML(t) {
   if (t.media === 'movie') return movieTileHTML(t);
@@ -1862,7 +1959,7 @@ function tileHTML(t) {
     <div class="wn" title="${esc(t.name)}">${esc(t.name)}</div>
     ${(() => { const d = t.links.filter(l => l.ban).length;
       return d && d < t.links.length ? `<div class="wsub" style="color:var(--warn)">第 ${t.season} 季 · ⚠ ${d} 个链接失效</div>`
-        : `<div class="wsub">第 ${t.season} 季 · ${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
+        : `<div class="wsub">第 ${t.season} 季 · ${t.drive === 'xunlei' ? '迅雷 · ' : ''}${esc(nextIn(t) || (t.enabled ? '—' : '已暂停'))}</div>`; })()}</div>`;
 }
 function listRowHTML(t) {
   const s = t.snap, mv = t.media === 'movie', b = badgeOf(t), base = s ? (s.aired ?? s.total ?? 0) : 0, pct = Math.round(pctOf(t) * 100);
@@ -2068,7 +2165,7 @@ function renderSub(m, t, tab) {
     if (!aliases.length && t.tmdb_id) aliases = await api(`/tmdb/${t.media === 'movie' ? 'movie' : 'tv'}/${t.tmdb_id}`).then(d => d.aliases || []).catch(() => []);
     pansouPicker({
       keyword: t.name, total: t.media === 'movie' ? 0 : (t.snap?.total || 0), aired: t.media === 'movie' ? 0 : (t.snap?.aired || 0), season: t.season,
-      movie: t.media === 'movie', title: t.name, aliases, prefs: {res: t.want_res, hdr: t.want_hdr, no_cam: t.no_cam},
+      movie: t.media === 'movie', title: t.name, aliases, drive: t.drive || 'quark', lockDrive: true, prefs: {res: t.want_res, hdr: t.want_hdr, no_cam: t.no_cam},
       onPick: guard(async urls => {
         await api('/tasks/' + t.id, 'PUT', {links_text: t.links.map(l => l.url).concat(urls).join('\n')});
         toast(`已添加 ${urls.length} 个链接，下次扫描时检查`, 'ok'); await reload('links');
@@ -2217,15 +2314,16 @@ loaders.calendar = () => { if (!cal.y) { const n = new Date(); cal.y = n.getFull
    ====================================================================== */
 const FORMS = {
   dingtalk: {enabled: '#d-enabled', webhook: '#d-webhook', secret: '#d-secret', on_add: '#d-add', on_save: '#d-save', on_error: '#d-err'},
-  smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp', name: '#x-name', target: '#x-target', path_prefix: '#x-prefix'},
+  smartstrm: {enabled: '#x-enabled', webhook: '#x-webhook', strmtask: '#x-task', event: '#x-event', delay: '#x-delay', send_savepath: '#x-sp', name: '#x-name', target: '#x-target', path_prefix: '#x-prefix', drive: '#x-drive'},
   tmdb: {api_key: '#t-key', language: '#t-lang', region: '#t-region', base_url: '#t-base', image_base: '#t-img'},
   pansou: {enabled: '#p-enabled', url: '#p-url', username: '#p-user', password: '#p-pass', src: '#p-src', channels: '#p-channels', plugins: '#p-plugins', timeout: '#p-timeout', auto_interval: '#p-interval'},
+  xunlei: {refresh_token: '#xl-rt', access_token: '#xl-at', client_id: '#xl-cid', device_id: '#xl-dev', captcha_token: '#xl-cap', sign_key: '#xl-sk', client_version: '#xl-cv', package_name: '#xl-pkg', user_agent: '#xl-ua'},
   auto: {auto_finish: '#au-finish', missing_retry: '#au-retry', account_alert: '#au-acct', purge_dead_days: '#au-purge', digest: '#au-digest', digest_hour: '#au-hour', trash_clean_days: '#au-trash', backup_auto: '#au-bk', backup_keep: '#au-bkn'},
   proxy: {enabled: '#px-enabled', url: '#px-url', username: '#px-user', password: '#px-pass', use_tmdb: '#px-tmdb', use_platforms: '#px-pf', fallback: '#px-fb'},
   fnmedia: {enabled: '#f-enabled', url: '#f-url', username: '#f-user', password: '#f-pass', access_code: '#f-code', only_missing: '#f-only', refresh_after_save: '#f-refresh', refresh_delay: '#f-delay'},
   emby: {enabled: '#e-enabled', url: '#e-url', api_key: '#e-key', user_id: '#e-user', only_missing: '#e-only', refresh_after_save: '#e-refresh', refresh_delay: '#e-delay'},
 };
-const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], fnmedia: ['password', 'access_code'], proxy: ['password'], pansou: ['password'], auto: []};
+const SECRET = {dingtalk: ['webhook', 'secret'], smartstrm: ['webhook'], tmdb: ['api_key'], emby: ['api_key'], fnmedia: ['password', 'access_code'], proxy: ['password'], pansou: ['password'], auto: [], xunlei: ['refresh_token', 'access_token', 'captcha_token', 'sign_key']};
 const FOLD_SUM = {
   dingtalk: d => `${d.enabled ? '🟢' : '⚪'} <b>钉钉</b> <small>· ${d.webhook_set ? '已配置机器人' : '未配置机器人'}${d.enabled ? '' : ' · 未启用'}</small>`,
   emby: d => `${d.enabled ? '🟢' : '⚪'} <b>Emby</b> <small>· ${esc(d.url) || '未填写地址'}${d.enabled ? '' : ' · 未启用'}</small>`,
@@ -2253,7 +2351,7 @@ loaders.notify = () => loadSettings('dingtalk');
 loaders.media = () => { loadSettings('emby'); loadSettings('fnmedia'); };
 /* 折叠行：已设置好的条目只显示一行概要，点开才看到详情 */
 const SRV_NAME = {emby: 'Emby', fn: '飞牛'};
-const scopeSum = r => `<b>${esc(r.name || '未命名')}</b> <small>· ${SRV_NAME[r.server === 'fn' ? 'fn' : 'emby']} · ${LB_KIND[r.kind] || ''}${r.lib_name ? ' · ' + esc(r.lib_name) : ''} → ${esc(r.quark_path || '（未选夸克目录）')}</small>`;
+const scopeSum = r => `<b>${esc(r.name || '未命名')}</b> <small>· ${SRV_NAME[r.server === 'fn' ? 'fn' : 'emby']} · ${LB_KIND[r.kind] || ''}${r.lib_name ? ' · ' + esc(r.lib_name) : ''} → ${r.drive === 'xunlei' ? '迅雷 ' : ''}${esc(r.quark_path || '（未选网盘目录）')}</small>`;
 const ssxSum = r => `${r.enabled ? '🟢' : '⚪'} <b>${esc(r.name || '未命名')}</b> <small>· ${r.target ? '给 ' + SRV_NAME[r.target] : '不指定服务器'} · ${r.path_prefix ? esc(r.path_prefix) : '所有目录'}${r.enabled ? '' : ' · 已停用'}</small>`;
 const stripOpen = a => a.map(({_open, ...x}) => x);
 /* ---------- 更多 SmartStrm ---------- */
@@ -2262,6 +2360,7 @@ function drawSsx() {
   $('#ssx-list').innerHTML = ssx.map((r, i) => `<details class="lbscope" data-i="${i}" ${(r._open ?? !r.id) ? 'open' : ''}><summary><span class="sm">${ssxSum(r)}</span></summary><div class="lbbody">
     <label class="chk" style="margin-top:0"><input type="checkbox" data-k="enabled" ${r.enabled ? 'checked' : ''}> 启用这一套</label>
     <div class="row"><div class="grow"><label class="l">名称</label><input type="text" data-k="name" value="${esc(r.name || '')}" placeholder="如：飞牛那台"></div>
+      <div class="grow"><label class="l">适用网盘</label><select data-k="drive"><option value="">都适用</option><option value="quark" ${r.drive === 'quark' ? 'selected' : ''}>夸克</option><option value="xunlei" ${r.drive === 'xunlei' ? 'selected' : ''}>迅雷</option></select></div>
       <div class="grow"><label class="l">给谁生成 strm</label><select data-k="target"><option value="">不指定</option><option value="emby" ${r.target === 'emby' ? 'selected' : ''}>Emby</option><option value="fn" ${r.target === 'fn' ? 'selected' : ''}>飞牛影视</option></select></div></div>
     <label class="l">Webhook 地址${r.webhook_set ? '（已保存，留空保持不变）' : ''}</label><input type="text" data-k="webhook" value="" placeholder="http://192.168.1.20:8024/webhook/…">
     <label class="l">STRM 任务名（可选，多个用英文逗号分隔）</label><input type="text" data-k="strmtask" value="${esc(r.strmtask || '')}">
@@ -2279,7 +2378,7 @@ function drawSsx() {
   });
 }
 async function loadSsx() { ssx = (await api('/smartstrm/extra')).items; drawSsx(); }
-$('#ssx-add').onclick = () => { ssx.push({_open: true, enabled: true, name: '', target: '', webhook: '', event: 'qas_strm', delay: 3, send_savepath: true, path_prefix: ''}); drawSsx(); };
+$('#ssx-add').onclick = () => { ssx.push({_open: true, enabled: true, name: '', target: '', drive: '', webhook: '', event: 'qas_strm', delay: 3, send_savepath: true, path_prefix: ''}); drawSsx(); };
 $('#ssx-save').onclick = guard(async () => { ssx = (await api('/smartstrm/extra', 'PUT', {items: stripOpen(ssx)})).items; drawSsx(); toast('已保存', 'ok'); });
 const _ssLoad = loaders.smartstrm; loaders.smartstrm = () => { _ssLoad(); loadSsx().catch(e => toast(e.message, 'err')); };
 $$('[data-save]').forEach(b => b.onclick = guard(async () => {
@@ -2334,12 +2433,51 @@ $('#bk-file').onchange = async e => {
 /* ======================================================================
    账号
    ====================================================================== */
-loaders.account = guard(async () => {
-  const s = await api('/account');
+const loadXunlei = guard(async () => { const d = await api('/settings/xunlei'); fill('xunlei', d); ACC.x = d; renderAccCards(); XL_ON = !!(d.refresh_token_set || d.access_token_set); $('#xl-state').textContent = d.status === '已登录' ? '✓ 已登录' + (d.nickname ? '：' + d.nickname : '') : (d.refresh_token_set || d.access_token_set ? '状态：' + d.status : '还没有登录迅雷云盘'); });
+$('#xl-test').onclick = guard(async () => { const m = $('#xunlei-msg'); m.className = 'hint'; m.textContent = '测试中…'; await api('/settings/xunlei', 'PUT', collect('xunlei')); try { const r = await api('/settings/xunlei/test', 'POST', {}); m.className = 'hint ok'; m.textContent = '✓ ' + r.msg; } catch (e) { m.className = 'hint err'; m.textContent = '✗ ' + e.message; } loadXunlei(); });
+$('#xl-dg').onclick = guard(async () => { const o = $('#xl-dg-out'); o.style.display = ''; o.textContent = '诊断中…'; try { const r = await api('/xunlei/diagnose', 'POST', {url: $('#xl-dg-url').value}); delete r.ok; o.textContent = JSON.stringify(r, null, 2); } catch (e) { o.textContent = '✗ ' + e.message; } });
+$('#xl-curl-go').onclick = guard(async () => { const m = $('#xl-curl-msg'); const r = await api('/xunlei/curl', 'POST', {text: $('#xl-curl').value}); m.className = 'hint ok'; m.innerHTML = r.notes.map(esc).join('<br>'); $('#xl-curl').value = ''; loadXunlei(); });
+/* ---- 账号卡片：驱动表（以后加网盘，往这里加一项 + 一个 #accf-xxx 表单即可） ---- */
+const ACC = {q: null, x: null};
+const ACC_DRIVERS = [
+  {key: 'quark', name: '夸克网盘', ico: '🔐', form: '#accf-quark', info: () => {
+    const s = ACC.q; if (!s) return {st: '读取中…', cls: '', nm: '', sub: ''};
+    return s.logged_in ? {st: '已登录', cls: 'ok', nm: s.nickname || '', sub: s.sign ? '今日签到：' + (s.sign.signed ? '已完成' : '未签到') + (s.auto_sign ? ' · 自动签到' : '') : (s.can_sign ? (s.auto_sign ? '自动签到已开' : '') : 'Cookie 不能自动签到')}
+      : {st: '未登录', cls: 'bad', nm: '', sub: s.error || '点击填写 Cookie'}; }},
+  {key: 'xunlei', name: '迅雷云盘', ico: '⚡', form: '#accf-xunlei', info: () => {
+    const d = ACC.x; if (!d) return {st: '读取中…', cls: '', nm: '', sub: ''};
+    const has = d.refresh_token_set || d.access_token_set;
+    return d.status === '已登录' ? {st: '已登录', cls: 'ok', nm: d.nickname || '', sub: ''}
+      : has ? {st: d.status || '待验证', cls: 'bad', nm: d.nickname || '', sub: '点击检查登录'} : {st: '未登录', cls: 'bad', nm: '', sub: '点击填写 refresh_token'}; }},
+];
+function renderAccCards() {
+  const box = $('#acc-cards'); if (!box) return;
+  box.innerHTML = ACC_DRIVERS.map(d => { const i = d.info(); return `<div class="acc-card" data-k="${d.key}"><div class="t"><span class="ico">${d.ico}</span>${esc(d.name)}<span class="st ${i.cls}">${esc(i.st)}</span></div>${i.nm ? `<div class="nm">${esc(i.nm)}</div>` : ''}<div class="sub">${esc(i.sub || '　')}</div></div>`; }).join('')
+    + '<div class="acc-card add" id="acc-card-add">＋ 添加账号</div>';
+  $$('.acc-card[data-k]', box).forEach(c => c.onclick = () => openAcc(c.dataset.k));
+  $('#acc-card-add').onclick = addAcc;
+}
+function openAcc(key) {
+  const d = ACC_DRIVERS.find(x => x.key === key); if (!d) return;
+  const form = $(d.form), src = $('#acc-src');
+  const m = modal(`<h3>${d.ico} ${esc(d.name)}</h3><div id="acc-slot"></div>`, 'wide');
+  $('#acc-slot', m).append(form);
+  const obs = new MutationObserver(() => { if (!document.body.contains(m)) { src.append(form); obs.disconnect(); renderAccCards(); } });
+  obs.observe(document.body, {childList: true});
+}
+function addAcc() {
+  const m = modal(`<h3>添加账号</h3><div class="hint" style="margin-bottom:10px">选择网盘类型。</div><div class="acc-grid">${ACC_DRIVERS.map(d => `<div class="acc-card" data-k="${d.key}"><div class="t"><span class="ico">${d.ico}</span>${esc(d.name)}</div><div class="sub">${esc(d.info().st === '已登录' ? '已有账号，点击进入修改' : '点击登录')}</div></div>`).join('')}<div class="acc-card" style="opacity:.6;cursor:default"><div class="t"><span class="ico">…</span>更多网盘</div><div class="sub">以后支持</div></div></div>
+    <div class="hint" style="margin-top:10px">同一种网盘登录多个账号（比如两个夸克）会在下一步支持，现在每种网盘一个账号。</div>`);
+  $$('.acc-card[data-k]', m).forEach(c => c.onclick = () => { m.remove(); openAcc(c.dataset.k); });
+}
+$('#acc-add').onclick = addAcc;
+const _accLoad = guard(async () => {
+  const s = await api('/account'); ACC.q = s; renderAccCards();
   $('#a-state').innerHTML = s.logged_in ? `✓ 已登录：<b>${esc(s.nickname)}</b>${s.sign ? `　今日签到：${s.sign.signed ? '已完成' : '未签到'}` : (s.can_sign ? '' : '　（Cookie 无 kps/sign/vcode，不能自动签到）')}`
     : `<span style="color:var(--warn)">${esc(s.error || '尚未登录')}</span>`;
   $('#a-auto').checked = s.auto_sign; $('#a-sign').style.display = s.can_sign ? '' : 'none'; $('#a-out').style.display = s.logged_in ? '' : 'none';
 });
+loaders.account = () => { _accLoad(); loadXunlei(); };
 $('#a-save').onclick = guard(async () => {
   const msg = $('#a-msg'); msg.className = 'hint'; msg.textContent = '验证中…';
   try { const r = await api('/account', 'POST', {cookie: $('#a-cookie').value}); $('#a-cookie').value = ''; msg.className = 'hint ok'; msg.textContent = '✓ 登录成功：' + r.nickname; refreshStatus(); loaders.account(); }
@@ -2480,21 +2618,23 @@ async function lbConfig() {
       ${fn ? '<div class="sub" style="margin:4px 0 8px">飞牛没有文件路径，只显示「能在下面的夸克目录里找到对应文件夹」的条目（按订阅里的 TMDB ID，其次按名字对应）；同一个媒体库里混着迅雷的内容也不会显示。删除时会连 strm 文件一起删。</div>' : `<div class="row"><div class="grow"><label class="l">Emby 文件夹路径（只显示这个文件夹下面的内容）</label><input type="text" data-k="emby_path" list="lbc-loc-${i}" value="${esc(r.emby_path || '')}" placeholder="如：/mnt/quark/剧集">
         <datalist id="lbc-loc-${i}">${(libs.find(l => l.id === r.lib_id)?.locations || []).map(p => `<option value="${esc(p)}">`).join('')}</datalist></div></div>
       <div class="row"><div class="grow"><label class="l">strm 文件夹在本工具里的路径（可选。填了，删除时本工具会直接删掉 strm 文件；需要先把 Emby 的 strm 目录挂载进本容器）</label><input type="text" data-k="strm_path" value="${esc(r.strm_path || '')}" placeholder="如：/strm/剧集"></div></div>`}
-      <div class="row"><div class="grow"><label class="l">对应的夸克目录</label><input type="text" data-k="quark_path" value="${esc(r.quark_path || '')}" placeholder="如：/影视/剧集"></div><button class="btn" data-a="pick">浏览</button><button class="btn" data-a="del">删除此条</button></div></div></details>`; }).join('') || '<div class="empty">还没有范围，点下面「添加一条」</div>';
+      ${XL_ON ? `<div class="row"><div style="width:160px"><label class="l">网盘</label><select data-k="drive"><option value="quark" ${r.drive !== 'xunlei' ? 'selected' : ''}>夸克网盘</option><option value="xunlei" ${r.drive === 'xunlei' ? 'selected' : ''}>迅雷云盘</option></select></div></div>` : ''}
+      <div class="row"><div class="grow"><label class="l">对应的${r.drive === 'xunlei' ? '迅雷' : '夸克'}目录</label><input type="text" data-k="quark_path" value="${esc(r.quark_path || '')}" placeholder="如：/影视/剧集"></div><button class="btn" data-a="pick">浏览</button><button class="btn" data-a="del">删除此条</button></div></div></details>`; }).join('') || '<div class="empty">还没有范围，点下面「添加一条」</div>';
     $$('.lbscope', m).forEach(box => {
       const i = +box.dataset.i;
       box.addEventListener('toggle', () => { rows[i]._open = box.open; });
       $$('[data-k]', box).forEach(el => el.onchange = el.oninput = () => {
         rows[i][el.dataset.k] = el.value; $('.sm', box).innerHTML = scopeSum(rows[i]);
         if (el.dataset.k === 'server') { rows[i].lib_id = ''; rows[i].lib_name = ''; draw(); }
+        if (el.dataset.k === 'drive') { rows[i].quark_path = ''; draw(); }
         if (el.dataset.k === 'lib_id') { rows[i].lib_name = libsBy[rows[i].server === 'fn' ? 'fn' : 'emby'].find(l => l.id === el.value)?.name || ''; draw(); }
       });
-      $('[data-a=pick]', box).onclick = () => browse(rows[i].quark_path, p => { rows[i].quark_path = p; draw(); });
+      $('[data-a=pick]', box).onclick = () => browse(rows[i].quark_path, p => { rows[i].quark_path = p; draw(); }, rows[i].drive || 'quark');
       $('[data-a=del]', box).onclick = () => { rows.splice(i, 1); draw(); };
     });
   };
   draw();
-  $('#lbc-add', m).onclick = () => { rows.push({_open: true, server: 'emby', kind: 'tv', name: '', lib_id: '', emby_path: '', quark_path: ''}); draw(); };
+  $('#lbc-add', m).onclick = () => { rows.push({_open: true, server: 'emby', drive: 'quark', kind: 'tv', name: '', lib_id: '', emby_path: '', quark_path: ''}); draw(); };
   $('#lbc-save', m).onclick = async () => {
     try { await api('/library/scopes', 'PUT', {scopes: stripOpen(rows)}); m.remove(); toast('已保存'); loadLibrary().catch(e => toast(e.message, 'err')); }
     catch (e) { toast(e.message, 'err'); }

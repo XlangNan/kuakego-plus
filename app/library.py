@@ -75,11 +75,12 @@ class Library:
                 raise ValueError("请选择飞牛媒体库" if server == "fn" else "请选择 Emby 媒体库")
             if server == "emby" and (len(emby_path) < 2 or not emby_path.startswith("/")):
                 raise ValueError("请填写 Emby 里的文件夹路径（不能是根目录）")
+            drive = "xunlei" if it.get("drive") == "xunlei" else "quark"
             if len(quark_path) < 2 or not quark_path.startswith("/"):
-                raise ValueError("请选择对应的夸克目录（不能是网盘根目录）")
+                raise ValueError("请选择对应的%s目录（不能是网盘根目录）" % ("迅雷" if drive == "xunlei" else "夸克"))
             kind = it.get("kind") if it.get("kind") in KINDS else "tv"
             out.append({
-                "id": it.get("id") or secrets.token_hex(4), "kind": kind, "server": server,
+                "id": it.get("id") or secrets.token_hex(4), "kind": kind, "server": server, "drive": drive,
                 "name": (it.get("name") or "").strip() or quark_path,
                 "lib_id": lib_id, "lib_name": (it.get("lib_name") or "").strip(),
                 "emby_path": emby_path, "quark_path": quark_path,
@@ -164,7 +165,7 @@ class Library:
             return self.fnl.detail(scope, emby_id)
         it, top = self._item_in_scope(scope, emby_id)
         qpath = f"{scope['quark_path']}/{top}"
-        q = self.e.quark()
+        q = self.e.client(scope.get("drive") or "quark")
         found = q.get_fids([qpath])
         created = (it.get("DateCreated") or "").replace("T", " ")[:19]
         res = {"emby_id": emby_id, "name": it.get("Name"), "year": it.get("ProductionYear"), "type": it.get("Type"),
@@ -186,7 +187,7 @@ class Library:
         qroot, eroot = scope["quark_path"], scope["emby_path"]
         qitem, eitem = f"{qroot}/{top}", f"{eroot}/{top}"
         rels = [r for r in (_safe_rel(x) for x in (rels or [])) if r]
-        q = self.e.quark()
+        q = self.e.client(scope.get("drive") or "quark")
         if rels and self._covers_all(q, qitem, rels):   # 把里面的内容都选上了 = 要删整部（连文件夹、Emby 里的剧集一起删）
             rels = []
         whole = not rels

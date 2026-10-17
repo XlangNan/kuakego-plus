@@ -18,15 +18,17 @@ from .fnmedia import FnError, FnMedia
 from .engine import Engine, Scheduler
 from .logbuf import log, ring, setup as setup_log
 from .quark import Quark, QuarkError
+from .xunlei import Xunlei
+from . import curlimport
 from .pansou import PanSou, PanSouError
 from .parser import parse_share_text
 from .store import CONFIG_DIR, DEFAULTS, Store, _merge
 from .tmdb import Tmdb
 
-VERSION = "1.18.0"
+VERSION = "1.22.0"
 # 图标不含敏感信息，浏览器取 favicon 时不一定带登录凭据，所以不要求认证
 PUBLIC_ASSETS = {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"}
-SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms")
+SECTIONS = ("dingtalk", "tmdb", "emby", "fnmedia", "proxy", "smartstrm", "pansou", "auto", "platforms", "xunlei")
 
 
 def create_app(store=None, engine=None):
@@ -254,7 +256,7 @@ def create_app(store=None, engine=None):
     @app.get("/api/browse")
     def browse():
         fid = request.args.get("fid", "0")
-        items = engine.quark().ls_dir(fid)
+        items = engine.client(request.args.get("drive", "quark")).ls_dir(fid)
         dirs = [{"fid": i["fid"], "name": i["file_name"]} for i in items if i["dir"]]
         dirs.sort(key=lambda d: d["name"])
         return jsonify(dirs=dirs)
@@ -264,8 +266,13 @@ def create_app(store=None, engine=None):
         path = body().get("path", "").strip()
         if not path.strip("/"):
             raise ValueError("目录名不能为空")
-        fid = engine.quark().ensure_dir(path)
+        fid = engine.client(body().get("drive", "quark")).ensure_dir(path)
         return jsonify(ok=True, fid=fid)
+
+    @app.get("/api/smartstrm/items")
+    def smartstrm_items():
+        with store.lock:
+            return jsonify(items=notify.strm_items(store.data, request.args.get("drive") or None))
 
     # ------------------------------------------------------------ 任务
     @app.post("/api/parse")
@@ -284,7 +291,7 @@ def create_app(store=None, engine=None):
     def tasks_create():
         data = body()
         if not parse_share_text(data.get("links_text", "")) and data.get("kind") != "subscription":
-            raise ValueError("没有识别到夸克分享链接（形如 https://pan.quark.cn/s/xxxx）")
+            raise ValueError("没有识别到分享链接（夸克：https://pan.quark.cn/s/xxxx，迅雷：https://pan.xunlei.com/s/xxxx）")
         task = engine.create_task(data, save_existing=data.get("save_existing", True))
         if task["links"] and data.get("save_existing", True):
             threading.Thread(target=engine.run_task, args=(task["id"], True), daemon=True).start()
@@ -936,7 +943,7 @@ def create_app(store=None, engine=None):
         if not (c["enabled"] and c["url"]):
             raise ValueError("资源搜索还没有启用：请先到「资源搜索」页填写 PanSou 地址并勾选启用")
         try:
-            return jsonify(items=PanSou(c).search(kw))
+            return jsonify(items=PanSou(c).search(kw, drive=request.args.get("drive", "quark")))
         except PanSouError as e:
             return jsonify(error=str(e)), 502
 
@@ -986,7 +993,7 @@ def create_app(store=None, engine=None):
         d = body()
         with store.lock:
             old = next((i for i in store.data["smartstrm_more"]["items"] if i["id"] == d.get("id")), None)
-        ok, msg = notify.trigger_smartstrm(notify.clean_ss(d, old), None, force=True)
+        ok, msg = notify.test_smartstrm(notify.clean_ss(d, old))
         return jsonify(ok=ok, msg=msg), (200 if ok else 400)
 
     def run_test(name, cur):
@@ -994,7 +1001,7 @@ def create_app(store=None, engine=None):
         if name == "dingtalk":
             ok, msg = notify.send_dingtalk(cur, "测试消息", "### ✅ 钉钉通知配置成功\n来自 kuakego-plus", force=True)
         elif name == "smartstrm":
-            ok, msg = notify.trigger_smartstrm(cur, None, force=True)
+            ok, msg = notify.test_smartstrm(cur)
         elif name == "pansou":
             try:
                 ok, msg = True, PanSou(cur).ping()
@@ -1014,6 +1021,16 @@ def create_app(store=None, engine=None):
                 tm = Tmdb(store.data["tmdb"])
                 msg = netproxy.probe(cur, f"{tm.base}/configuration" + (f"?api_key={tm.key}" if tm.key and len(tm.key) <= 40 else ""))
                 ok = "失败" not in msg.split("；")[0]
+        elif name == "xunlei":
+            try:
+                if not (cur.get("refresh_token") or cur.get("access_token")):
+                    raise ValueError("还没有填 refresh_token")
+                x = Xunlei(store)
+                x.refresh(force=bool(cur.get("refresh_token")))
+                x.init()
+                ok, msg = True, f"已登录：{x.nickname or '（取不到昵称）'}｜根目录 {len(x.ls_dir('0'))} 项"
+            except Exception as e:
+                ok, msg = False, f"连接失败：{e}"
         elif name == "fnmedia":
             try:
                 if not (cur["url"] and cur["username"]):
@@ -1048,6 +1065,29 @@ def create_app(store=None, engine=None):
                 cur[k] = v if v != "__clear__" else ""
         ok, msg = run_test(name, cur)
         return jsonify(ok=ok, msg=msg), (200 if ok else 400)
+
+    @app.post("/api/xunlei/diagnose")
+    def xunlei_diagnose():
+        url = (body().get("url") or "").strip()
+        if not url:
+            raise ValueError("请粘贴迅雷分享链接")
+        x = engine.xunlei()
+        return jsonify(ok=True, **x.diagnose(url))
+
+    @app.post("/api/xunlei/curl")
+    def xunlei_curl():
+        """从浏览器「复制为 cURL」导入登录参数（client_id / device_id / captcha 参数等），只在本机解析。"""
+        reqs = curlimport.parse(body().get("text", ""))
+        if not reqs:
+            raise ValueError("没有识别到 curl 命令（在浏览器 F12 → 网络 → 右键请求 →「复制为 cURL (bash)」）")
+        with store.lock:
+            acct = dict(store.data["xunlei"])
+            notes = curlimport.apply(reqs, acct)
+            for k, v in acct.items():
+                if k in store.data["xunlei"] and k not in ("refresh_token", "access_token", "status", "nickname", "expires_at"):
+                    store.data["xunlei"][k] = v
+            store.save()
+        return jsonify(ok=True, notes=notes)
 
     # ------------------------------------------------------------ 健康状态
     @app.post("/api/health")
@@ -1103,6 +1143,7 @@ def create_app(store=None, engine=None):
                   ("emby", "Emby", svc("emby", d["emby"]["enabled"] and d["emby"]["url"] and d["emby"]["api_key"], "未启用")),
                   ("fnmedia", "飞牛影视", svc("fnmedia", d["fnmedia"]["enabled"] and d["fnmedia"]["url"] and d["fnmedia"]["username"], "未启用")),
                   ("proxy", "网络代理", svc("proxy", d["proxy"]["enabled"] and d["proxy"]["url"], "未启用")),
+                  ("xunlei", "迅雷云盘", svc("xunlei", bool(d["xunlei"].get("refresh_token") or d["xunlei"].get("access_token")), "未登录")),
                   ("pansou", "资源搜索（PanSou）", svc("pansou", d["pansou"]["enabled"] and d["pansou"]["url"], "未启用")),
                   ("dingtalk", "钉钉通知", dingtalk_check),
                   ("smartstrm", "SmartStrm（主）", ss_check(d["smartstrm"], "主 SmartStrm"))]

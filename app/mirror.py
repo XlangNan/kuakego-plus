@@ -196,7 +196,7 @@ class Mirror:
 
     # ------------------------------------------------------------ 试运行
     def preview(self, task):
-        q = self.e.quark()
+        q = self.e.client(task)
         st = self.state(task)
         an = self.analyze(task, q)
         man, cfg = st["manifest"], an["cfg"]
@@ -297,7 +297,7 @@ class Mirror:
     # ------------------------------------------------------------ 正式运行
     def run(self, task, manual):
         e = self.e
-        q = e.quark()
+        q = e.client(task)
         if not task["links"]:
             return {"status": "idle", "msg": "还没有分享链接", "saved": []}
         st = self.state(task)
@@ -451,7 +451,7 @@ class Mirror:
         man = st["manifest"]
         deleted = []
         if action == "confirm":
-            q = e.quark()
+            q = e.client(task)
             d_ok, gone, kept = self._delete(q, task, pick, man, st["trash"])
             deleted = d_ok
             for r in d_ok:
@@ -480,6 +480,8 @@ class Mirror:
         """镜像同步删掉的文件还在回收站里占多少空间（按我们自己的记录估算，不去查夸克）。"""
         n = size = 0
         for t in self.e.store.data["tasks"]:
+            if t.get("drive") == "xunlei":
+                continue
             for x in (t.get("mstate") or {}).get("trash", []):
                 n, size = n + 1, size + int(x.get("size") or 0)
         return f"镜像同步删掉的 {n} 个文件（约 {size / 1024 ** 3:.1f} GB）可能还在夸克回收站里占着空间，清空回收站能腾出来。" if n else ""
@@ -490,6 +492,8 @@ class Mirror:
         cut = time.time() - days * 86400
         olds = {}
         for t in self.e.store.data["tasks"]:
+            if t.get("drive") == "xunlei":
+                continue
             for x in (t.get("mstate") or {}).get("trash", []):
                 if x.get("ts", 0) <= cut:
                     olds[x["fid"]] = x

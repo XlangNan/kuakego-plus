@@ -25,7 +25,7 @@ def setup(insts):
 
 def run(eng, savepath):
     calls = []
-    def fake(cfg, sp, force=False):
+    def fake(cfg, sp, force=False, **kw):
         calls.append((cfg["webhook"], sp)); return True, "ok"
     task = {"name": "剧", "savepath": savepath, "media": "tv", "season": 1}
     with mock.patch.object(notify, "trigger_smartstrm", fake):

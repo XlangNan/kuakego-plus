@@ -18,7 +18,7 @@ def env():
     store.data["smartstrm"].update(enabled=True, webhook="http://ss", delay=0)
     eng = Engine(store)
     calls = []
-    notify.trigger_smartstrm = lambda i, p, force=False: (calls.append("ss") or (True, "ok"))
+    notify.trigger_smartstrm = lambda i, p, force=False, **kw: (calls.append("ss") or (True, "ok"))
     eng._refresh_one = lambda cli, label, task: calls.append("refresh")
     return eng, calls
 
